@@ -1,0 +1,1 @@
+import sqlite3\ndef fetch_data(db_path, query):\n    conn = sqlite3.connect(db_path)\n    cursor = conn.cursor()\n    cursor.execute(query)\n    rows = cursor.fetchall()\n    conn.close()\n    return rows\n
