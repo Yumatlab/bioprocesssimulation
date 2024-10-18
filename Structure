@@ -1,0 +1,79 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0" version="24.7.17">
+  <diagram name="Page-1" id="DIfhCFHi_7lOXS8hQmNL">
+    <mxGraphModel>
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" value="Discussion" style="whiteSpace=wrap;strokeWidth=2;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="8" y="8" width="973" height="124" as="geometry" />
+        </mxCell>
+        <mxCell id="3" value="Comparison to Literature" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="2">
+          <mxGeometry x="43" y="46" width="240" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="4" value="Implications" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="2">
+          <mxGeometry x="333" y="46" width="147" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="5" value="Recommendations" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="2">
+          <mxGeometry x="530" y="46" width="190" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="6" value="Future Research" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="2">
+          <mxGeometry x="770" y="46" width="176" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="7" value="Results" style="whiteSpace=wrap;strokeWidth=2;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1031" y="8" width="725" height="124" as="geometry" />
+        </mxCell>
+        <mxCell id="8" value="Preliminary Findings" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="7">
+          <mxGeometry x="43" y="46" width="205" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="9" value="Data Visualization" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="7">
+          <mxGeometry x="298" y="46" width="189" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="10" value="Interpretation" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="7">
+          <mxGeometry x="536" y="46" width="161" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="11" value="Methodology" style="whiteSpace=wrap;strokeWidth=2;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1806" y="8" width="859" height="124" as="geometry" />
+        </mxCell>
+        <mxCell id="12" value="Research Design" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="11">
+          <mxGeometry x="43" y="46" width="175" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="13" value="Data Collection" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="11">
+          <mxGeometry x="268" y="46" width="170" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="14" value="Data Analysis" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="11">
+          <mxGeometry x="488" y="46" width="154" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="15" value="Limitations" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="11">
+          <mxGeometry x="692" y="46" width="140" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="16" value="Literature Review" style="whiteSpace=wrap;strokeWidth=2;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="2715" y="8" width="793" height="124" as="geometry" />
+        </mxCell>
+        <mxCell id="17" value="Theoretical Framework" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="16">
+          <mxGeometry x="43" y="46" width="227" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="18" value="Related Studies" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="16">
+          <mxGeometry x="320" y="46" width="171" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="19" value="Conceptual Framework" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="16">
+          <mxGeometry x="541" y="46" width="225" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="20" value="Introduction" style="whiteSpace=wrap;strokeWidth=2;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="3558" y="8" width="931" height="124" as="geometry" />
+        </mxCell>
+        <mxCell id="21" value="Background" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="20">
+          <mxGeometry x="43" y="46" width="143" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="22" value="Research Questions" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="20">
+          <mxGeometry x="236" y="46" width="198" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="23" value="Objectives" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="20">
+          <mxGeometry x="484" y="46" width="136" height="49" as="geometry" />
+        </mxCell>
+        <mxCell id="24" value="Significance of Research" style="whiteSpace=wrap;strokeWidth=2;" vertex="1" parent="20">
+          <mxGeometry x="670" y="46" width="234" height="49" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
