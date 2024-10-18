@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0" version="24.7.17">
   <diagram name="Page-1" id="c4acf3e9-155e-7222-9cf6-157b1a14988f">
-    <mxGraphModel dx="1051" dy="586" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" background="none" math="0" shadow="0">
+    <mxGraphModel dx="1261" dy="703" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" background="none" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -27,7 +27,7 @@
           <mxGeometry x="540" y="190" width="140" height="60" as="geometry" />
         </mxCell>
         <mxCell id="MxcoF52-XSTHhtGem_gU-5" value="&lt;p style=&quot;margin: 4px 0px 0px; text-align: center; font-size: 8px;&quot;&gt;&lt;b style=&quot;font-size: 8px;&quot;&gt;Figure App&lt;/b&gt;&lt;/p&gt;" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;fontSize=8;" vertex="1" parent="1">
-          <mxGeometry x="660" y="550" width="100" height="50" as="geometry" />
+          <mxGeometry x="545" y="470" width="100" height="50" as="geometry" />
         </mxCell>
         <mxCell id="MxcoF52-XSTHhtGem_gU-40" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="MxcoF52-XSTHhtGem_gU-6" target="MxcoF52-XSTHhtGem_gU-26">
           <mxGeometry relative="1" as="geometry" />
@@ -54,7 +54,7 @@
             <mxPoint x="320" y="220" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="MxcoF52-XSTHhtGem_gU-8" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;SQLite Database&lt;/font&gt;" style="html=1;verticalLabelPosition=bottom;align=center;labelBackgroundColor=#ffffff;verticalAlign=top;strokeWidth=2;strokeColor=#000000;shadow=0;dashed=0;shape=mxgraph.ios7.icons.data;fontColor=default;fontSize=8;" vertex="1" parent="1">
+        <mxCell id="MxcoF52-XSTHhtGem_gU-8" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;SQLite&lt;/font&gt;" style="html=1;verticalLabelPosition=bottom;align=center;labelBackgroundColor=#ffffff;verticalAlign=top;strokeWidth=2;strokeColor=#000000;shadow=0;dashed=0;shape=mxgraph.ios7.icons.data;fontColor=default;fontSize=8;" vertex="1" parent="1">
           <mxGeometry x="220" y="175" width="100" height="120" as="geometry" />
         </mxCell>
         <mxCell id="MxcoF52-XSTHhtGem_gU-26" value="&lt;p style=&quot;margin: 4px 0px 0px; text-align: center;&quot;&gt;&lt;b style=&quot;font-size: 8px;&quot;&gt;Dialogboxes&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 8px;&quot;&gt;Edit starting values and control parameters&lt;/font&gt;&lt;/p&gt;" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;fontSize=8;" vertex="1" parent="1">
@@ -64,7 +64,7 @@
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="155" y="460" as="sourcePoint" />
             <Array as="points">
-              <mxPoint x="155" y="350" />
+              <mxPoint x="155" y="230" />
             </Array>
           </mxGeometry>
         </mxCell>
@@ -87,7 +87,7 @@
           <mxGeometry x="560" y="410" width="70" height="20" as="geometry" />
         </mxCell>
         <mxCell id="MxcoF52-XSTHhtGem_gU-38" value="&lt;p style=&quot;margin: 4px 0px 0px; text-align: center; font-size: 8px;&quot;&gt;&lt;b style=&quot;font-size: 8px;&quot;&gt;Figure Export&lt;br&gt;Plot figure opens for export&amp;nbsp;&lt;/b&gt;&lt;/p&gt;" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;fontSize=8;" vertex="1" parent="1">
-          <mxGeometry x="590" y="485" width="70" height="20" as="geometry" />
+          <mxGeometry x="460" y="440" width="70" height="20" as="geometry" />
         </mxCell>
         <mxCell id="MxcoF52-XSTHhtGem_gU-41" value="&lt;p style=&quot;margin: 4px 0px 0px; text-align: center; font-size: 8px;&quot;&gt;&lt;b style=&quot;font-size: 8px;&quot;&gt;Data Table&lt;/b&gt;&lt;/p&gt;" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;fontSize=8;" vertex="1" parent="1">
           <mxGeometry x="270" y="820" width="100" height="50" as="geometry" />
@@ -96,7 +96,10 @@
           <mxGeometry x="600" y="790" width="140" height="30" as="geometry" />
         </mxCell>
         <mxCell id="MxcoF52-XSTHhtGem_gU-43" value="&lt;p style=&quot;margin: 4px 0px 0px; text-align: center; font-size: 8px;&quot;&gt;&lt;b style=&quot;font-size: 8px;&quot;&gt;Template Creator&lt;/b&gt;&lt;/p&gt;" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;fontSize=8;" vertex="1" parent="1">
-          <mxGeometry x="670" y="470" width="100" height="50" as="geometry" />
+          <mxGeometry x="690" y="470" width="80" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="MxcoF52-XSTHhtGem_gU-50" value="Database" style="shape=umlFrame;whiteSpace=wrap;html=1;pointerEvents=0;width=75;height=23;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="165" y="147.5" width="210" height="175" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
