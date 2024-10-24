@@ -23,7 +23,7 @@
           <mxGeometry x="363" y="270" width="95" height="30" as="geometry" />
         </mxCell>
         <mxCell id="z7AWwnghV1RiAxtXLaxC-7" value="State variables&lt;br&gt;(Dynamic variable)" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontFamily=Arial;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArial;" vertex="1" parent="1">
-          <mxGeometry x="349.25" y="180" width="122.5" height="30" as="geometry" />
+          <mxGeometry x="353" y="180" width="122.5" height="30" as="geometry" />
         </mxCell>
         <mxCell id="z7AWwnghV1RiAxtXLaxC-8" value="Parameter" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontFamily=Arial;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArial;" vertex="1" parent="1">
           <mxGeometry x="363" y="380" width="95" height="30" as="geometry" />
@@ -134,7 +134,7 @@
           <mxGeometry x="473" y="100" width="40" height="20" as="geometry" />
         </mxCell>
         <mxCell id="z7AWwnghV1RiAxtXLaxC-32" value="c&lt;sub&gt;XL&lt;/sub&gt;, c&lt;sub&gt;SL&lt;/sub&gt;, V&lt;sub&gt;L&lt;/sub&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontFamily=Arial;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArial;" vertex="1" parent="1">
-          <mxGeometry x="378" y="210" width="80" height="20" as="geometry" />
+          <mxGeometry x="374" y="210" width="80" height="20" as="geometry" />
         </mxCell>
         <mxCell id="z7AWwnghV1RiAxtXLaxC-35" value="q&lt;sub&gt;X/X&lt;/sub&gt;, q&lt;sub&gt;S/X&lt;/sub&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontFamily=Arial;fontSource=https%3A%2F%2Ffonts.googleapis.com%2Fcss%3Ffamily%3DArial;" vertex="1" parent="1">
           <mxGeometry x="370.5" y="259" width="80" height="20" as="geometry" />
