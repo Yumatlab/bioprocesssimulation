@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0" version="24.8.3">
   <diagram name="Page-1" id="lFvaAh8aQDlacCa_j_jw">
-    <mxGraphModel dx="679" dy="360" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="750" pageHeight="500" math="0" shadow="0">
+    <mxGraphModel dx="1429" dy="360" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="750" pageHeight="500" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -424,6 +424,9 @@
         </mxCell>
         <mxCell id="YntMffvWRpzzQS-7JYIt-107" value="&lt;font style=&quot;font-size: 14px;&quot;&gt;+&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
           <mxGeometry x="584" y="217" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="YntMffvWRpzzQS-7JYIt-108" value="&lt;div&gt;$$K_{CP1} \cdot \left( 1 + \frac{1}{T_{IP1} \cdot S} \right)$$&lt;/div&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="-110" y="148" width="340" height="30" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
