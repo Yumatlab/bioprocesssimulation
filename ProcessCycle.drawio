@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0" version="24.8.4">
   <diagram id="C5RBs43oDa-KdzZeNtuy" name="Page-1">
-    <mxGraphModel dx="728" dy="405" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel dx="1351" dy="753" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="WIyWlLk6GJQsqaUBKTNV-0" />
         <mxCell id="WIyWlLk6GJQsqaUBKTNV-1" parent="WIyWlLk6GJQsqaUBKTNV-0" />
@@ -74,15 +74,15 @@
         <mxCell id="SXoWHD3rTipn2T0-jQtz-193" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=async;endFill=0;" edge="1" parent="SXoWHD3rTipn2T0-jQtz-6" source="SXoWHD3rTipn2T0-jQtz-192" target="SXoWHD3rTipn2T0-jQtz-178">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="SXoWHD3rTipn2T0-jQtz-192" value="&lt;font style=&quot;font-size: 8px;&quot;&gt;m :=&lt;br&gt;SELECT timeID &lt;br&gt;FROM timeTab &lt;br&gt;WHERE projectID = 1 &lt;br&gt;AND process_time = process time end&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="SXoWHD3rTipn2T0-jQtz-6">
-          <mxGeometry y="730" width="160" height="90" as="geometry" />
+        <mxCell id="SXoWHD3rTipn2T0-jQtz-192" value="&lt;font style=&quot;font-size: 8px;&quot;&gt;m :=&lt;br&gt;SELECT timeID &lt;br&gt;FROM timeTab &lt;br&gt;WHERE projectID = 1 &lt;br&gt;AND process_time = t&lt;/font&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="SXoWHD3rTipn2T0-jQtz-6">
+          <mxGeometry x="30" y="730" width="100" height="90" as="geometry" />
         </mxCell>
         <mxCell id="SXoWHD3rTipn2T0-jQtz-96" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;endArrow=classic;endFill=0;" edge="1" parent="SXoWHD3rTipn2T0-jQtz-5" source="SXoWHD3rTipn2T0-jQtz-92" target="SXoWHD3rTipn2T0-jQtz-95">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="SXoWHD3rTipn2T0-jQtz-97" value="upload: t = process time,&lt;br style=&quot;font-size: 8px;&quot;&gt;T = real time" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=8;" vertex="1" connectable="0" parent="SXoWHD3rTipn2T0-jQtz-96">
+        <mxCell id="SXoWHD3rTipn2T0-jQtz-97" value="upload: &lt;br&gt;t = process time [app.t(end)],&lt;br style=&quot;font-size: 8px;&quot;&gt;T = real time" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=8;" vertex="1" connectable="0" parent="SXoWHD3rTipn2T0-jQtz-96">
           <mxGeometry x="-0.2422" y="1" relative="1" as="geometry">
-            <mxPoint x="16" y="-13" as="offset" />
+            <mxPoint x="14" y="15" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="SXoWHD3rTipn2T0-jQtz-111" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;dashed=1;endArrow=classic;endFill=0;" edge="1" parent="SXoWHD3rTipn2T0-jQtz-5" source="SXoWHD3rTipn2T0-jQtz-104" target="SXoWHD3rTipn2T0-jQtz-108">
@@ -142,7 +142,7 @@
             <mxPoint x="335" y="1010" as="sourcePoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="SXoWHD3rTipn2T0-jQtz-189" value="&lt;font style=&quot;font-size: 8px;&quot;&gt;upload: y = app.variable(end)&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="SXoWHD3rTipn2T0-jQtz-188">
+        <mxCell id="SXoWHD3rTipn2T0-jQtz-189" value="&lt;font style=&quot;font-size: 8px;&quot;&gt;upload: y = app.variable(end),&lt;br&gt;t = app.t(end)&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="SXoWHD3rTipn2T0-jQtz-188">
           <mxGeometry x="0.4909" y="2" relative="1" as="geometry">
             <mxPoint x="39" y="36" as="offset" />
           </mxGeometry>
