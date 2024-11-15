@@ -1,6 +1,6 @@
-<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0" version="24.8.6">
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0" version="24.8.6" pages="2">
   <diagram name="Page-1" id="PsFbMVQWgl6epuxMNhGU">
-    <mxGraphModel dx="1426" dy="755" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -296,6 +296,29 @@
         </mxCell>
         <mxCell id="iyGMFY8Sxj-X5n7Boc2I-134" value="" style="shape=doubleArrow;whiteSpace=wrap;html=1;rotation=0;" parent="1" vertex="1">
           <mxGeometry x="442.4" y="120" width="42.4" height="20" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="BxuFZpmcHOnsfzGL1bfq" name="Page-2">
+    <mxGraphModel dx="983" dy="521" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="zAhfo4fl5WVb5lQPp9Pu-3" value="User Interface" style="image;points=[];aspect=fixed;html=1;align=center;shadow=0;dashed=0;image=img/lib/allied_telesis/computer_and_terminals/Personal_Computer.svg;" vertex="1" parent="1">
+          <mxGeometry x="110" y="257.65" width="92.01" height="124.7" as="geometry" />
+        </mxCell>
+        <mxCell id="zAhfo4fl5WVb5lQPp9Pu-4" value="" style="shape=doubleArrow;whiteSpace=wrap;html=1;rotation=0;" vertex="1" parent="1">
+          <mxGeometry x="220" y="317.26" width="49.76" height="21.83" as="geometry" />
+        </mxCell>
+        <mxCell id="zAhfo4fl5WVb5lQPp9Pu-5" value="" style="shape=doubleArrow;whiteSpace=wrap;html=1;rotation=0;" vertex="1" parent="1">
+          <mxGeometry x="400" y="319.09" width="49.11" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="zAhfo4fl5WVb5lQPp9Pu-6" value="Database" style="sketch=0;shadow=0;dashed=0;html=1;strokeColor=none;fillColor=#505050;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;outlineConnect=0;align=center;shape=mxgraph.office.databases.database_mini_3;" vertex="1" parent="1">
+          <mxGeometry x="290" y="271.8" width="93" height="108.2" as="geometry" />
+        </mxCell>
+        <mxCell id="zAhfo4fl5WVb5lQPp9Pu-7" value="Simulation Script" style="sketch=0;aspect=fixed;pointerEvents=1;shadow=0;dashed=0;html=1;strokeColor=none;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;align=center;fillColor=#000000;shape=mxgraph.azure.script_file;strokeOpacity=100;fillOpacity=100;" vertex="1" parent="1">
+          <mxGeometry x="470" y="280" width="75.2" height="80" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
