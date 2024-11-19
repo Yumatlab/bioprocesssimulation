@@ -40,7 +40,7 @@
           <mxGeometry x="70" y="460" width="650" height="320" as="geometry" />
         </mxCell>
         <mxCell id="MxcoF52-XSTHhtGem_gU-8" value="&lt;font style=&quot;font-size: 12px;&quot;&gt;SQLite&lt;/font&gt;" style="html=1;verticalLabelPosition=bottom;align=center;labelBackgroundColor=#ffffff;verticalAlign=top;strokeWidth=2;strokeColor=#000000;shadow=0;dashed=0;shape=mxgraph.ios7.icons.data;fontColor=default;fontSize=8;" parent="1" vertex="1">
-          <mxGeometry x="95" y="306" width="71" height="82" as="geometry" />
+          <mxGeometry x="101.5" y="307" width="71" height="82" as="geometry" />
         </mxCell>
         <mxCell id="MxcoF52-XSTHhtGem_gU-26" value="&lt;p style=&quot;margin: 4px 0px 0px; text-align: center;&quot;&gt;&lt;b style=&quot;font-size: 8px;&quot;&gt;Dialogboxes&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 8px;&quot;&gt;Edit starting values and control parameters&lt;/font&gt;&lt;/p&gt;" style="verticalAlign=top;align=left;overflow=fill;html=1;whiteSpace=wrap;fontSize=8;" parent="1" vertex="1">
           <mxGeometry x="400" y="727.5" width="120" height="35" as="geometry" />
