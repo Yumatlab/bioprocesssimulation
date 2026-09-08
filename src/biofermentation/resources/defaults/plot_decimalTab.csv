@@ -1,0 +1,6 @@
+decimalID,decimal_name,decimal_symbol
+1,1,%.0f
+2,0.1,%.1f
+3,0.01,%.2f
+4,0.001,%.3f
+5,0.0001,%.4f

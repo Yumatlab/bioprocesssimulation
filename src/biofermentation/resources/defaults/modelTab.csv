@@ -1,0 +1,4 @@
+modelID,bioreactorID,organismID,name,description,display_rank
+1,1,1,Escherichia model,,1
+2,1,2,Pichia model (late stage),,2
+5,1,2,Pichia pastoris,,5

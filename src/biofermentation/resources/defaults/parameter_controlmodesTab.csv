@@ -1,0 +1,14 @@
+modesID,parameterID,value,mode
+1,92,0,Manual
+2,92,1,Auto
+3,93,0,Manual
+4,93,1,Auto
+5,94,0,Manual
+6,94,1,pO2-Agitation
+7,94,2,pO2-Aeration
+8,94,3,pO2-Gasmix
+9,94,4,pO2-Feed
+10,95,0,Manual
+11,95,1,Harvest
+12,96,0,Manual
+13,96,1,Feed Control
