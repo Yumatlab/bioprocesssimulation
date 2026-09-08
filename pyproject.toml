@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "biofermentation-sim"
+version = "0.1.0"
+description = "Bioreactor process simulation with a plugin-based organism architecture"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Yuma Iff" }]
+keywords = ["bioreactor", "fermentation", "simulation", "ode", "qt"]
+
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "PySide6>=6.6",
+    "pyqtgraph>=0.13",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+# pandas is required by the reference-run comparison in tests (plan 2.4).
+dev = [
+    "pytest>=8.0",
+    "pandas>=2.1",
+    "ruff>=0.5",
+]
+# Used by the GitHub Actions matrix in plan 7.2: pip install -e .[build]
+build = [
+    "pyinstaller>=6.3",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/biofermentation"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
+# The domain notation from the MATLAB model is kept verbatim (cXL, qXpX, NSt,
+# FR1, kLa, thetaL). Renaming it to snake_case would make every comparison
+# against the MATLAB reference run unreadable, so the pep8-naming rules that
+# would flag it are disabled deliberately.
+ignore = ["N803", "N806", "N815", "N816"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "reference: requires a MATLAB reference run in tests/reference_data/",
+]

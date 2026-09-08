@@ -1,0 +1,56 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.python-version
+
+# --- Tests / tooling ---
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- PyInstaller ---
+# The spec files live in build/ (see plan 7.1), but PyInstaller's default
+# workpath is also ./build. Ignore its output directories, keep the specs.
+/build/*/
+/dist/
+*.manifest
+
+# --- Qt generated ---
+ui_*.py
+*_rc.py
+*.qmlc
+*.jsc
+
+# --- SQLite runtime artefacts ---
+# The bundled template database IS tracked; only runtime files are ignored.
+*.db-wal
+*.db-shm
+*.db-journal
+*.backup.db
+
+# --- Reference data (large MATLAB exports stay local unless small) ---
+# tests/reference_data/*.csv is tracked on purpose - it is the only proof
+# that the port computes the same numbers. Nothing ignored here.
+
+# --- macOS ---
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# --- Windows ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# --- Editors ---
+.idea/
+.vscode/
+*.swp
