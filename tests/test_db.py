@@ -1,16 +1,33 @@
 """Database layer tests.
 
-Covers the bundled template database and the schema migration of plan
-section 1.1. The load/save round-trip tests belong to plan section 1.4.
+Covers the bundled template database, the schema migration of plan section
+1.1 and the access layer of plan sections 1.2 and 1.3. Everything runs
+against a copy of the real database, never against mocks — the defects worth
+catching here live in the data, not in an idealised model of it.
 """
 
 import shutil
 import sqlite3
 from pathlib import Path
 
+import numpy as np
 import pytest
 
+from biofermentation.db import (
+    Phase,
+    VariableSeries,
+    get_connection,
+    load_phases,
+    load_project_info,
+    load_project_variables,
+    save_project,
+    save_project_with_backup,
+)
 from biofermentation.db.migrate import MIGRATION_SQL, apply_migration
+
+# Two projects in the template carry phases and parameters; the rest are
+# empty shells. 519 is a Pichia run with five phases, 520 has seven.
+PROJECT_WITH_PHASES = 519
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_DB = REPO_ROOT / "src" / "biofermentation" / "resources" / "SimulationAppDB_template.db"
@@ -291,3 +308,275 @@ def test_both_bioreactors_are_fully_populated():
         ).fetchone()[0]
     assert counts == {1: 60, 2: 60}
     assert missing == 0
+
+
+# ------------------------------------------- access layer, plan 1.2 / 1.3 --
+
+
+def _series(t, **columns) -> VariableSeries:
+    return VariableSeries(
+        t=np.array(t, dtype=float),
+        v={name: np.array(values, dtype=float) for name, values in columns.items()},
+        real_t=["01.01.2026 10:00:00.000"] * len(t),
+    )
+
+
+def test_get_connection_enables_foreign_keys_and_wal(db_copy: Path):
+    with get_connection(db_copy) as conn:
+        assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+
+
+def test_get_connection_rolls_back_on_error(db_copy: Path):
+    before = _count(db_copy, "SELECT COUNT(*) FROM logTab")
+    with pytest.raises(ZeroDivisionError), get_connection(db_copy) as conn:
+        conn.execute(
+            "INSERT INTO logTab (projectID, datetime, message) VALUES (?, ?, ?)",
+            (PROJECT_WITH_PHASES, "01.01.2026", "should not survive"),
+        )
+        raise ZeroDivisionError
+    assert _count(db_copy, "SELECT COUNT(*) FROM logTab") == before
+
+
+def test_get_connection_commits_on_clean_exit(db_copy: Path):
+    before = _count(db_copy, "SELECT COUNT(*) FROM logTab")
+    with get_connection(db_copy) as conn:
+        conn.execute(
+            "INSERT INTO logTab (projectID, datetime, message) VALUES (?, ?, ?)",
+            (PROJECT_WITH_PHASES, "01.01.2026", "kept"),
+        )
+    assert _count(db_copy, "SELECT COUNT(*) FROM logTab") == before + 1
+
+
+def test_readonly_connection_refuses_to_write(db_copy: Path):
+    with (
+        pytest.raises(sqlite3.OperationalError, match="readonly"),
+        get_connection(db_copy, readonly=True) as conn,
+    ):
+        conn.execute("DELETE FROM logTab")
+
+
+def _count(db_path: Path, sql: str) -> int:
+    with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+        return conn.execute(sql).fetchone()[0]
+
+
+def test_load_project_info_resolves_organism_and_bioreactor(db_copy: Path):
+    info = load_project_info(db_copy, PROJECT_WITH_PHASES)
+    assert info.organism_name == "Pichia pastoris"
+    assert info.bioreactor_name == "BIOSTAT ED"
+    assert info.reservoirs == 2
+    assert info.function_file == "Pichia_pastoris"
+
+
+def test_load_project_info_rejects_unknown_project(db_copy: Path):
+    with pytest.raises(LookupError, match="99999"):
+        load_project_info(db_copy, 99999)
+
+
+def test_load_phases_reads_everything_in_one_go(db_copy: Path):
+    setup = load_phases(db_copy, PROJECT_WITH_PHASES)
+    assert len(setup.p) == 280
+    assert setup.p["NStw"] == 1000.0
+    assert len(setup.phases) == 5
+    assert setup.next_process_id == max(ph.processID for ph in setup.phases) + 1
+    # Lookups are split by start_end so the editors get the right dropdown.
+    assert {row["start_end"] for row in setup.lookups.start_conditiontype} == {1}
+    assert {row["start_end"] for row in setup.lookups.end_conditiontype} == {2}
+
+
+def test_cyclic_parameters_are_a_subset_of_the_metadata(db_copy: Path):
+    setup = load_phases(db_copy, PROJECT_WITH_PHASES)
+    assert 0 < len(setup.p_meta_cyclic) < len(setup.p_meta)
+    assert all(row["reading_rate"] == "cyclic" for row in setup.p_meta_cyclic)
+
+
+def test_phase_conditions_are_split_into_start_and_end(db_copy: Path):
+    setup = load_phases(db_copy, PROJECT_WITH_PHASES)
+    batch = next(ph for ph in setup.phases if ph.name == "Batch Phase")
+    assert batch.statusID == 4
+    assert batch.start.typeID == 1
+    assert batch.end.typeID == 6
+    assert batch.end.value == 0.1
+    fed_batch = next(ph for ph in setup.phases if ph.name == "Fed Batch")
+    assert fed_batch.parameters, "phase parameters must come along"
+
+
+def test_phases_survive_a_save_and_reload(db_copy: Path):
+    before = load_phases(db_copy, PROJECT_WITH_PHASES)
+    save_project(db_copy, PROJECT_WITH_PHASES, p=before.p, phases=before.phases)
+    after = load_phases(db_copy, PROJECT_WITH_PHASES)
+    assert after.phases == before.phases
+    assert after.p == before.p
+
+
+def test_series_survives_a_save_and_reload(db_copy: Path):
+    series = _series([0.0, 0.1, 0.2], cXL=[0.5, 0.8, 1.3], pO2=[100.0, 88.0, 71.0])
+    save_project(db_copy, PROJECT_WITH_PHASES, series=series)
+
+    back = load_project_variables(db_copy, PROJECT_WITH_PHASES)
+    assert back.n == 3
+    assert np.array_equal(back.t, series.t)
+    assert np.array_equal(back.v["cXL"], series.v["cXL"])
+    assert np.array_equal(back.v["pO2"], series.v["pO2"])
+
+
+def test_nan_preallocation_slots_are_not_written(db_copy: Path):
+    """preallocationFcn leaves NaN at the end of every series; they are not data."""
+    series = _series([0.0, 0.1, np.nan, np.nan], cXL=[0.5, 0.8, np.nan, np.nan])
+    result = save_project(db_copy, PROJECT_WITH_PHASES, series=series)
+    assert result["times"] == 2
+    assert load_project_variables(db_copy, PROJECT_WITH_PHASES).n == 2
+
+
+def test_missing_values_come_back_as_nan_not_zero(db_copy: Path):
+    """MATLAB wrote 0 for a NaN, turning 'not measured' into a measured zero."""
+    series = _series([0.0, 0.1, 0.2], cXL=[0.5, np.nan, 1.3])
+    save_project(db_copy, PROJECT_WITH_PHASES, series=series)
+
+    back = load_project_variables(db_copy, PROJECT_WITH_PHASES)
+    assert back.v["cXL"][0] == 0.5
+    assert np.isnan(back.v["cXL"][1])
+    assert back.v["cXL"][2] == 1.3
+
+
+def test_second_save_appends_instead_of_duplicating(db_copy: Path):
+    save_project(db_copy, PROJECT_WITH_PHASES, series=_series([0.0, 0.1], cXL=[0.5, 0.8]))
+    save_project(
+        db_copy,
+        PROJECT_WITH_PHASES,
+        series=_series([0.0, 0.1, 0.2, 0.3], cXL=[0.5, 0.8, 1.3, 1.9]),
+    )
+    back = load_project_variables(db_copy, PROJECT_WITH_PHASES)
+    assert back.n == 4
+    assert np.array_equal(back.v["cXL"], np.array([0.5, 0.8, 1.3, 1.9]))
+
+
+def test_saving_an_already_saved_series_changes_nothing(db_copy: Path):
+    series = _series([0.0, 0.1], cXL=[0.5, 0.8])
+    save_project(db_copy, PROJECT_WITH_PHASES, series=series)
+    result = save_project(db_copy, PROJECT_WITH_PHASES, series=series)
+    assert result["times"] == 0
+    assert load_project_variables(db_copy, PROJECT_WITH_PHASES).n == 2
+
+
+def test_parameter_values_are_updated_in_place(db_copy: Path):
+    setup = load_phases(db_copy, PROJECT_WITH_PHASES)
+    rows_before = _count(
+        db_copy,
+        f"SELECT COUNT(*) FROM project_parameterTab WHERE projectID = {PROJECT_WITH_PHASES}",
+    )
+    changed = dict(setup.p)
+    changed["NStw"] = 1234.0
+    save_project(db_copy, PROJECT_WITH_PHASES, p=changed)
+
+    after = load_phases(db_copy, PROJECT_WITH_PHASES)
+    assert after.p["NStw"] == 1234.0
+    # The upsert must not add a second row for the same pair — that is exactly
+    # what UNIQUE (projectID, parameterID) from plan 1.1 prevents.
+    assert (
+        _count(
+            db_copy,
+            f"SELECT COUNT(*) FROM project_parameterTab WHERE projectID = {PROJECT_WITH_PHASES}",
+        )
+        == rows_before
+    )
+
+
+def test_unknown_parameter_names_are_reported_not_raised(db_copy: Path):
+    """A typo must not cost a whole session's results."""
+    result = save_project(
+        db_copy, PROJECT_WITH_PHASES, p={"NStw": 900.0, "definitely_not_a_parameter": 1.0}
+    )
+    assert result["unknown_parameters"] == ["definitely_not_a_parameter"]
+    assert result["parameters"] == 1
+
+
+def test_nan_parameters_are_skipped_rather_than_nulled(db_copy: Path):
+    """sqlite3 binds NaN as NULL, which would erase the stored value."""
+    before = load_phases(db_copy, PROJECT_WITH_PHASES).p["NStw"]
+    result = save_project(db_copy, PROJECT_WITH_PHASES, p={"NStw": float("nan")})
+    assert result["skipped_parameters"] == ["NStw"]
+    assert load_phases(db_copy, PROJECT_WITH_PHASES).p["NStw"] == before
+
+
+def test_replacing_phases_cascades_into_phase_parameters(db_copy: Path):
+    """ON DELETE CASCADE only fires because get_connection turns it on."""
+    setup = load_phases(db_copy, PROJECT_WITH_PHASES)
+    assert (
+        _count(
+            db_copy,
+            "SELECT COUNT(*) FROM process_parameterTab WHERE processID IN "
+            f"(SELECT processID FROM processTab WHERE projectID = {PROJECT_WITH_PHASES})",
+        )
+        > 0
+    )
+
+    save_project(db_copy, PROJECT_WITH_PHASES, phases=[])
+    assert load_phases(db_copy, PROJECT_WITH_PHASES).phases == []
+    assert (
+        _count(
+            db_copy,
+            "SELECT COUNT(*) FROM process_parameterTab WHERE processID IN "
+            f"(SELECT processID FROM processTab WHERE projectID = {PROJECT_WITH_PHASES})",
+        )
+        == 0
+    )
+    assert setup.phases, "fixture must actually have had phases"
+
+
+def test_a_failing_save_leaves_the_database_untouched(db_copy: Path):
+    """One transaction for parameters, series, phases and log together.
+
+    Parameters and the series are written before the phases; the duplicate
+    processID below makes the phase insert fail, and nothing may survive.
+    """
+    setup = load_phases(db_copy, PROJECT_WITH_PHASES)
+    duplicate = [
+        Phase(processID=1, projectID=PROJECT_WITH_PHASES),
+        Phase(processID=1, projectID=PROJECT_WITH_PHASES),
+    ]
+
+    with pytest.raises(sqlite3.IntegrityError):
+        save_project(
+            db_copy,
+            PROJECT_WITH_PHASES,
+            p={"NStw": 4242.0},
+            series=_series([0.0, 0.1], cXL=[0.5, 0.8]),
+            phases=duplicate,
+        )
+
+    after = load_phases(db_copy, PROJECT_WITH_PHASES)
+    assert after.p["NStw"] == setup.p["NStw"]
+    assert len(after.phases) == len(setup.phases)
+    assert (
+        _count(db_copy, f"SELECT COUNT(*) FROM timeTab WHERE projectID = {PROJECT_WITH_PHASES}")
+        == 0
+    )
+
+
+def test_backup_is_written_and_is_a_usable_database(db_copy: Path):
+    result, backup = save_project_with_backup(
+        db_copy, PROJECT_WITH_PHASES, series=_series([0.0], cXL=[0.5])
+    )
+    assert result["times"] == 1
+    assert backup.is_file() and backup != db_copy
+    with sqlite3.connect(f"file:{backup}?mode=ro", uri=True) as conn:
+        assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert list(conn.execute("PRAGMA foreign_key_check")) == []
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM timeTab WHERE projectID = ?", (PROJECT_WITH_PHASES,)
+            ).fetchone()[0]
+            == 1
+        )
+
+
+def test_empty_project_loads_without_data(db_copy: Path):
+    """Most projects in the template have no phases and no series at all."""
+    setup = load_phases(db_copy, 733)
+    assert setup.phases == []
+    assert setup.p == {}
+    assert setup.next_process_id == 1
+    series = load_project_variables(db_copy, 733)
+    assert series.n == 0

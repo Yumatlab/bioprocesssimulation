@@ -89,7 +89,18 @@ biofermentation_sim/
 - `COUNT(*)` statt `MAX()` zur Existenzprüfung.
 - NaN-Preallokationsslots vor jedem Schreibvorgang herausfiltern.
 - `PRAGMA foreign_keys = ON` und `journal_mode = WAL` setzt
-  `get_connection` selbst.
+  `get_connection` selbst. `readonly=True` öffnet im SQLite-Readonly-Modus und
+  lässt WAL in Ruhe.
+- Ein Block, eine Verbindung, **eine** Transaktion: `get_connection` öffnet
+  `BEGIN` und schließt mit `COMMIT` oder `ROLLBACK`. `save_project` schreibt
+  Parameter, Zeitreihen, Phasen und Log gemeinsam darin.
+- **NaN wird nie geschrieben.** Preallokationsslots werden vor dem Upload
+  gefiltert, NaN-Messwerte erzeugen keine `dataTab`-Zeile und kommen als NaN
+  zurück. MATLAB schrieb dort 0 — aus „nicht gemessen" wurde eine gemessene
+  Null.
+- Der Default-Datensatz unter `resources/defaults/` ist der Wiederaufbaupfad:
+  23 CSVs, `load_defaults()` / `export_defaults()`. Projektdaten sind nicht
+  enthalten. Details in `resources/defaults/README.md`.
 
 ### Namensgebung
 
@@ -114,30 +125,33 @@ Reglerzustände (nicht persistiert).
 
 ---
 
-## Bekannte Altlasten in der Datenbank
+## Altlasten in der Datenbank — Stand nach Phase 1
 
-Gefunden beim Anlegen des Repositorys, alle noch offen:
+`src/biofermentation/db/migrate_schema.sql` behebt alle vier. Angewendet auf
+das mitgelieferte Template; **auf die produktive `SimulationAppDB.db` im
+MATLAB-Ordner noch nicht**. Das Skript ist idempotent und legt über
+`apply_migration()` vorher eine Kopie an.
 
-1. **`processTab.end_typeID` zeigt auf die falsche Tabelle.** Der Foreign Key
-   verweist auf `process_typeTab` (IDs 1–5), gespeichert werden aber
-   Bedingungstypen aus `process_conditiontypeTab` (Werte 6 und 7). Ergebnis:
-   12 Fremdschlüsselverletzungen. Dasselbe gilt für `start_typeID`, dort
-   fallen die Werte 1 und 2 nur zufällig in beide Wertebereiche.
-   `PRAGMA foreign_keys = ON` (Plan §1.2) macht das ab Phase 1 sichtbar.
-   `test_db.py` hält das als `xfail(strict=True)` fest — der Test schlägt um,
-   sobald die Migration greift.
-2. **`MATCH SIMPLE` an allen Foreign Keys**, wodurch `ON DELETE CASCADE`
-   nicht zuverlässig greift (aus der MATLAB-CLAUDE.md).
-3. **`project_parameterTab` fehlt `UNIQUE (projectID, parameterID)`.**
-   Duplikate haben dort schon einmal das Anlegen von Pichia-Projekten
-   blockiert.
-4. **`migrate_schema.sql` existiert nicht.** Der Projektplan §1.1 setzt das
-   Skript aus einer früheren Session voraus; es ist im MATLAB-Projekt nicht
-   auffindbar und muss in Phase 1 neu geschrieben werden — dann gleich
-   inklusive Punkt 1.
-5. Die produktive DB hatte eine inkonsistente Freelist (`integrity_check`
-   meldete vier nie benutzte Seiten). Das mitgelieferte Template ist über
-   `VACUUM INTO` erzeugt und dadurch bereinigt.
+1. **`processTab.start_typeID`/`end_typeID` zeigten auf `process_typeTab`**,
+   gespeichert sind aber Bedingungstypen aus `process_conditiontypeTab`
+   (1, 2 für Start; 6, 7 für Ende). 12 Fremdschlüsselverletzungen. **Behoben.**
+2. **`MATCH SIMPLE` an allen Foreign Keys. Entfernt.** Anders als bisher
+   angenommen war das nie die Ursache für unzuverlässige Cascades: SQLite
+   parst die Klausel und ignoriert sie, MATCH SIMPLE *ist* die einzige
+   Semantik, die SQLite kennt. Der reale Grund ist `PRAGMA foreign_keys`, das
+   pro Verbindung standardmäßig **aus** ist — `get_connection` setzt es jetzt.
+3. **`UNIQUE (projectID, parameterID)` auf `project_parameterTab`.** War im
+   Template bereits vorhanden; die Migration erzwingt es trotzdem, weil die
+   produktive DB den Stand nicht zwingend hat. Ermöglicht das Upsert in
+   `save_project`.
+4. **BIOSTAT B trug die Werte des BIOSTAT ED** bei sechs Parametern, acht
+   Zeilen fehlten ganz. **Behoben** aus `Parameter Overview.xlsx`. Die
+   Bioreaktoren sind die einzige Stelle, an der die Excel gegenüber der
+   Datenbank Vorrang hat — überall sonst gilt die Datenbank.
+
+Die produktive DB hatte zusätzlich eine inkonsistente Freelist
+(`integrity_check` meldete vier nie benutzte Seiten). Das Template ist über
+`VACUUM INTO` erzeugt und dadurch bereinigt.
 
 ## Herkunft des Templates
 
@@ -154,7 +168,7 @@ MATLAB-Projektordner.
 | Phase | Inhalt | Stand |
 |---|---|---|
 | 0 | Fundament, Referenzdaten | **abgeschlossen**, bis auf die Referenzläufe und das GitHub-Repository |
-| 1 | Datenschicht | als nächstes |
+| 1 | Datenschicht | **abgeschlossen** |
 | 2 | Kern, Plugin-Architektur, ODE-Übersetzung | offen |
 | 3 | Phasenautomat | offen |
 | 4 | GUI-Grundgerüst, Timer | offen |
@@ -162,6 +176,17 @@ MATLAB-Projektordner.
 | 6 | Plot-Engine | offen |
 | 7 | Verteilung Windows/macOS | offen |
 | 8 | Dokumentation | offen |
+
+### Offen aus Phase 1
+
+- **Migration auf die produktive `SimulationAppDB.db` anwenden.** Bisher nur
+  auf dem Template.
+- **`processTab.start_operatorID` zeigt auf `process_conditiontypeTab`**,
+  sein Gegenstück `end_operatorID` auf `process_operatorTab`. Gespeichert sind
+  Vergleichsoperatoren. Derselbe Fehler wie bei `end_typeID`, nur unsichtbar,
+  weil die Werte 1 und 3 zufällig in beide Wertebereiche fallen. Bewusst
+  nicht mitgeändert, im Skript kommentiert.
+- **`xCGin` fehlt in `variableTab`.** Das Gegenstück `xOGin` ist vorhanden.
 
 ### Offen aus Phase 0
 
