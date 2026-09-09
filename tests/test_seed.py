@@ -115,11 +115,10 @@ def test_null_and_empty_string_survive_the_round_trip(empty_db: Path):
     """
     load_defaults(empty_db)
     with sqlite3.connect(f"file:{empty_db}?mode=ro", uri=True) as conn:
-        empty = conn.execute(
-            "SELECT COUNT(*) FROM variableTab WHERE description = ''"
-        ).fetchone()[0]
+        empty = conn.execute("SELECT COUNT(*) FROM variableTab WHERE description = ''").fetchone()[
+            0
+        ]
         null = conn.execute(
             "SELECT COUNT(*) FROM variableTab WHERE description IS NULL"
         ).fetchone()[0]
     assert (empty, null) == (61, 3)
-

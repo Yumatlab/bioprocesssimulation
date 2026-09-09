@@ -1,1 +1,1 @@
-"""Qt user interface — phases 4-6."""
+"""Qt user interface — phases 4 to 6. Importing this pulls in PySide6."""

@@ -512,3 +512,174 @@ def save_project_with_backup(db_path: Path | str, project_id: int, **state) -> t
         target.close()
         source.close()
     return result, backup_path
+
+
+# ------------------------------------------------- projects, plan 5 --
+#
+# The two paths that destroyed the production database. See CLAUDE.md,
+# "Anforderung an Phase 5". Both are one transaction here, both leave the
+# cascading to SQLite, and neither ever switches foreign keys off.
+
+
+def list_projects(db_path: Path | str) -> list[dict]:
+    """Projects with their organism, bioreactor and how complete they are.
+
+    parameters against expected is what tells a usable project from the
+    residue of an interrupted create or delete.
+    """
+    with get_connection(db_path, readonly=True) as conn:
+        return _rows(
+            conn,
+            """
+            SELECT p.projectID, p.name, p.description, p.author, p.created_on,
+                   p.recent_use, p.organismID, p.bioreactorID, p.modelID,
+                   o.name AS organism_name, b.name AS bioreactor_name,
+                   (SELECT COUNT(*) FROM project_parameterTab pp
+                     WHERE pp.projectID = p.projectID) AS parameters,
+                   (SELECT COUNT(*) FROM model_parameterTab mp
+                     WHERE mp.modelID = p.modelID) AS expected
+              FROM projectTab p
+              LEFT JOIN organismTab o ON o.organismID = p.organismID
+              LEFT JOIN bioreactorTab b ON b.bioreactorID = p.bioreactorID
+             ORDER BY p.recent_use DESC, p.projectID DESC
+            """,
+        )
+
+
+def list_models(db_path: Path | str) -> list[dict]:
+    """Selectable models, as the project creator lists them."""
+    with get_connection(db_path, readonly=True) as conn:
+        return _rows(
+            conn,
+            """
+            SELECT m.modelID, m.name, m.description, m.display_rank,
+                   m.organismID, m.bioreactorID,
+                   o.name AS organism_name, o.function_file, o.reservoirs,
+                   b.name AS bioreactor_name,
+                   (SELECT COUNT(*) FROM model_parameterTab mp
+                     WHERE mp.modelID = m.modelID) AS parameters
+              FROM modelTab m
+              LEFT JOIN organismTab o ON o.organismID = m.organismID
+              LEFT JOIN bioreactorTab b ON b.bioreactorID = m.bioreactorID
+             ORDER BY m.display_rank, m.modelID
+            """,
+        )
+
+
+def unique_project_name(db_path: Path | str, name: str) -> str:
+    """A free name, appending _1, _2 … the way uniqueProjectname does."""
+    with get_connection(db_path, readonly=True) as conn:
+        taken = {row[0] for row in conn.execute("SELECT name FROM projectTab")}
+    if name not in taken:
+        return name
+    suffix = 1
+    while f"{name}_{suffix}" in taken:
+        suffix += 1
+    return f"{name}_{suffix}"
+
+
+def create_project(
+    db_path: Path | str,
+    name: str,
+    model_id: int,
+    *,
+    author: str = "",
+    description: str = "",
+) -> int:
+    """Create a project and its parameter set. One transaction.
+
+    MATLAB inserts the project row and then bulk-writes 250 parameter rows
+    without a transaction. An interruption in between leaves a project that
+    cannot be opened — project 732 of the production database has 42 of its
+    250 rows, ending exactly on the highest id ever assigned. Here the row and
+    its parameters are one unit: either both or neither.
+    """
+    if not name.strip():
+        raise ValueError("a project needs a name")
+
+    with get_connection(db_path) as conn:
+        model = conn.execute(
+            "SELECT modelID, organismID, bioreactorID FROM modelTab WHERE modelID = ?",
+            (model_id,),
+        ).fetchone()
+        if model is None:
+            raise LookupError(f"no model with modelID {model_id}")
+
+        defaults = conn.execute(
+            "SELECT parameterID, value, description FROM model_parameterTab WHERE modelID = ?",
+            (model_id,),
+        ).fetchall()
+        if not defaults:
+            raise ValueError(f"model {model_id} has no parameters; a project from it is unusable")
+
+        timestamp = datetime.now().strftime("%d.%m.%Y %H:%M:%S.%f")[:-3]
+        cursor = conn.execute(
+            """
+            INSERT INTO projectTab
+                (name, description, author, created_on, recent_use,
+                 organismID, bioreactorID, modelID)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                name,
+                description,
+                author,
+                timestamp,
+                timestamp,
+                model["organismID"],
+                model["bioreactorID"],
+                model_id,
+            ),
+        )
+        project_id = cursor.lastrowid
+
+        conn.executemany(
+            """
+            INSERT INTO project_parameterTab (projectID, parameterID, value, description)
+            VALUES (?, ?, ?, ?)
+            """,
+            [
+                (project_id, row["parameterID"], row["value"], row["description"])
+                for row in defaults
+            ],
+        )
+
+    return project_id
+
+
+def delete_project(db_path: Path | str, project_id: int) -> dict[str, int]:
+    """Delete a project and everything hanging off it. One transaction.
+
+    MATLAB's ClosingScreen.deleteProject switches foreign keys off, deletes
+    from dataTab, timeTab and project_parameterTab by hand, switches them back
+    on and deletes the project row last — five statements, each committing on
+    its own. An interruption leaves the data gone and the project row standing.
+    Three projects of the production database are in exactly that state.
+
+    Here one DELETE removes the row and SQLite cascades the rest, inside the
+    transaction get_connection holds and with foreign keys on throughout.
+    """
+    with get_connection(db_path) as conn:
+        if (
+            conn.execute(
+                "SELECT COUNT(*) FROM projectTab WHERE projectID = ?", (project_id,)
+            ).fetchone()[0]
+            == 0
+        ):
+            raise LookupError(f"no project with projectID {project_id}")
+
+        before = {
+            table: conn.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE projectID = ?", (project_id,)
+            ).fetchone()[0]
+            for table in ("project_parameterTab", "processTab", "timeTab", "logTab")
+        }
+        before["dataTab"] = conn.execute(
+            "SELECT COUNT(*) FROM dataTab WHERE timeID IN "
+            "(SELECT timeID FROM timeTab WHERE projectID = ?)",
+            (project_id,),
+        ).fetchone()[0]
+
+        conn.execute("DELETE FROM projectTab WHERE projectID = ?", (project_id,))
+
+    return before

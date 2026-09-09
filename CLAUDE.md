@@ -172,8 +172,8 @@ MATLAB-Projektordner.
 | 1 | Datenschicht | **abgeschlossen** |
 | 2 | Kern, Plugin-Architektur, ODE-Übersetzung | **abgeschlossen**, E. coli verifiziert, Pichia offen |
 | 3 | Phasenautomat | **abgeschlossen** |
-| 4 | GUI-Grundgerüst, Timer | offen |
-| 5 | ControlApp, Phasenmanager | offen — **siehe Anforderung unten** |
+| 4 | GUI-Grundgerüst, Timer | **abgeschlossen** |
+| 5 | ControlApp, Phasenmanager | offen — Anforderung unten, `create_project`/`delete_project` liegen bereits vor |
 | 6 | Plot-Engine | offen |
 | 7 | Verteilung Windows/macOS | offen |
 | 8 | Dokumentation | offen |
@@ -222,6 +222,17 @@ MATLAB-Projektordner.
   Parametern. E. coli bleibt bei ~133 %. Ob MATLAB dasselbe zeigt, entscheidet
   der Referenzlauf.
 
+### Offen aus Phase 4
+
+- **Die ControlApp fehlt.** `open_project` hängt bisher nur einen
+  `SimulationRunner` an das geladene Projekt; das Steuerfenster mit seinen
+  fünf Reglerpanels ist Phase 5. Die Screenshots dafür liegen in der
+  Masterarbeit auf Seite 54.
+- **`Quick Start` verhält sich wie `Start New Project`.** In MATLAB legt es
+  ein Projekt mit Standardwerten ohne Rückfrage an.
+- **Kein Anwendungssymbol und kein Logo.** Das Logo des Originals ist ein
+  Bildmittel der Hochschule und gehört nicht in diese Portierung.
+
 ### Offen aus Phase 3
 
 - **`Mode_pH` 0, `Mode_temp` 0 und `Mode_pO2` 2/3/4 sind ungeprüft.** Der
@@ -249,6 +260,15 @@ MATLAB-Projektordner.
   `license`-Feld.
 
 ---
+
+## Projekt anlegen und löschen — in Phase 4 erledigt
+
+Die beiden Pfade, über die die produktive Datenbank zerstört wurde, sind in
+`db/project.py` neu gebaut, weil die Fenster aus Phase 4 sie brauchen.
+`create_project` schreibt Projektzeile und Parametersatz in **einer**
+Transaktion, `delete_project` löscht die Projektzeile und überlässt das
+Kaskadieren SQLite. Kein `PRAGMA foreign_keys = OFF`, kein Nachbauen von Hand.
+Die Anforderung unten bleibt als Begründung stehen.
 
 ## Anforderung an Phase 5: Projekt anlegen und löschen
 
@@ -308,6 +328,17 @@ Kopieren der `.db` ohne WAL sind sie verloren.
   Original einen Wert bei `idx` schreibt und im nächsten Ausdruck den bei
   `idx-1` liest, steht im Python-Code `# MATLAB lag`. Eine Korrektur vor dem
   Referenzlauf würde jede Abweichung unzuordenbar machen.
+- **Qt bleibt aus `core/` heraus, bis auf eine Datei.** `core/runner.py`
+  läuft ohne Oberfläche und ohne PySide6; nur `core/simulation_runner.py`
+  importiert Qt, und `core/__init__.py` zieht sie nicht mit herein. Ein
+  Referenzlauf oder ein Test darf nie eine GUI-Abhängigkeit brauchen.
+- **Fenster öffnen keine Fenster.** Jedes gibt über ein Signal bekannt, was
+  der Anwender wollte; `gui/app.py` entscheidet, was aufgeht. Nur so ist ein
+  Fenster einzeln testbar.
+- **Die mitgelieferte Vorlage wird nie beschrieben.** `default_database()`
+  legt beim ersten Start eine Kopie im Benutzerverzeichnis an — über die
+  sqlite3-Backup-API, damit ein etwaiges WAL mitkommt. Im PyInstaller-Bundle
+  ist die Vorlage schreibgeschützt.
 - **Die beiden Organismen sind nicht vereinheitlicht.** Pichias MATLAB-Datei
   ist eine spätere Revision mit anderen Reglerabgriffen, D-Anteil auf der
   Messgröße und Anti-Windup. Jede Datei ist die Referenz für ihren Organismus.
