@@ -34,6 +34,8 @@ ui_*.py
 *.db-journal
 *.backup.db
 *.pre-migration.db
+# Aus dem Template erzeugt, jederzeit reproduzierbar via db/repair.py
+SimulationAppDB_verification.db
 
 # --- Reference data (large MATLAB exports stay local unless small) ---
 # tests/reference_data/*.csv is tracked on purpose - it is the only proof

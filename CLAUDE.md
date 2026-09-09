@@ -172,7 +172,7 @@ MATLAB-Projektordner.
 | 2 | Kern, Plugin-Architektur, ODE-Übersetzung | **abgeschlossen**, Verifikation blockiert |
 | 3 | Phasenautomat | offen |
 | 4 | GUI-Grundgerüst, Timer | offen |
-| 5 | ControlApp, Phasenmanager | offen |
+| 5 | ControlApp, Phasenmanager | offen — **siehe Anforderung unten** |
 | 6 | Plot-Engine | offen |
 | 7 | Verteilung Windows/macOS | offen |
 | 8 | Dokumentation | offen |
@@ -223,6 +223,47 @@ MATLAB-Projektordner.
   (Plan §0.2). Der Workflow liegt bereit.
 - **Lizenz** ist noch nicht festgelegt; `pyproject.toml` hat deshalb kein
   `license`-Feld.
+
+---
+
+## Anforderung an Phase 5: Projekt anlegen und löschen
+
+Die produktive Datenbank ist über diese beiden Pfade zerstört worden. Die
+Forensik ist eindeutig: von 733 je vergebenen Projekten sind 14 übrig, von
+11,3 Millionen `dataTab`-Zeilen keine einzige, 98,9 % der Seiten sind frei.
+Beide Pfade in der Python-Version **müssen** anders gebaut werden.
+
+**Was in MATLAB passiert ist**
+
+`ClosingScreen.deleteProject` schaltet die Fremdschlüssel ab
+(`PRAGMA foreign_keys = OFF`, Kommentar „Manual cascade for speed"), löscht
+dann von Hand aus `dataTab`, `timeTab` und `project_parameterTab`, schaltet
+sie wieder ein und löscht zuletzt aus `projectTab`. Fünf einzeln
+committende Anweisungen ohne Transaktion. Bricht etwas dazwischen ab, sind
+alle Daten weg und die Projektzeile bleibt stehen. Das `catch` stellt das
+Pragma wieder her, kann aber nichts zurückrollen — es gibt keine Transaktion.
+Drei benutzte Projekte (707, 708, 712) stehen genau so in der Datenbank.
+
+`CreateProject.CreateButtonPushed` fügt die Projektzeile ein und schreibt
+danach 250 Parameterzeilen per `sqlwrite` — ebenfalls ohne Transaktion.
+Projekt 732 hat 42 davon, lückenlos, endend exakt auf der höchsten je
+vergebenen ID. Fünf weitere Projekte haben null.
+
+Dazu vier verwaiste `.db-wal`-Dateien ohne zugehörige Datenbank: im
+WAL-Modus committete Transaktionen stehen zunächst nur im WAL, und beim
+Kopieren der `.db` ohne WAL sind sie verloren.
+
+**Was Phase 5 daraus zu machen hat**
+
+- `create_project` und `delete_project` sind **je eine** Transaktion über
+  `get_connection`. Kein Zwischenzustand darf committet werden.
+- **Das Kaskadieren macht SQLite.** Kein Nachbauen von Hand, und unter keinen
+  Umständen `PRAGMA foreign_keys = OFF`. Ist das Löschen zu langsam, ist der
+  Index das Mittel, nicht das Abschalten der Integritätsprüfung.
+- Vor dem Löschen ein Backup über `save_project_with_backup` — die
+  sqlite3-Backup-API, nie `shutil.copy`, damit das WAL mitkommt.
+- Ein Test muss belegen, dass ein Abbruch mitten im Löschen **nichts**
+  hinterlässt: entweder das Projekt ist vollständig weg oder vollständig da.
 
 ---
 
