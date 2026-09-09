@@ -15,6 +15,7 @@ Plattformen: Windows und macOS, verteilt als einzelne ausführbare Datei.
 | `~/Documents/Biofermentation Simulation Version 2.2/Anweisungen/CLAUDE.md` | **Fachliche Referenz.** Beschreibt die MATLAB-Architektur: Datenmodell (`app.p`/`app.v`/`app.a`), Preallokations-Prinzip, Phasenautomat, Reglerlogik, DB-Regeln, bekannte Schema-Probleme. Diese Datei ist der Ist-Zustand, aus dem portiert wird — nicht der Zielzustand. |
 | `~/Documents/Biofermentation Simulation Version 2.2/Anweisungen/Projektplan_Python_Migration.md` | **Phasenplan.** Neun Phasen mit Abschnittsnummern; wird eingehalten. |
 | `~/Documents/Biofermentation Simulation Version 2.2/` | MATLAB-Quellcode als Übersetzungsvorlage (`Escherichia_coli/`, `Pichia_pastoris/`, `*.mlapp`). |
+| `docs/verifikation_escherichia_coli.md` | **Verifikationsbericht.** Wogegen geprüft wurde, mit welchem Ergebnis, in welchem Fenster und warum es keine globale Toleranz geben kann. |
 
 Der MATLAB-Code wird **nicht** verändert. Er ist Lesequelle, sonst nichts.
 
@@ -185,13 +186,16 @@ MATLAB-Projektordner.
   `pHL` und `thetaL` auf ≤ 1,5e-06 überein, `VL` auf 5,5e-14, die Messgrößen
   auf 1e-11. In den ersten zwölf Schritten sind es 1e-09. Eine MATLAB-Lizenz
   war dafür nicht nötig.
-- **Pichia ist nicht verifiziert.** Der einzige verfügbare Lauf
-  (`Thesis_SimulationAppDB.db`, Projekt 520) ist vom 02.03.2025 und damit 14
-  Monate älter als `Pichia_pastoris.m`. Nachweisbar an `kLa`: die aktuelle
-  Formel reproduziert die Werte des Laufs nicht, obwohl die Übersetzung ihr
-  zeilengenau folgt. Der Test ist `skip`, nicht `xfail` — nicht
-  fehlgeschlagen, sondern nicht anwendbar. **Ein Pichia-Lauf aus der
-  aktuellen Quelle ist die wertvollste offene Zuarbeit.**
+- **Pichia wird nicht verifiziert — bewusst.** Die Strategie der Software
+  wurde geändert und dabei nur das E.-coli-Modell nachgezogen; Pichia steht
+  noch auf dem älteren Ansatz. Eine Vorlage aus der aktuellen Quelle existiert
+  daher nicht und ist auch nicht zu erwarten. Der einzige Lauf
+  (`Thesis_SimulationAppDB.db`, Projekt 520, 02.03.2025) ist 14 Monate älter
+  als `Pichia_pastoris.m` und reproduziert dessen `kLa`-Formel nicht. Der Test
+  ist `skip`, nicht `xfail` — nicht fehlgeschlagen, sondern nicht anwendbar.
+  Die Pichia-Übersetzung folgt der vorhandenen Quelle zeilengenau und ist über
+  Struktur- und Plausibilitätstests abgesichert; das ist keine Verifikation
+  und wird auch nicht als solche ausgegeben.
 - **Der Vergleich endet bei Schritt 402**, weil dort im Lauf eine
   Fed-Batch-Phase beginnt und Phase 2 keinen Phasenautomaten hat. Mit Phase 3
   wird das Fenster länger.
