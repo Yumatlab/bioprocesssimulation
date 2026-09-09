@@ -14,11 +14,19 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 
+from ..control import PhaseAutomaton
 from ..core.runner import DEFAULT_DT, load_project_state
 from ..core.simulation_runner import SimulationRunner
+from ..db import load_phases
 from ..organisms import discover_organisms
 from ..resources import default_database
-from .windows import CreateProjectWindow, SelectProjectWindow, StartingScreen
+from .style import load_stylesheet
+from .windows import (
+    ControlWindow,
+    CreateProjectWindow,
+    SelectProjectWindow,
+    StartingScreen,
+)
 
 
 class SimulationApp(QApplication):
@@ -27,6 +35,8 @@ class SimulationApp(QApplication):
     def __init__(self, argv: list[str] | None = None, *, db_path: Path | str | None = None):
         super().__init__(argv if argv is not None else sys.argv)
         self.setApplicationName("Biofermentation Simulation")
+        # The whole look is a text file; see gui/style.py.
+        self.setStyleSheet(load_stylesheet())
 
         # The plugin registry is filled once, at start, before any window can
         # ask what organisms exist.
@@ -36,6 +46,7 @@ class SimulationApp(QApplication):
         self.starting_screen = StartingScreen()
         self.select_window: SelectProjectWindow | None = None
         self.create_window: CreateProjectWindow | None = None
+        self.control_window: ControlWindow | None = None
         self.runner: SimulationRunner | None = None
 
         self.starting_screen.load_project_requested.connect(self.show_select_project)
@@ -89,24 +100,50 @@ class SimulationApp(QApplication):
 
     # ------------------------------------------------------ simulation --
 
-    def open_project(self, project_id: int) -> SimulationRunner | None:
-        """Load a project and put a runner behind it.
+    def open_project(self, project_id: int) -> ControlWindow | None:
+        """Load a project, wire up its phases and open the control window.
 
-        Phase 5 replaces this with the control window; until then the runner
-        exists and can be started, which is what the phase 4 milestone asks
-        for — "a startable prototype, without plot and without phase manager".
+        The three reads of load_phases, load_project_variables and the
+        organism plugin happen here and nowhere else — the two-accesses rule
+        of plan section 1.2 means the window that follows never touches the
+        database until it saves.
         """
         try:
+            setup = load_phases(self.db_path, project_id)
             state, organism = load_project_state(self.db_path, project_id, dt=DEFAULT_DT)
         except LookupError as error:
             QMessageBox.warning(None, "Open Project", str(error))
             return None
 
+        # The step width the project was configured with, not the default.
+        seconds = float(state.p.get("deltatsec", 0) or 0)
+        if seconds > 0:
+            state.dt = seconds / 3600
+
+        automaton = PhaseAutomaton.from_setup(setup)
         self.runner = SimulationRunner(
-            organism, state, speedfactor=int(state.p.get("speedfactor", 1) or 1)
+            organism,
+            state,
+            phases=automaton,
+            speedfactor=int(state.p.get("speedfactor", 1) or 1),
         )
-        self.runner.failed.connect(lambda message: QMessageBox.warning(None, "Simulation", message))
-        return self.runner
+
+        self.control_window = ControlWindow(setup, self.runner, self.db_path)
+        self.control_window.closed.connect(self._control_closed)
+        for window in (self.starting_screen, self.select_window, self.create_window):
+            if window is not None:
+                window.hide()
+        self.control_window.show()
+        return self.control_window
+
+    def _control_closed(self) -> None:
+        self.control_window = None
+        self.runner = None
+        if self.select_window is not None:
+            self.select_window.refresh()
+            self.select_window.show()
+        else:
+            self.show_starting_screen()
 
 
 def main(argv: list[str] | None = None) -> int:

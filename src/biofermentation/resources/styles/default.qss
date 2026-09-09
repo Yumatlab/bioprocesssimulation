@@ -1,0 +1,85 @@
+/* Look and feel of the application.
+ *
+ * Qt Style Sheets are CSS for widgets. This file can be edited without
+ * touching a line of Python — change a colour, restart, done. Put your own
+ * copy next to the database as style.qss and it is used instead; see
+ * gui/style.py.
+ *
+ * The selectors are widget classes and object names. Object names are set in
+ * the window code with setObjectName(), and the ones worth styling are:
+ *   #runButton      the big Run/Pause button
+ *   #phasePanel     one panel of the Process Manager
+ *   #controlPanel   one controller panel of the Control Options tab
+ */
+
+QGroupBox {
+    font-weight: bold;
+    border: 1px solid #b4b4b4;
+    border-radius: 4px;
+    margin-top: 10px;
+    padding-top: 8px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top center;
+    padding: 0 6px;
+}
+
+QPushButton {
+    padding: 4px 10px;
+    border: 1px solid #adadad;
+    border-radius: 3px;
+    background: #f0f0f0;
+}
+
+QPushButton:hover:enabled {
+    background: #e3efff;
+    border-color: #6ba4e0;
+}
+
+QPushButton:disabled {
+    color: #9a9a9a;
+    background: #f6f6f6;
+}
+
+QPushButton#runButton {
+    font-size: 16px;
+    font-weight: bold;
+}
+
+QLineEdit[readOnly="true"] {
+    background: #f4f4f4;
+    color: #303030;
+}
+
+QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox {
+    padding: 2px 4px;
+    border: 1px solid #b4b4b4;
+    border-radius: 3px;
+    background: white;
+}
+
+QDoubleSpinBox:disabled, QSpinBox:disabled, QLineEdit:disabled {
+    background: #ededed;
+    color: #9a9a9a;
+}
+
+QTableView {
+    gridline-color: #d8d8d8;
+    selection-background-color: #2f7fd1;
+    selection-color: white;
+}
+
+QHeaderView::section {
+    padding: 4px;
+    border: none;
+    border-right: 1px solid #d0d0d0;
+    border-bottom: 1px solid #b4b4b4;
+    background: #f2f2f2;
+    font-weight: bold;
+}
+
+QTabBar::tab {
+    padding: 6px 14px;
+}

@@ -54,7 +54,38 @@ def render(out_dir: Path, db_path: Path | None = None) -> list[Path]:
         create.table.selectRow(0)
     shoot(create, "03_create_project.png", (600, 620))
 
+    control = _control_window(db_path)
+    if control is not None:
+        shoot(control, "04_control_app.png", (1290, 690))
+        control.tabs.setCurrentIndex(2)
+        shoot(control, "05_process_manager.png", (1290, 690))
+
     return written
+
+
+def _control_window(db_path: Path):
+    """The Control App on the first project that can be opened."""
+    from ..control import PhaseAutomaton
+    from ..core.runner import load_project_state
+    from ..core.simulation_runner import SimulationRunner
+    from ..db import list_projects, load_phases
+    from .windows import ControlWindow
+
+    usable = [p for p in list_projects(db_path) if p["parameters"] >= p["expected"] > 0]
+    if not usable:
+        return None
+    project_id = usable[0]["projectID"]
+
+    setup = load_phases(db_path, project_id)
+    state, organism = load_project_state(db_path, project_id)
+    state.p["f_Inoc"] = 1.0
+    state.p["f_InocStart"] = 1.0
+    runner = SimulationRunner(organism, state, phases=PhaseAutomaton.from_setup(setup))
+    for _ in range(20):
+        runner._on_tick()
+    window = ControlWindow(setup, runner, db_path)
+    window.refresh()
+    return window
 
 
 def main(argv: list[str] | None = None) -> int:

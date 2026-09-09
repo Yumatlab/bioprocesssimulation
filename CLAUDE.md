@@ -173,7 +173,7 @@ MATLAB-Projektordner.
 | 2 | Kern, Plugin-Architektur, ODE-Übersetzung | **abgeschlossen**, E. coli verifiziert, Pichia offen |
 | 3 | Phasenautomat | **abgeschlossen** |
 | 4 | GUI-Grundgerüst, Timer | **abgeschlossen** |
-| 5 | ControlApp, Phasenmanager | offen — Anforderung unten, `create_project`/`delete_project` liegen bereits vor |
+| 5 | ControlApp, Phasenmanager | **abgeschlossen** |
 | 6 | Plot-Engine | offen |
 | 7 | Verteilung Windows/macOS | offen |
 | 8 | Dokumentation | offen |
@@ -222,12 +222,19 @@ MATLAB-Projektordner.
   Parametern. E. coli bleibt bei ~133 %. Ob MATLAB dasselbe zeigt, entscheidet
   der Referenzlauf.
 
+### Offen aus Phase 5
+
+- **Kein Plot.** Der Knopf „Open Plot" fehlt noch; die FigureApp ist Phase 6.
+- **Nur `PhaseEditor`.** `PhaseParameterEditor` und `PhaseFeedEditor` des
+  Originals sind noch nicht übersetzt — phasenspezifische Parameter lassen
+  sich derzeit nicht über die Oberfläche setzen, nur über die Datenbank.
+- **Der Reservoir-Wähler des Feed-Panels fehlt.** Das Panel zeigt fest R1;
+  bei Pichia mit zwei Reservoirs braucht es die Auswahl aus dem Screenshot.
+- **Kein `Variable Pool`-Filter.** Die Tabelle listet alle 78 Variablen;
+  `variable_handlingTab.visible` wird noch nicht ausgewertet.
+
 ### Offen aus Phase 4
 
-- **Die ControlApp fehlt.** `open_project` hängt bisher nur einen
-  `SimulationRunner` an das geladene Projekt; das Steuerfenster mit seinen
-  fünf Reglerpanels ist Phase 5. Die Screenshots dafür liegen in der
-  Masterarbeit auf Seite 54.
 - **`Quick Start` verhält sich wie `Start New Project`.** In MATLAB legt es
   ein Projekt mit Standardwerten ohne Rückfrage an.
 - **Kein Anwendungssymbol und kein Logo.** Das Logo des Originals ist ein
@@ -335,6 +342,17 @@ Kopieren der `.db` ohne WAL sind sie verloren.
 - **Fenster öffnen keine Fenster.** Jedes gibt über ein Signal bekannt, was
   der Anwender wollte; `gui/app.py` entscheidet, was aufgeht. Nur so ist ein
   Fenster einzeln testbar.
+- **Kein `findData` mit einem `IntEnum`.** Qt vergleicht über eine QVariant,
+  und die enthält einen `int` — `findData(EndCondition.TIMER)` liefert `-1`,
+  wo `findData(7)` die 0 liefert. Jede ID in dieser Anwendung kommt aus einer
+  Lookup-Tabelle und hat ein `IntEnum` daneben, die Falle liegt also überall
+  eine Zeile entfernt. Dafür gibt es `widgets.select_data()`.
+- **Jeder Schreibzugriff der Oberfläche läuft durch `runner.editing()`.**
+  Ein Sollwert, der geändert wird, während ein Timer-Tick mitten im Schritt
+  steht, ist genau der Fall, für den das Guard-Flag existiert.
+- **Die Optik ist eine Textdatei.** `resources/styles/default.qss`; eine
+  `style.qss` neben der Datenbank ersetzt sie. Farben, Abstände und Schriften
+  ohne Python und ohne Neuübersetzung.
 - **Die mitgelieferte Vorlage wird nie beschrieben.** `default_database()`
   legt beim ersten Start eine Kopie im Benutzerverzeichnis an — über die
   sqlite3-Backup-API, damit ein etwaiges WAL mitkommt. Im PyInstaller-Bundle

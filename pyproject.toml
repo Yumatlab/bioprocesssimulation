@@ -49,6 +49,10 @@ ignore = ["N803", "N806", "N815", "N816"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
+# The Greek letters are the point of the file: parameterTab.tex writes
+# \alpha, \vartheta and \mu, and they have to come out as α, ϑ and µ.
+"src/biofermentation/gui/widgets/tex.py" = ["RUF001"]
+"src/biofermentation/gui/widgets/panel_specs.py" = ["RUF001"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
