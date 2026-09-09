@@ -60,6 +60,14 @@ def render(out_dir: Path, db_path: Path | None = None) -> list[Path]:
         control.tabs.setCurrentIndex(2)
         shoot(control, "05_process_manager.png", (1290, 690))
 
+        control.open_plot()
+        figure = control.figure_window
+        figure.resize(1500, 815)
+        figure.show()
+        app.processEvents()
+        figure.refresh()
+        shoot(figure, "06_figure_app.png", (1500, 815))
+
     return written
 
 
@@ -80,8 +88,10 @@ def _control_window(db_path: Path):
     state, organism = load_project_state(db_path, project_id)
     state.p["f_Inoc"] = 1.0
     state.p["f_InocStart"] = 1.0
-    runner = SimulationRunner(organism, state, phases=PhaseAutomaton.from_setup(setup))
-    for _ in range(20):
+    runner = SimulationRunner(
+        organism, state, phases=PhaseAutomaton.from_setup(setup), speedfactor=30
+    )
+    for _ in range(120):
         runner._on_tick()
     window = ControlWindow(setup, runner, db_path)
     window.refresh()

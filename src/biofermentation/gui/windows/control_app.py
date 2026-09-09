@@ -59,6 +59,7 @@ class ControlWindow(QMainWindow):
         self.runner = runner
         self.db_path = Path(db_path)
         self.log_lines: list[str] = []
+        self.figure_window = None
 
         info = setup.info
         self.setWindowTitle(
@@ -157,6 +158,10 @@ class ControlWindow(QMainWindow):
         layout.addLayout(form)
 
         layout.addStretch()
+        self.plot_button = QPushButton("Open Plot")
+        self.plot_button.clicked.connect(self.open_plot)
+        layout.addWidget(self.plot_button)
+
         self.save_button = QPushButton("Save")
         self.save_button.clicked.connect(self.save)
         layout.addWidget(self.save_button)
@@ -370,6 +375,20 @@ class ControlWindow(QMainWindow):
 
     # ------------------------------------------------------------- log --
 
+    def open_plot(self) -> None:
+        """The Figure App, on the same runner. One window at a time."""
+        from .figure_app import open_figure
+
+        if self.figure_window is None:
+            self.figure_window = open_figure(self.db_path, self.runner)
+            self.figure_window.closed.connect(self._figure_closed)
+        self.figure_window.show()
+        self.figure_window.raise_()
+        self.note("Plot opened")
+
+    def _figure_closed(self) -> None:
+        self.figure_window = None
+
     def note(self, message: str) -> None:
         self.log_lines.append(message)
         self.log_view.appendPlainText(message)
@@ -383,6 +402,8 @@ class ControlWindow(QMainWindow):
         self.refresh()
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
+        if self.figure_window is not None:
+            self.figure_window.close()
         self.runner.pause()
         self.closed.emit()
         super().closeEvent(event)

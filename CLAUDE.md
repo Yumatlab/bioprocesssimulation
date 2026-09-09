@@ -174,7 +174,7 @@ MATLAB-Projektordner.
 | 3 | Phasenautomat | **abgeschlossen** |
 | 4 | GUI-Grundgerüst, Timer | **abgeschlossen** |
 | 5 | ControlApp, Phasenmanager | **abgeschlossen** |
-| 6 | Plot-Engine | offen |
+| 6 | Plot-Engine | **abgeschlossen** |
 | 7 | Verteilung Windows/macOS | offen |
 | 8 | Dokumentation | offen |
 
@@ -222,9 +222,19 @@ MATLAB-Projektordner.
   Parametern. E. coli bleibt bei ~133 %. Ob MATLAB dasselbe zeigt, entscheidet
   der Referenzlauf.
 
+### Offen aus Phase 6
+
+- **Kein `TemplateManager`.** Templates lassen sich laden, ändern und
+  speichern, aber nicht anlegen, kopieren oder löschen. Farbe und Linienstil
+  sind über die Oberfläche nicht wählbar — `QColorDialog` und ein Dropdown
+  für `plot_linestyleTab` fehlen.
+- **Kein Export.** Das Menü `Export` der FigureApp ist nicht übersetzt.
+- **Keine vertikalen Phasenmarkierungen.** Die MATLAB-Version zeichnet die
+  Phasengrenzen als senkrechte Linien (`graphvlinewidth`); dafür gibt es in
+  pyqtgraph `InfiniteLine`.
+
 ### Offen aus Phase 5
 
-- **Kein Plot.** Der Knopf „Open Plot" fehlt noch; die FigureApp ist Phase 6.
 - **Nur `PhaseEditor`.** `PhaseParameterEditor` und `PhaseFeedEditor` des
   Originals sind noch nicht übersetzt — phasenspezifische Parameter lassen
   sich derzeit nicht über die Oberfläche setzen, nur über die Datenbank.
@@ -342,6 +352,11 @@ Kopieren der `.db` ohne WAL sind sie verloren.
 - **Fenster öffnen keine Fenster.** Jedes gibt über ein Signal bekannt, was
   der Anwender wollte; `gui/app.py` entscheidet, was aufgeht. Nur so ist ein
   Fenster einzeln testbar.
+- **Jeder Qt-Stift muss kosmetisch sein.** Ein `QPen` von Hand ist es nicht,
+  seine Breite gilt dann in Datenkoordinaten und wird von der
+  ViewBox-Transformation skaliert — aus einer 1,5-pt-Linie wird ein 50 px
+  breites Band, und jede Kurve sieht aus wie eine Fläche. `pg.mkPen` setzt
+  das Flag, ein selbst gebautes `QPen` nicht.
 - **Kein `findData` mit einem `IntEnum`.** Qt vergleicht über eine QVariant,
   und die enthält einen `int` — `findData(EndCondition.TIMER)` liefert `-1`,
   wo `findData(7)` die 0 liefert. Jede ID in dieser Anwendung kommt aus einer
