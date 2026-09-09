@@ -106,6 +106,18 @@ def build_ecoli() -> None:
         # cXL is 0 at index 0 and 1 and 3.0 at index 2: inoculation was
         # switched on during the second step, not before the run.
         inoculation_step=1,
+        # The project this run belonged to is deleted, but its feed phase can
+        # be reconstructed. FR1 becomes non-zero at step 403, and the value
+        # 0.03899203 l/h is exactly what handleExponentialFeed computes from
+        # the state at step 402 — to eight decimals. The feed then grows at
+        # 0.100000 1/h, which is qXpX1w. Reservoir 1, since E. coli has one.
+        feed_phase_start_step=402,
+        feed_phase_type=5,
+        feed_phase_reservoir=1,
+        # Where the comparison has to stop: at this step a pH difference of
+        # 1.4e-05 puts the two runs on opposite sides of the controller's dead
+        # band and the pump schedules part company.
+        comparison_end_step=903,
     )
     print(f"E. coli: {len(rows)} Schritte, {len(header)} Spalten, dt = {dt}")
 

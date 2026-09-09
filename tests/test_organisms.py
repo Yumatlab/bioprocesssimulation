@@ -332,20 +332,23 @@ def test_the_database_knows_every_variable_the_models_compute(registry):
 # this system, and the reason is worth writing down.
 #
 # The E. coli reference is a batch that turns into a fed batch at step 403,
-# driven by a phase. Phase 2 has no phase automaton, so from there the two
-# runs are simulating different experiments — MATLAB feeds, this model does
-# not. The comparison therefore ends at step 402.
+# driven by a phase of a project that no longer exists. The phase is
+# reconstructed — see reference_data/extract.py — so the comparison covers the
+# feed as well and reaches step 903.
 #
-# What happens after that is instructive anyway. The pH controller has a hard
+# It cannot reach further. The pH controller has a hard
 # dead band, |pHw - pHL| < 0.1, and the process sits almost exactly on it: in
 # 19 % of all steps MATLAB is within 1e-3 of the switching threshold. At step
 # 785 a pH difference of 1.0e-04 puts MATLAB inside the band and this model
 # outside, the alkali pump runs in one and not in the other, and 1016 of 2983
-# steps end up deciding differently. Bit-exact agreement over a long horizon
+# steps end up deciding differently. With the feed phase in place the first
+# divergence moves to step 904 and the deciding pH difference is 1.4e-05 —
+# smaller, not larger, which is what amplification at a discontinuity looks
+# like. Bit-exact agreement over a long horizon
 # is impossible here in principle, not merely hard — no tolerance can be both
 # meaningful and passable across a discontinuous switch.
 #
-# Tolerances below are measured, not guessed. Over steps 0..402 the state
+# Tolerances below are measured, not guessed. Over steps 0..903 the state
 # variables agree to 1.5e-06 or better and the measured values to 1e-11; the
 # fast oxygen loop (pO2, kLa, OTR, RQ) is looser because those quantities pass
 # through zero, which makes a relative bound meaningless — they get an
@@ -376,21 +379,63 @@ def test_ecoli_matches_matlab_reference(registry):
     starting value of the run matches that project exactly, down to
     pG = pGcal + deltapGw * 1e5 and the agitation controller's lower clamp of
     0.3 * NStmax. Agreement to 1e-09 in the first steps confirms the choice.
+
+    The project itself is deleted, so its feed phase is reconstructed from the
+    run — see reference_data/extract.py for the derivation. With the phase in
+    place the comparison reaches step 903 instead of 402 and covers the
+    exponential feed; without it, this model simply stops feeding at 403 and
+    the two runs are no longer the same experiment.
     """
+    from biofermentation.control import (
+        EndCondition,
+        PhaseAutomaton,
+        PhaseStatus,
+        PhaseType,
+        StartCondition,
+    )
+    from biofermentation.db.models import Condition, Phase
+
     reference, p, meta = _reference("ecoli")
     dt = float(meta["deltat"])
     inoculation_step = int(float(meta["inoculation_step"]))
-    end = 402  # last step before the fed batch begins
+    feed_step = int(float(meta["feed_phase_start_step"]))
+    end = int(float(meta["comparison_end_step"]))
 
     # cXL is 0 for the first two rows and 3.0 in the third: inoculation was
     # switched on during the run, not before it.
-    p = dict(p) | {"f_InocStart": 0.0, "f_Inoc": 0.0}
+    p = dict(p) | {"f_InocStart": 0.0, "f_Inoc": 0.0, "deltatsec": 2.0}
     model = get_organism("escherichia_coli")
     state = build_state(p, model, dt=dt)
+
+    # variableID 61 is "t"; operatorID 1 is ">=".
+    phase = Phase(
+        processID=1,
+        projectID=int(float(meta["projectID"])),
+        statusID=PhaseStatus.UPCOMING,
+        typeID=PhaseType(int(float(meta["feed_phase_type"]))),
+        name="Fed Batch",
+        reservoirID=int(float(meta["feed_phase_reservoir"])),
+        start=Condition(
+            typeID=StartCondition.VARIABLE,
+            variableID=61,
+            operatorID=1,
+            value=float(reference["t"][feed_step]),
+        ),
+        end=Condition(typeID=EndCondition.TIMER, value=99.0),
+    )
+    automaton = PhaseAutomaton([phase], variable_names={61: "t"}, operator_symbols={1: ">="})
+
     for step in range(end):
         if step == inoculation_step:
             state.p.f_Inoc = 1.0
+        automaton.check_start(state)
         model.calculate_step(state)
+        automaton.check_end(state)
+
+    # The reconstructed feed has to land on the run's own value. The residual
+    # is 3.7e-09, which is the solver noise already present in cXL and VL —
+    # handleExponentialFeed computes FRj from both.
+    assert state.v.FR1[feed_step + 1] == pytest.approx(reference["FR1"][feed_step + 1], abs=1e-8)
 
     for column in PRIMARY_COLUMNS:
         np.testing.assert_allclose(

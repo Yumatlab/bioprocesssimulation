@@ -1,6 +1,6 @@
 # Verifikation des E.-coli-Modells gegen MATLAB
 
-Stand: 9. September 2026 · Projektplan §2.4 · Commit `ee24379`
+Stand: 9. September 2026 · Projektplan §2.4 und §3 · zuletzt erweitert nach Phase 3
 
 ---
 
@@ -72,18 +72,29 @@ Inokulation wurde also **während** des Laufs eingeschaltet, nicht davor. Der
 Vergleich bildet das nach: `f_InocStart = 0`, und `f_Inoc` wird im zweiten
 Schritt auf 1 gesetzt.
 
-## Vergleichsfenster: Schritte 0 bis 402
+## Vergleichsfenster: Schritte 0 bis 903
 
-Bei Schritt 403 beginnt im Lauf eine Fed-Batch-Phase:
+Bei Schritt 403 beginnt im Lauf eine Fed-Batch-Phase. Das Projekt dazu ist
+gelöscht, die Phase ließ sich aber **rekonstruieren**:
+
+`handleExponentialFeed` berechnet die Startrate aus dem Zustand bei
+Phasenbeginn. Aus dem Zustand bei Schritt 402 ergibt sich
 
 ```
-FR1   erste Abweichung bei idx 403:   MATLAB = 0,038992   Python = 0
+FRj = ((qXpX1w + qS1pXm·yXpS1gr) · VL · cXL) / (yXpS1gr · cS1R1) = 0,03899203 l/h
 ```
 
-Phase 2 hat keinen Phasenautomaten — ab dort simulieren die beiden Läufe
-verschiedene Experimente. Der Vergleich endet deshalb bei Schritt 402, dem
-letzten Schritt der reinen Batch-Phase. **Mit Phase 3 wird das Fenster
-länger.**
+und der Lauf zeigt bei Schritt 403 genau `FR1 = 0,03899203` — Übereinstimmung
+auf acht Nachkommastellen. Anschließend wächst der Feed mit gemessenen
+0,100000 1/h, was exakt `qXpX1w` ist. Damit sind Typ (Exponentialfeed),
+Reservoir (1) und Startzeitpunkt (Schritt 402) belegt.
+
+Mit dieser Phase reicht der Vergleich bis **Schritt 903** und deckt den
+Exponentialfeed mit ab. Die Rekonstruktion steht in
+`tests/reference_data/extract.py`, die abgeleiteten Werte im Metadatensatz.
+
+Bei Schritt 904 ist Schluss — dort greift das Totband des pH-Reglers
+(siehe unten).
 
 ## Ergebnis
 
@@ -97,6 +108,10 @@ länger.**
 | `pHL` | 6,66754008 | 6,66754960 | 1,4e-06 | 9,5e-06 |
 | `thetaL` | 31,9531001 | 31,9530837 | 1,1e-06 | 3,5e-05 |
 | `VL` | 10,0398611 | 10,0398611 | **5,5e-14** | 5,6e-13 |
+
+Über das volle Fenster bis Schritt 903 bleiben die Primärgrößen bei
+**≤ 2,1e-06**, die Sekundärgrößen bei absolut ≤ 7,1e-01 (`NSt`, das über
+400–1306 rpm läuft).
 
 ### Messgrößen (Verzögerungsglieder erster Ordnung)
 
@@ -151,12 +166,13 @@ Sauerstoff- und CO₂-Transfer mit Stanton-Zahlen, das Temperatursystem mit
 Doppelmantel und Kühlkreis, die Wachstumskinetik mit Substrat- und
 Sauerstofflimitierung, Acetatbildung und -rückverwertung, der
 Rührwerksregler über 400–1306 rpm, beide pH-Pumpenrichtungen, die
-Verzögerungsglieder der Messgrößen und die Volumenbilanz mit Titration.
+Verzögerungsglieder der Messgrößen, die Volumenbilanz mit Titration sowie
+seit Phase 3 der **Exponentialfeed samt Phasenübergang**.
 
 **Nicht geprüft:** reine O₂-, N₂- oder CO₂-Begasung (`FnO2`, `FnN2`, `FnCO2`
 durchgehend null), Antischaumzugabe (`AAF` null), Ernte, Glycerin als
-Substrat (`cS2L` null), Exponential- und Pulsfeed, Betriebsart `Mode_pO2` 2,
-3 und 4, `Mode_pH` 0, `Mode_temp` 0.
+Substrat (`cS2L` null), Pulsfeed, Betriebsart `Mode_pO2` 2, 3 und 4,
+`Mode_pH` 0, `Mode_temp` 0.
 
 ## Warum es keine globale Toleranz geben kann
 
@@ -175,10 +191,15 @@ Der Prozess sitzt praktisch auf dieser Schwelle. In **19 % aller Schritte**
 liegt MATLAB näher als 1e-3 an ihr. Bei Schritt 785 sieht das so aus:
 
 ```
-MATLAB  pHL = 6,6000088   Abstand 0,0999912   Regler AUS
-Python  pHL = 6,5999080   Abstand 0,1000920   Regler AN
-Differenz im pH: 1,0e-04
+MATLAB  pHL = 6,5999948   Abstand 0,1000052   Regler AN
+Python  pHL = 6,6000085   Abstand 0,0999915   Regler AUS
+Differenz im pH: 1,4e-05
 ```
+
+(Ohne die rekonstruierte Feed-Phase lag der erste Umschlag bei Schritt 785
+und die entscheidende Differenz bei 1,0e-04. Mit besserer Übereinstimmung
+wandert der Umschlag nach hinten und die auslösende Differenz wird **kleiner**
+— genau das Bild, das eine Verstärkung an einer Unstetigkeit erzeugt.)
 
 Eine Differenz in der vierten Nachkommastelle entscheidet, ob die
 Laugenpumpe läuft. Über den vollen Lauf fallen **1016 von 2983 Schritten**

@@ -171,7 +171,7 @@ MATLAB-Projektordner.
 | 0 | Fundament, Referenzdaten | **abgeschlossen**, bis auf die Referenzläufe und das GitHub-Repository |
 | 1 | Datenschicht | **abgeschlossen** |
 | 2 | Kern, Plugin-Architektur, ODE-Übersetzung | **abgeschlossen**, E. coli verifiziert, Pichia offen |
-| 3 | Phasenautomat | offen |
+| 3 | Phasenautomat | **abgeschlossen** |
 | 4 | GUI-Grundgerüst, Timer | offen |
 | 5 | ControlApp, Phasenmanager | offen — **siehe Anforderung unten** |
 | 6 | Plot-Engine | offen |
@@ -196,9 +196,11 @@ MATLAB-Projektordner.
   Die Pichia-Übersetzung folgt der vorhandenen Quelle zeilengenau und ist über
   Struktur- und Plausibilitätstests abgesichert; das ist keine Verifikation
   und wird auch nicht als solche ausgegeben.
-- **Der Vergleich endet bei Schritt 402**, weil dort im Lauf eine
-  Fed-Batch-Phase beginnt und Phase 2 keinen Phasenautomaten hat. Mit Phase 3
-  wird das Fenster länger.
+- **Der Vergleich reicht bis Schritt 903.** Die Fed-Batch-Phase des
+  gelöschten Projekts ließ sich aus dem Lauf rekonstruieren: `FRj` aus dem
+  Zustand bei Schritt 402 trifft den Wert bei 403 auf acht Nachkommastellen,
+  und der Feed wächst mit exakt `qXpX1w`. Damit deckt die Verifikation seit
+  Phase 3 auch den Exponentialfeed und einen Phasenübergang ab.
 - **Pichia-Defaults sind verfälscht.** `default_modelTab` hat für Pichia je
   zwei Zeilen für `yXpOgr`, `yCpO` und `qOpXm` (parameterID 206/207/208). Die
   jeweils zweite trägt Wert *und* Beschreibung der Methanol-Toxizitätsparameter
@@ -219,6 +221,12 @@ MATLAB-Projektordner.
 - **pO2 überschwingt bei Pichia** auf über 1000 %, auch mit korrigierten
   Parametern. E. coli bleibt bei ~133 %. Ob MATLAB dasselbe zeigt, entscheidet
   der Referenzlauf.
+
+### Offen aus Phase 3
+
+- **`Mode_pH` 0, `Mode_temp` 0 und `Mode_pO2` 2/3/4 sind ungeprüft.** Der
+  Referenzlauf benutzt sie nicht.
+- **Der Pulsfeed ist nur strukturell getestet**, nicht gegen einen Lauf.
 
 ### Offen aus Phase 1
 

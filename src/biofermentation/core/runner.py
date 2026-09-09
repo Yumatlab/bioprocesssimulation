@@ -33,21 +33,40 @@ def run_steps(
     organism: OrganismModel,
     n_steps: int,
     *,
+    phases=None,
+    steps_per_check: int = 1,
     on_step: Callable[[SimulationState], None] | None = None,
     stop_when: Callable[[SimulationState], bool] | None = None,
 ) -> SimulationState:
     """Advance the state by n_steps.
 
+    With a PhaseAutomaton in phases the loop mirrors MATLAB's calculationFcn:
+    the start condition is checked before a block of steps and the end
+    condition after it. steps_per_check is app.p.speedfactor, the number of
+    simulation steps one timer tick performs; the checks do not happen in
+    between, and a phase can therefore overrun its condition by up to that
+    many steps. Faithful, and worth knowing when reading a phase's end time.
+
     on_step is called after every step — that is where the GUI will hang its
-    plot refresh. stop_when ends the run early and is what the phase automaton
-    of phase 3 will use for a stop phase.
+    plot refresh. stop_when ends the run early.
     """
-    for _ in range(n_steps):
-        organism.calculate_step(state)
-        if on_step is not None:
-            on_step(state)
-        if stop_when is not None and stop_when(state):
-            break
+    done = 0
+    while done < n_steps:
+        if phases is not None:
+            phases.check_start(state)
+
+        for _ in range(min(steps_per_check, n_steps - done)):
+            organism.calculate_step(state)
+            done += 1
+            if on_step is not None:
+                on_step(state)
+            if stop_when is not None and stop_when(state):
+                return state
+
+        if phases is not None:
+            phases.check_end(state)
+            if phases.stop_requested:
+                return state
     return state
 
 
