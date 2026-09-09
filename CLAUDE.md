@@ -169,7 +169,7 @@ MATLAB-Projektordner.
 |---|---|---|
 | 0 | Fundament, Referenzdaten | **abgeschlossen**, bis auf die Referenzläufe und das GitHub-Repository |
 | 1 | Datenschicht | **abgeschlossen** |
-| 2 | Kern, Plugin-Architektur, ODE-Übersetzung | **abgeschlossen**, Verifikation blockiert |
+| 2 | Kern, Plugin-Architektur, ODE-Übersetzung | **abgeschlossen**, E. coli verifiziert, Pichia offen |
 | 3 | Phasenautomat | offen |
 | 4 | GUI-Grundgerüst, Timer | offen |
 | 5 | ControlApp, Phasenmanager | offen — **siehe Anforderung unten** |
@@ -179,10 +179,22 @@ MATLAB-Projektordner.
 
 ### Offen aus Phase 2
 
-- **Referenzläufe fehlen weiterhin.** Beide Organismen sind übersetzt und
-  laufen, aber `test_organisms.py` kann nur Struktur und Plausibilität prüfen.
-  Ohne `ecoli_reference.csv` ist keine einzige Zahl verifiziert. Das ist der
-  wichtigste offene Punkt des Projekts.
+- **E. coli ist verifiziert.** Gegen `MyProject_11.txt`, einen Export der
+  Anwendung vom 27.04.2026 — fünf Tage jünger als `Escherichia_coli.m`, also
+  derselbe Code. Über die Batch-Phase (Schritte 0–402) stimmen `cXL`, `cS1L`,
+  `pHL` und `thetaL` auf ≤ 1,5e-06 überein, `VL` auf 5,5e-14, die Messgrößen
+  auf 1e-11. In den ersten zwölf Schritten sind es 1e-09. Eine MATLAB-Lizenz
+  war dafür nicht nötig.
+- **Pichia ist nicht verifiziert.** Der einzige verfügbare Lauf
+  (`Thesis_SimulationAppDB.db`, Projekt 520) ist vom 02.03.2025 und damit 14
+  Monate älter als `Pichia_pastoris.m`. Nachweisbar an `kLa`: die aktuelle
+  Formel reproduziert die Werte des Laufs nicht, obwohl die Übersetzung ihr
+  zeilengenau folgt. Der Test ist `skip`, nicht `xfail` — nicht
+  fehlgeschlagen, sondern nicht anwendbar. **Ein Pichia-Lauf aus der
+  aktuellen Quelle ist die wertvollste offene Zuarbeit.**
+- **Der Vergleich endet bei Schritt 402**, weil dort im Lauf eine
+  Fed-Batch-Phase beginnt und Phase 2 keinen Phasenautomaten hat. Mit Phase 3
+  wird das Fenster länger.
 - **Pichia-Defaults sind verfälscht.** `default_modelTab` hat für Pichia je
   zwei Zeilen für `yXpOgr`, `yCpO` und `qOpXm` (parameterID 206/207/208). Die
   jeweils zweite trägt Wert *und* Beschreibung der Methanol-Toxizitätsparameter
@@ -287,6 +299,15 @@ Kopieren der `.db` ohne WAL sind sie verloren.
 - **Die beiden Organismen sind nicht vereinheitlicht.** Pichias MATLAB-Datei
   ist eine spätere Revision mit anderen Reglerabgriffen, D-Anteil auf der
   Messgröße und Anti-Windup. Jede Datei ist die Referenz für ihren Organismus.
+- **Referenzvergleiche brauchen ein Fenster, keine globale Toleranz.** Der
+  pH-Regler hat ein hartes Totband (`|pHw - pHL| < 0.1`), und der Prozess
+  sitzt praktisch darauf: in 19 % aller Schritte liegt MATLAB näher als 1e-3
+  an der Schaltschwelle. Bei Schritt 785 entscheidet eine pH-Differenz von
+  1,0e-04 über die Laugenpumpe, und 1016 von 2983 Schritten fallen danach
+  unterschiedlich aus. Bit-genaue Langzeitübereinstimmung ist hier **prinzipiell**
+  unmöglich — kein Toleranzwert kann gleichzeitig aussagekräftig und
+  erfüllbar sein. Deshalb: scharfes Fenster vor dem ersten Umschalten, danach
+  nichts. Die Toleranzen in `test_organisms.py` sind gemessen, nicht geraten.
 
 ### Arbeitsweise
 

@@ -28,8 +28,8 @@ from biofermentation.organisms import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_DB = REPO_ROOT / "src" / "biofermentation" / "resources" / "SimulationAppDB_template.db"
 REFERENCE_DIR = Path(__file__).resolve().parent / "reference_data"
-ECOLI_REFERENCE = REFERENCE_DIR / "ecoli_reference.csv"
-PICHIA_REFERENCE = REFERENCE_DIR / "pichia_reference.csv"
+ECOLI_REFERENCE = REFERENCE_DIR / "ecoli_reference.csv.gz"
+PICHIA_REFERENCE = REFERENCE_DIR / "pichia_reference.csv.gz"
 
 # Variables compared first; a deviation here points at the balance equations
 # rather than at a controller detail.
@@ -327,42 +327,164 @@ def test_the_database_knows_every_variable_the_models_compute(registry):
 
 
 # ----------------------------------------- MATLAB reference, plan 2.4 --
+#
+# The plan asks for one tolerance over the whole run. That cannot work for
+# this system, and the reason is worth writing down.
+#
+# The E. coli reference is a batch that turns into a fed batch at step 403,
+# driven by a phase. Phase 2 has no phase automaton, so from there the two
+# runs are simulating different experiments — MATLAB feeds, this model does
+# not. The comparison therefore ends at step 402.
+#
+# What happens after that is instructive anyway. The pH controller has a hard
+# dead band, |pHw - pHL| < 0.1, and the process sits almost exactly on it: in
+# 19 % of all steps MATLAB is within 1e-3 of the switching threshold. At step
+# 785 a pH difference of 1.0e-04 puts MATLAB inside the band and this model
+# outside, the alkali pump runs in one and not in the other, and 1016 of 2983
+# steps end up deciding differently. Bit-exact agreement over a long horizon
+# is impossible here in principle, not merely hard — no tolerance can be both
+# meaningful and passable across a discontinuous switch.
+#
+# Tolerances below are measured, not guessed. Over steps 0..402 the state
+# variables agree to 1.5e-06 or better and the measured values to 1e-11; the
+# fast oxygen loop (pO2, kLa, OTR, RQ) is looser because those quantities pass
+# through zero, which makes a relative bound meaningless — they get an
+# absolute one. Every bound has at least a factor of two of margin.
+
+# Balance equations and slow states. A translation error shows here first.
+PRIMARY_COLUMNS = ["cXL", "cS1L", "pHL", "thetaL", "VL"]
+# Fast oxygen transfer loop and the controllers driving it.
+SECONDARY_COLUMNS = ["pO2", "cOL", "OUR", "OTR", "kLa", "NSt", "xOG", "RQ"]
 
 
-def _load_reference(prefix: str):
+def _reference(prefix: str):
+    """Load a reference run: series, the parameters MATLAB ran with, metadata."""
     pd = pytest.importorskip("pandas")
-    series = pd.read_csv(REFERENCE_DIR / f"{prefix}_reference.csv")
+    series = pd.read_csv(REFERENCE_DIR / f"{prefix}_reference.csv.gz")
     parameters = pd.read_csv(REFERENCE_DIR / f"{prefix}_reference_p.csv")
     meta = pd.read_csv(REFERENCE_DIR / f"{prefix}_reference_meta.csv").set_index("key")["value"]
     p = dict(zip(parameters["name"], parameters["value"].astype(float), strict=True))
-    return series, p, float(meta["deltat"]), int(float(meta["steps"]))
+    return series, p, meta
 
 
-def _compare(organism: str, prefix: str) -> None:
-    reference, p, dt, steps = _load_reference(prefix)
-    state = run_simulation(organism, p, steps - 1, dt=dt)
-    result = state.trimmed()
+@pytest.mark.reference
+@pytest.mark.skipif(not ECOLI_REFERENCE.is_file(), reason="no E. coli reference run yet")
+def test_ecoli_matches_matlab_reference(registry):
+    """Against MyProject_11.txt, an export the application wrote itself.
 
-    missing = [c for c in CORE_COLUMNS if c not in reference.columns]
-    assert missing == [], f"reference run lacks {missing}"
+    The export carries no parameter set. Project 716 supplies it: every
+    starting value of the run matches that project exactly, down to
+    pG = pGcal + deltapGw * 1e5 and the agitation controller's lower clamp of
+    0.3 * NStmax. Agreement to 1e-09 in the first steps confirms the choice.
+    """
+    reference, p, meta = _reference("ecoli")
+    dt = float(meta["deltat"])
+    inoculation_step = int(float(meta["inoculation_step"]))
+    end = 402  # last step before the fed batch begins
 
-    for column in CORE_COLUMNS:
+    # cXL is 0 for the first two rows and 3.0 in the third: inoculation was
+    # switched on during the run, not before it.
+    p = dict(p) | {"f_InocStart": 0.0, "f_Inoc": 0.0}
+    model = get_organism("escherichia_coli")
+    state = build_state(p, model, dt=dt)
+    for step in range(end):
+        if step == inoculation_step:
+            state.p.f_Inoc = 1.0
+        model.calculate_step(state)
+
+    for column in PRIMARY_COLUMNS:
         np.testing.assert_allclose(
-            result[column][: len(reference)],
-            reference[column].to_numpy(),
-            rtol=1e-4,
-            atol=1e-6,
+            state.v[column][: end + 1],
+            reference[column].to_numpy()[: end + 1],
+            rtol=1e-5,
+            atol=1e-8,
+            err_msg=f"deviation in {column}",
+        )
+    for column in SECONDARY_COLUMNS:
+        np.testing.assert_allclose(
+            state.v[column][: end + 1],
+            reference[column].to_numpy()[: end + 1],
+            rtol=5e-3,
+            atol=1e-3,
             err_msg=f"deviation in {column}",
         )
 
 
 @pytest.mark.reference
 @pytest.mark.skipif(not ECOLI_REFERENCE.is_file(), reason="no E. coli reference run yet")
-def test_ecoli_matches_matlab_reference():
-    _compare("escherichia_coli", "ecoli")
+def test_ecoli_agrees_to_nine_digits_at_the_start(registry):
+    """Before any controller switch, the two implementations are the same code.
+
+    This is the sharpest statement the reference supports and the one that
+    would break first on an index slip or a sign error. Measured over the
+    first twelve steps: cXL 4.8e-09, cS1L 2.8e-09, pHL 1.3e-10, VL 4.6e-15.
+
+    thetaL is left out on purpose — it sits at 2.7e-07, which is excellent but
+    a decimal short of the rest. The temperature balance is the stiffest part
+    of the system and shows MATLAB's own solver tolerance first.
+    """
+    reference, p, meta = _reference("ecoli")
+    dt = float(meta["deltat"])
+    p = dict(p) | {"f_InocStart": 0.0, "f_Inoc": 0.0}
+    model = get_organism("escherichia_coli")
+    state = build_state(p, model, dt=dt)
+    for step in range(12):
+        if step == int(float(meta["inoculation_step"])):
+            state.p.f_Inoc = 1.0
+        model.calculate_step(state)
+
+    for column in ("cXL", "cS1L", "VL", "pHL"):
+        np.testing.assert_allclose(
+            state.v[column][:13],
+            reference[column].to_numpy()[:13],
+            rtol=1e-8,
+            atol=1e-10,
+            err_msg=f"deviation in {column}",
+        )
 
 
 @pytest.mark.reference
-@pytest.mark.skipif(not PICHIA_REFERENCE.is_file(), reason="no Pichia reference run yet")
-def test_pichia_matches_matlab_reference():
-    _compare("pichia_pastoris", "pichia")
+@pytest.mark.skip(
+    reason="the only Pichia run predates the model it would verify: "
+    "Thesis_SimulationAppDB.db is from 2 March 2025, Pichia_pastoris.m from "
+    "22 April 2026. The kLa of the run does not follow the current formula, "
+    "so a mismatch would say nothing about the translation."
+)
+def test_pichia_matches_matlab_reference(registry):
+    """Kept as a fixture rather than deleted — see reference_data/README.md.
+
+    The run itself is excellent: 14799 steps, 51 variables, the full AOX
+    induction and expression chain, both reservoirs and seven phases. It is
+    the natural test for the phase automaton of plan section 3, provided a
+    Pichia run from the current source ever becomes available to separate a
+    model change from a translation error.
+    """
+    reference, p, meta = _reference("pichia")
+    dt = float(meta["deltat"])
+    end = int(float(meta["batch_end_step"]))
+    p = dict(p) | {"f_InocStart": 0.0, "f_Inoc": 0.0}
+    model = get_organism("pichia_pastoris")
+    state = build_state(p, model, dt=dt)
+    for step in range(end):
+        if step == 2:
+            state.p.f_Inoc = 1.0
+        model.calculate_step(state)
+    for column in PRIMARY_COLUMNS:
+        np.testing.assert_allclose(
+            state.v[column][: end + 1],
+            reference[column].to_numpy()[: end + 1],
+            rtol=1e-5,
+            atol=1e-8,
+            err_msg=f"deviation in {column}",
+        )
+
+
+@pytest.mark.reference
+@pytest.mark.skipif(not ECOLI_REFERENCE.is_file(), reason="no E. coli reference run yet")
+def test_the_reference_run_covers_more_than_a_bare_batch():
+    """A run with nothing switched on would verify very little."""
+    reference, _, _ = _reference("ecoli")
+    assert reference["FT1"].abs().max() > 0, "acid pump never ran"
+    assert reference["FT2"].abs().max() > 0, "alkali pump never ran"
+    assert reference["cS3L"].abs().max() > 0, "no acetate was formed"
+    assert reference["NSt"].max() > reference["NSt"].min(), "agitation never moved"
