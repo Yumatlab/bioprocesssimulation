@@ -1,0 +1,2716 @@
+name: escherichia_coli
+display_name: Escherichia coli
+n_reservoirs: 1
+texname: \textit{Escherichia coli}
+function_file: Escherichia_coli
+initialization_file: Escherichia_coli_Initialization
+categories:
+- name: Setpoint
+  section: Parameters
+  reading_rate: cyclic
+- name: Initial value
+  section: Parameters
+  reading_rate: once
+- name: Calibration
+  section: Parameters
+  reading_rate: once
+- name: Substrate reservoir
+  section: Parameters
+  reading_rate: once
+- name: Feed control
+  section: Parameters
+  reading_rate: cyclic
+- name: pH control
+  section: Parameters
+  reading_rate: once
+- name: Modes
+  section: Parameters
+  reading_rate: cyclic
+- name: Flags
+  section: Parameters
+  reading_rate: cyclic
+- name: Controller gain
+  section: Parameters
+  reading_rate: cyclic
+- name: General
+  section: General
+  reading_rate: once
+- name: Cell growth
+  section: Organism
+  reading_rate: once
+- name: Growth temperature
+  section: Organism
+  reading_rate: once
+- name: Foam
+  section: Organism
+  reading_rate: once
+- name: pH
+  section: Organism
+  reading_rate: once
+- name: Settings
+  section: Settings
+  reading_rate: invisible
+- name: Pichia induction/protein expression
+  section: Parameters
+  reading_rate: once
+- name: Vessel
+  section: Bioreactor
+  reading_rate: once
+- name: Instrumentation
+  section: Bioreactor
+  reading_rate: once
+- name: Temperature control
+  section: Bioreactor
+  reading_rate: once
+parameters:
+- name: NStw
+  category: Setpoint
+  default: 400.0
+  tex: N_{Stw}
+  unit: 1/min
+  tex_unit: min^{-1}
+  type: editfield
+  internal_order: 1
+  external_order: 101
+  description: Setpoint for agitation speed
+- name: pHw
+  category: Setpoint
+  default: 6.7
+  tex: pH_{w}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 2
+  external_order: 102
+  description: Value of pH Setpoint
+- name: pO2w
+  category: Setpoint
+  default: 20.0
+  tex: pO_{2w}
+  unit: '%'
+  tex_unit: '%'
+  type: editfield
+  internal_order: 3
+  external_order: 103
+  description: Value of pO2 setpoint
+- name: thetaLw
+  category: Setpoint
+  default: 32.0
+  tex: \vartheta_{Lw}
+  unit: °C
+  tex_unit: °C
+  type: editfield
+  internal_order: 4
+  external_order: 104
+  description: Value of temperature Setpoint
+- name: LWw
+  category: Setpoint
+  default: 14.0
+  tex: L_{Ww}
+  unit: kg
+  tex_unit: kg
+  type: editfield
+  internal_order: 5
+  external_order: 105
+  description: Liquid weight setpoint
+- name: FnGw
+  category: Setpoint
+  default: 6.0
+  tex: F_{nGw}
+  unit: l/min
+  tex_unit: lmin^{-1}
+  type: editfield
+  internal_order: 6
+  external_order: 106
+  description: Value of chosen aeration rate
+- name: FnAIRw
+  category: Setpoint
+  default: 7.5
+  tex: F_{nAIRw}
+  unit: l/min
+  tex_unit: lmin^{-1}
+  type: editfield
+  internal_order: 7
+  external_order: 107
+  description: Aeration rate AIR extern
+- name: FnO2w
+  category: Setpoint
+  default: 0.0
+  tex: F_{nO2w}
+  unit: l/min
+  tex_unit: lmin^{-1}
+  type: editfield
+  internal_order: 8
+  external_order: 108
+  description: Aeration rate O2 extern
+- name: FnN2w
+  category: Setpoint
+  default: 0.0
+  tex: F_{nN2w}
+  unit: l/min
+  tex_unit: lmin^{-1}
+  type: editfield
+  internal_order: 9
+  external_order: 109
+  description: Aeration rate N2 extern
+- name: FnCO2w
+  category: Setpoint
+  default: 0.0
+  tex: F_{nCO2w}
+  unit: l/min
+  tex_unit: lmin^{-1}
+  type: editfield
+  internal_order: 10
+  external_order: 110
+  description: Aeration rate CO2 extern
+- name: deltapGw
+  category: Setpoint
+  default: 0.5
+  tex: \Deltap_{Gw}
+  unit: bar
+  tex_unit: bar
+  type: editfield
+  internal_order: 11
+  external_order: 111
+  description: Pressure setpoint
+- name: FHrelw
+  category: Setpoint
+  default: 20.0
+  tex: F_{Hrelw}
+  unit: '%'
+  tex_unit: '%'
+  type: editfield
+  internal_order: 12
+  external_order: 112
+  description: Harvest rate
+- name: cS1Lw
+  category: Setpoint
+  default: 0.5
+  tex: c_{S1Lw}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 13
+  external_order: 113
+  description: Substrate concentration setpoint for reservoir 1
+- name: FR1w
+  category: Setpoint
+  default: 0.1
+  tex: F_{R1w}
+  unit: l/h
+  tex_unit: lh^{-1}
+  type: editfield
+  internal_order: 16
+  external_order: 116
+  description: Pump rate setpoint for reservoir 1
+- name: cXL0
+  category: Initial value
+  default: 3.0
+  tex: c_{XL0}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 1
+  external_order: 201
+  description: Initial cell concentration t = 0 h
+- name: pO20
+  category: Initial value
+  default: 100.0
+  tex: pO_{20}
+  unit: '%'
+  tex_unit: '%'
+  type: editfield
+  internal_order: 2
+  external_order: 202
+  description: Partial pressure of dissolved oxygen at t = 0 h
+- name: pH0
+  category: Initial value
+  default: 7.5
+  tex: pH_{0}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 3
+  external_order: 203
+  description: Initial pH at t = 0 h
+- name: VL0
+  category: Initial value
+  default: 10.0
+  tex: V_{L0}
+  unit: l
+  tex_unit: l
+  type: editfield
+  internal_order: 4
+  external_order: 204
+  description: Initial volumme in reactor
+- name: thetaL0
+  category: Initial value
+  default: 32.0
+  tex: \vartheta_{L0}
+  unit: °C
+  tex_unit: °C
+  type: editfield
+  internal_order: 5
+  external_order: 205
+  description: Initial temperature in liquid phase at t = 0 h
+- name: thetaD0
+  category: Initial value
+  default: 32.0
+  tex: \vartheta_{D0}
+  unit: °C
+  tex_unit: °C
+  type: editfield
+  internal_order: 6
+  external_order: 206
+  description: Initial temperature in double jacket at t = 0 h
+- name: cS1L0
+  category: Initial value
+  default: 5.0
+  tex: c_{S1L0}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 7
+  external_order: 207
+  description: Initial glucose concentration t = 0 h
+- name: cS2L0
+  category: Initial value
+  default: 0.0
+  tex: c_{S2L0}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 8
+  external_order: 208
+  description: Initial glycerine concentration t = 0 h
+- name: cS3L0
+  category: Initial value
+  default: 0.0
+  tex: c_{S3L0}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 9
+  external_order: 209
+  description: Initial acetate concentration t = 0 h
+- name: cP1L0
+  category: Initial value
+  default: 0.0
+  tex: c_{P1L0}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 10
+  external_order: 210
+  description: Product concentration in liquid at t = 0 h
+- name: cP1X0
+  category: Initial value
+  default: 0.0
+  tex: c_{P1X0}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 11
+  external_order: 211
+  description: Product concentration in cells at t = 0 h
+- name: cOL0
+  category: Initial value
+  default: 0.014735071
+  tex: c_{OL0}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 12
+  external_order: 212
+  description: O2-concentration in liquid phase at t = 0 h
+- name: pGcal
+  category: Calibration
+  default: 150000.0
+  tex: p_{Gcal}
+  unit: n/m^2
+  tex_unit: nm^{-2}
+  type: editfield
+  internal_order: 1
+  external_order: 301
+  description: Pressure at calibration
+- name: xOGcal
+  category: Calibration
+  default: 0.2094
+  tex: x_{OGcal}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 2
+  external_order: 302
+  description: Molar concentration of oxygen at calibration
+- name: xCGcal
+  category: Calibration
+  default: 0.004
+  tex: x_{CGcal}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 3
+  external_order: 303
+  description: Molar concentration of carbon dioxide at calibration
+- name: cS1R1
+  category: Substrate reservoir
+  default: 200.0
+  tex: c_{S1R1}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 1
+  external_order: 401
+  description: Glucose concentration in reservoir
+- name: cS2R1
+  category: Substrate reservoir
+  default: 0.0
+  tex: c_{S2R1}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 2
+  external_order: 402
+  description: Gylcerin concentration in reservoir
+- name: cS3R1
+  category: Substrate reservoir
+  default: 0.0
+  tex: c_{S3R1}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 3
+  external_order: 403
+  description: Methanol concentration in reservoir
+- name: cXR1
+  category: Substrate reservoir
+  default: 0.0
+  tex: c_{XR1}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 4
+  external_order: 404
+  description: Concentration of cells in glucose reservoir
+- name: VR10
+  category: Substrate reservoir
+  default: 5.0
+  tex: V_{R10}
+  unit: l
+  tex_unit: l
+  type: editfield
+  internal_order: 5
+  external_order: 405
+  description: Glucose reservoir volume
+- name: rhoR1
+  category: Substrate reservoir
+  default: 1.25
+  tex: rho_{R1}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 6
+  external_order: 406
+  description: Glucose reservoir density
+- name: cOR1
+  category: Substrate reservoir
+  default: 0.0
+  tex: c_{OR1}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 7
+  external_order: 407
+  description: Dissolved oxygen concentration in reservoir
+- name: cP1R1
+  category: Substrate reservoir
+  default: 0.0
+  tex: C_{P1R1}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 8
+  external_order: 408
+  description: Concentration of product in glucose reservoir
+- name: CCR1tot
+  category: Substrate reservoir
+  default: 0.0
+  tex: C_{CR1tot}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 9
+  external_order: 409
+  description: Total CO2 concentration in reservoir
+- name: kR1
+  category: Feed control
+  default: 0.1
+  tex: k_{R1}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 1
+  external_order: 501
+  description: Pulse feed factor of reservoir 1
+- name: FR1max
+  category: Feed control
+  default: 0.5
+  tex: F_{R1max}
+  unit: l/h
+  tex_unit: lh^{-1}
+  type: editfield
+  internal_order: 2
+  external_order: 502
+  description: Maximum pump rate of reservoir 1
+- name: qXpX1w
+  category: Feed control
+  default: 0.1
+  tex: µ_{1w}
+  unit: 1/h
+  tex_unit: h^{-1}
+  type: editfield
+  internal_order: 3
+  external_order: 503
+  description: Growth rate set value for fed-batch 1
+- name: R_feed
+  category: Feed control
+  default: 1.0
+  tex: R_{Feed}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 10
+  external_order: 510
+  description: Feed control reservoir index
+- name: CPLtot0
+  category: pH control
+  default: 0.0
+  tex: C_{PLtot0}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 1
+  external_order: 601
+  description: Produced acid in liquid phase t = 0 h
+- name: CAcLtot0
+  category: pH control
+  default: 0.0
+  tex: C_{AcLtot0}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 2
+  external_order: 602
+  description: Titration acid in liquid phase t = 0 h
+- name: CAlLtot0
+  category: pH control
+  default: 0.05
+  tex: C_{AlLtot0}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 3
+  external_order: 603
+  description: Ammonia concentration in liquid phase t = 0 h
+- name: CB1Ltot0
+  category: pH control
+  default: 0.098
+  tex: C_{B1Ltot0}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 4
+  external_order: 604
+  description: Molar buffer acid concentration in liquid phase t = 0 h
+- name: CB2Ltot0
+  category: pH control
+  default: 0.03
+  tex: C_{B2Ltot0}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 5
+  external_order: 605
+  description: Molar buffer base concentration in liquid phase t = 0 h
+- name: CAcT1tot
+  category: pH control
+  default: 2.44
+  tex: C_{AcT1tot}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 6
+  external_order: 606
+  description: pH-acid reservoir
+- name: CAlT2tot
+  category: pH control
+  default: 16.47
+  tex: C_{AlT2tot}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 7
+  external_order: 607
+  description: pH-base reservoir concentration (ammonia)
+- name: CCT1tot
+  category: pH control
+  default: 0.0
+  tex: C_{CT1tot}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 8
+  external_order: 608
+  description: Total CO2 concentration in acid reservoir
+- name: CCT2tot
+  category: pH control
+  default: 0.0
+  tex: C_{CT2tot}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 9
+  external_order: 609
+  description: Total CO2 concentration in base reservoir
+- name: cOT1
+  category: pH control
+  default: 0.0
+  tex: c_{OT1}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 10
+  external_order: 610
+  description: Dissolved O2 concentration in acid reservoir
+- name: cOT2
+  category: pH control
+  default: 0.0
+  tex: c_{OT2}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 11
+  external_order: 611
+  description: Dissolved O2 concentration in base reservoir
+- name: KAc1
+  category: pH control
+  default: 0.0154
+  tex: K_{Ac1}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 12
+  external_order: 612
+  description: 1. titration acid dissociation constant (H2SO3 to HSO3-)
+- name: KAc2
+  category: pH control
+  default: 1.02e-07
+  tex: K_{Ac2}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 13
+  external_order: 613
+  description: 2. tritration acid dissociation constant (HSO3- to SO3--)
+- name: KAl
+  category: pH control
+  default: 1.76e-05
+  tex: K_{Al}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 14
+  external_order: 614
+  description: Ammonia (pH base) dissociation constant (NH3 to NH4+)
+- name: KAlvol
+  category: pH control
+  default: 0.00462
+  tex: K_{Alvol}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 15
+  external_order: 615
+  description: Stripping constant ammonia
+- name: KB1
+  category: pH control
+  default: 0.00752
+  tex: K_{B1}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 16
+  external_order: 616
+  description: 1. buffer dissociation constant (H3PO4 to H2PO4-)
+- name: KB2
+  category: pH control
+  default: 6.23e-08
+  tex: K_{B2}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 17
+  external_order: 617
+  description: 2. buffer dissociation constant (H2PO4- to HPO4--)
+- name: KB3
+  category: pH control
+  default: 2.2e-13
+  tex: K_{B3}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 18
+  external_order: 618
+  description: 3. buffer dissociation constant (HPO4-- to PO4---)
+- name: KP1
+  category: pH control
+  default: 1.76e-05
+  tex: K_{P}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 19
+  external_order: 619
+  description: Acetate (product) dissociation constant (CH3COOH to CH3COO-)
+- name: MAc
+  category: pH control
+  default: 82.0
+  tex: M_{Ac}
+  unit: g/mol
+  tex_unit: gmol^{-1}
+  type: editfield
+  internal_order: 20
+  external_order: 620
+  description: Molar mass of titration acid
+- name: MAl
+  category: pH control
+  default: 17.0
+  tex: M_{Al}
+  unit: g/mol
+  tex_unit: gmol^{-1}
+  type: editfield
+  internal_order: 21
+  external_order: 621
+  description: Molar mass of ammonia
+- name: Mode_pH
+  category: Modes
+  default: 1.0
+  tex: pH_{Mode}
+  unit: ''
+  tex_unit: ''
+  type: dropdown
+  internal_order: 1
+  external_order: 701
+  description: 'pH control mode (1: auto, 0: manual)'
+- name: Mode_temp
+  category: Modes
+  default: 1.0
+  tex: temp_{Mode}
+  unit: ''
+  tex_unit: ''
+  type: dropdown
+  internal_order: 2
+  external_order: 702
+  description: 'Temperature control mode (1: auto, 0: manual)'
+- name: Mode_pO2
+  category: Modes
+  default: 1.0
+  tex: pO_2_{Mode}
+  unit: ''
+  tex_unit: ''
+  type: dropdown
+  internal_order: 3
+  external_order: 703
+  description: 'pO2 control mode (1: auto, 0: manual)'
+- name: Mode_harvest
+  category: Modes
+  default: 0.0
+  tex: harvest(LW)_{Mode}
+  unit: ''
+  tex_unit: ''
+  type: dropdown
+  internal_order: 4
+  external_order: 704
+  description: Signal for liquid weight harvest control
+- name: Mode_feed
+  category: Modes
+  default: 0.0
+  tex: Feed_{Mode}
+  unit: ''
+  tex_unit: ''
+  type: dropdown
+  internal_order: 5
+  external_order: 705
+  description: 'Feed control mode (1: feed control, 0: manual)'
+- name: f_InocStart
+  category: Flags
+  default: 0.0
+  tex: Inoc_{Start}
+  unit: ''
+  tex_unit: ''
+  type: switch
+  internal_order: 1
+  external_order: 801
+  description: Signal for inoculation at start of simulation
+- name: f_motor
+  category: Flags
+  default: 1.0
+  tex: motor
+  unit: ''
+  tex_unit: ''
+  type: switch
+  internal_order: 2
+  external_order: 802
+  description: Signal for stirrer to be turned on/off
+- name: f_aeration
+  category: Flags
+  default: 1.0
+  tex: aeration
+  unit: ''
+  tex_unit: ''
+  type: switch
+  internal_order: 3
+  external_order: 803
+  description: Signal for aeration to be turned on/off
+- name: f_air
+  category: Flags
+  default: 1.0
+  tex: air
+  unit: ''
+  tex_unit: ''
+  type: switch
+  internal_order: 4
+  external_order: 804
+  description: Signal for aeration with AIR
+- name: f_O2
+  category: Flags
+  default: 1.0
+  tex: O_2
+  unit: ''
+  tex_unit: ''
+  type: switch
+  internal_order: 5
+  external_order: 805
+  description: Signal for aeration with O2
+- name: f_N2
+  category: Flags
+  default: 0.0
+  tex: N_2
+  unit: ''
+  tex_unit: ''
+  type: switch
+  internal_order: 6
+  external_order: 806
+  description: Signal for aeration with N2
+- name: f_CO2
+  category: Flags
+  default: 0.0
+  tex: CO_2
+  unit: ''
+  tex_unit: ''
+  type: switch
+  internal_order: 7
+  external_order: 807
+  description: Signal for aeration with CO2
+- name: f_acid
+  category: Flags
+  default: 0.0
+  tex: acid
+  unit: ''
+  tex_unit: ''
+  type: switch
+  internal_order: 8
+  external_order: 808
+  description: Signal for acid addition
+- name: f_alkali
+  category: Flags
+  default: 0.0
+  tex: alkali
+  unit: ''
+  tex_unit: ''
+  type: switch
+  internal_order: 9
+  external_order: 809
+  description: Signal for alkali addition
+- name: f_antifoam
+  category: Flags
+  default: 0.0
+  tex: antifoam
+  unit: ''
+  tex_unit: ''
+  type: switch
+  internal_order: 10
+  external_order: 810
+  description: Signal for antifoam addition
+- name: f_heating
+  category: Flags
+  default: 1.0
+  tex: heating
+  unit: ''
+  tex_unit: ''
+  type: switch
+  internal_order: 11
+  external_order: 811
+  description: Signal for heating
+- name: f_cooling
+  category: Flags
+  default: 1.0
+  tex: cooling
+  unit: ''
+  tex_unit: ''
+  type: switch
+  internal_order: 12
+  external_order: 812
+  description: Signal for cooling
+- name: f_harvest
+  category: Flags
+  default: 0.0
+  tex: harvest
+  unit: ''
+  tex_unit: ''
+  type: switch
+  internal_order: 13
+  external_order: 813
+  description: Signal for harvest to be turned on/off
+- name: f_feed
+  category: Flags
+  default: 0.0
+  tex: feed
+  unit: ''
+  tex_unit: ''
+  type: switch
+  internal_order: 14
+  external_order: 814
+  description: Signal for feed to be turned on/off
+- name: f_FR1
+  category: Flags
+  default: 0.0
+  tex: f_{FR1}
+  unit: ''
+  tex_unit: ''
+  type: switch
+  internal_order: 16
+  external_order: 816
+  description: Signal for open-loop feed control with reservoir 1
+- name: KP_pH
+  category: Controller gain
+  default: 10000.0
+  tex: KP_{pH}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 1
+  external_order: 901
+  description: Gain of P part of pH master controller
+- name: KP_pH2a
+  category: Controller gain
+  default: 1.0
+  tex: KP_{pH2a}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 2
+  external_order: 902
+  description: Gain of P part of acid pH slave controller
+- name: KP_pH2b
+  category: Controller gain
+  default: -1.0
+  tex: KP_{pH2b}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 3
+  external_order: 903
+  description: Gain of P part of base pH slave controller
+- name: taupHL
+  category: Controller gain
+  default: 20.0
+  tex: \tau_{pH_L}
+  unit: s
+  tex_unit: s
+  type: editfield
+  internal_order: 4
+  external_order: 904
+  description: ''
+- name: KP_temp1
+  category: Controller gain
+  default: 8.0
+  tex: KP_{temp1}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 5
+  external_order: 905
+  description: Gain of P part of temperature master controller
+- name: KI_temp1
+  category: Controller gain
+  default: 0.1
+  tex: KI_{temp1}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 6
+  external_order: 906
+  description: Gain of I part of temperature master controller
+- name: KP_temp2c
+  category: Controller gain
+  default: 10.0
+  tex: KP_{temp2c}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 7
+  external_order: 907
+  description: Gain of P part of temperature heating slave controller
+- name: KP_temp2h
+  category: Controller gain
+  default: 0.01
+  tex: KP_{temp2h}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 8
+  external_order: 908
+  description: Gain of P part of temperature heating slave controller
+- name: tauthetaL
+  category: Controller gain
+  default: 20.0
+  tex: \tau_{\vartheta_L}
+  unit: s
+  tex_unit: s
+  type: editfield
+  internal_order: 9
+  external_order: 909
+  description: ''
+- name: KP_agi
+  category: Controller gain
+  default: 10.0
+  tex: KP_{agi}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 10
+  external_order: 910
+  description: Gain of P part of agitation controller
+- name: KI_agi
+  category: Controller gain
+  default: 1000.0
+  tex: KI_{agi}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 11
+  external_order: 911
+  description: Gain of I part of agitation controller
+- name: KP_aeration
+  category: Controller gain
+  default: 20.0
+  tex: KP_{aeration}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 12
+  external_order: 912
+  description: Gain of P part of aeration controller
+- name: KD_agi
+  category: Controller gain
+  default: 0.015
+  tex: KD_{agi}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 13
+  external_order: 913
+  description: Gain of D part of agitation controller
+- name: KI_aeration
+  category: Controller gain
+  default: 1000.0
+  tex: KI_{aeration}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 14
+  external_order: 914
+  description: Gain of I part of aeration controller
+- name: KD_aeration
+  category: Controller gain
+  default: 0.0188
+  tex: KD_{aeration}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 15
+  external_order: 915
+  description: Gain of D part of aeration controller
+- name: KP_gasmix
+  category: Controller gain
+  default: 0.4
+  tex: KP_{gasmix}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 16
+  external_order: 916
+  description: Gain of P part of gasmix controller
+- name: KI_gasmix
+  category: Controller gain
+  default: 0.003
+  tex: KI_{gasmix}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 17
+  external_order: 917
+  description: Gain of I part of gasmix controller
+- name: KD_gasmix
+  category: Controller gain
+  default: 0.0005
+  tex: KD_{gasmix}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 18
+  external_order: 918
+  description: Gain of D part of gasmix controller
+- name: KP_feedpO2
+  category: Controller gain
+  default: -2.0
+  tex: KP_{feed}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 19
+  external_order: 919
+  description: Gain of P part of feed controller
+- name: KI_feedpO2
+  category: Controller gain
+  default: -15.0
+  tex: KI_{feed}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 20
+  external_order: 920
+  description: Gain of I part of feed controller
+- name: KD_feedpO2
+  category: Controller gain
+  default: -0.009
+  tex: KD_{feed}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 21
+  external_order: 921
+  description: Gain of D part of feed controller
+- name: taupO2
+  category: Controller gain
+  default: 25.0
+  tex: \tau_{pO_2}
+  unit: s
+  tex_unit: s
+  type: editfield
+  internal_order: 22
+  external_order: 922
+  description: ''
+- name: KP_LW
+  category: Controller gain
+  default: 10.0
+  tex: KP_{LW}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 23
+  external_order: 923
+  description: Gain of P part of liquid weight controller
+- name: KI_LW
+  category: Controller gain
+  default: 0.3
+  tex: KI_{LW}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 24
+  external_order: 924
+  description: Gain of I part of liquid weight controller
+- name: KD_LW
+  category: Controller gain
+  default: 1.0
+  tex: KD_{LW}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 25
+  external_order: 925
+  description: Gain of D part of liquid weight controller
+- name: KP_feedR1
+  category: Controller gain
+  default: 15.0
+  tex: KP_{feedR1}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 26
+  external_order: 926
+  description: Gain of P part of feed controller of reservoir 1
+- name: KI_feedR1
+  category: Controller gain
+  default: 500.0
+  tex: KI_{feedR1}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 27
+  external_order: 927
+  description: Gain of I part of feed controller of reservoir 1
+- name: KD_feedR1
+  category: Controller gain
+  default: 0.02
+  tex: KD_{feedR1}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 28
+  external_order: 928
+  description: Gain of D part of feed controller of reservoir 1
+- name: taucS1L
+  category: Controller gain
+  default: 100.0
+  tex: \tau_{c_{S1L}}
+  unit: s
+  tex_unit: s
+  type: editfield
+  internal_order: 35
+  external_order: 935
+  description: ''
+- name: ypH_SET
+  category: Controller gain
+  default: 0.0
+  tex: ypH_{SET}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 38
+  external_order: 938
+  description: Setpoint for difference between measured pH and wanted pH
+- name: xOAIR
+  category: General
+  default: 0.2094
+  tex: x_{OAIR}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 1
+  external_order: 1001
+  description: Molar concentration of oxygen in AIR
+- name: xCAIR
+  category: General
+  default: 0.0004
+  tex: x_{CAIR}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 2
+  external_order: 1002
+  description: Molar concentration of carbondioxide in AIR
+- name: VnM
+  category: General
+  default: 22.412
+  tex: V_{nM}
+  unit: l/mol
+  tex_unit: lmol^{-1}
+  type: editfield
+  internal_order: 3
+  external_order: 1003
+  description: Gas volume under normal conditions
+- name: TnG
+  category: General
+  default: 273.15
+  tex: T_{nG}
+  unit: K
+  tex_unit: K
+  type: editfield
+  internal_order: 4
+  external_order: 1004
+  description: Gas temperature under normal conditions
+- name: R
+  category: General
+  default: 8314.0
+  tex: R
+  unit: N*m/(kmol*K)
+  tex_unit: Nmkmol^{-1}K^{-1}
+  type: editfield
+  internal_order: 5
+  external_order: 1005
+  description: Gas constant
+- name: pnG
+  category: General
+  default: 101330.0
+  tex: p_{nG}
+  unit: N/m^2
+  tex_unit: Nm^{-2}
+  type: editfield
+  internal_order: 6
+  external_order: 1006
+  description: Gas pressure under normal conditions
+- name: MO2
+  category: General
+  default: 32.0
+  tex: M_{O2}
+  unit: g/mol
+  tex_unit: gmol^{-1}
+  type: editfield
+  internal_order: 7
+  external_order: 1007
+  description: Molar mass of O2
+- name: MCO2
+  category: General
+  default: 44.0
+  tex: M_{CO2}
+  unit: g/mol
+  tex_unit: gmol^{-1}
+  type: editfield
+  internal_order: 8
+  external_order: 1008
+  description: Molar mass of CO2
+- name: mdotT
+  category: General
+  default: 1500.0
+  tex: mdot_{T}
+  unit: kg/h
+  tex_unit: kgh^{-1}
+  type: editfield
+  internal_order: 9
+  external_order: 1009
+  description: Mass flux in temperature cycle
+- name: etaH2O
+  category: General
+  default: 0.001002
+  tex: \eta_{H_2O}
+  unit: Ns/m^2
+  tex_unit: Nsm^{-2}
+  type: editfield
+  internal_order: 10
+  external_order: 1010
+  description: Viscosity of water
+- name: etaXL
+  category: General
+  default: 0.001
+  tex: \eta_{XL}
+  unit: Ns/m^2
+  tex_unit: Nsm^{-2}
+  type: editfield
+  internal_order: 11
+  external_order: 1011
+  description: Viscosity at cXLeta
+- name: cXLeta
+  category: General
+  default: 100.0
+  tex: c_{XL\eta}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 12
+  external_order: 1012
+  description: Refering cell concentration
+- name: HO20
+  category: General
+  default: 1440000.0
+  tex: H_{O20}
+  unit: N*m/kg
+  tex_unit: Nmkg^{-1}
+  type: editfield
+  internal_order: 13
+  external_order: 1013
+  description: O2 Henry constant
+- name: HnO2
+  category: General
+  default: 1448000.0
+  tex: H_{nO2}
+  unit: N*m/kg
+  tex_unit: Nmkg^{-1}
+  type: editfield
+  internal_order: 14
+  external_order: 1014
+  description: O2 Henry constant under normal conditions
+- name: HCO20
+  category: General
+  default: 30010.0
+  tex: H_{CO20}
+  unit: N*m/kg
+  tex_unit: Nmkg^{-1}
+  type: editfield
+  internal_order: 15
+  external_order: 1015
+  description: CO2 Henry constant
+- name: HnCO2
+  category: General
+  default: 30010.0
+  tex: H_{nCO2}
+  unit: N*m/kg
+  tex_unit: Nmkg^{-1}
+  type: editfield
+  internal_order: 16
+  external_order: 1016
+  description: CO2 Henry constant under normal conditions
+- name: K1HO2
+  category: General
+  default: -0.02723
+  tex: K_{1HO2}
+  unit: °C^(-1)
+  tex_unit: °C^{-1}
+  type: editfield
+  internal_order: 17
+  external_order: 1017
+  description: Normed parameter of O2 Bunsen coefficient
+- name: K2HO2
+  category: General
+  default: 0.0005627
+  tex: K_{2HO2}
+  unit: °C^(-2)
+  tex_unit: °C^{-2}
+  type: editfield
+  internal_order: 18
+  external_order: 1018
+  description: Normed parameter of O2 Bunsen coefficient
+- name: K3HO2
+  category: General
+  default: -6.597e-06
+  tex: K_{3HO2}
+  unit: °C^(-3)
+  tex_unit: °C^{-3}
+  type: editfield
+  internal_order: 19
+  external_order: 1019
+  description: Normed parameter of O2 Bunsen coefficient
+- name: K4HO2
+  category: General
+  default: 3.28e-08
+  tex: K_{4HO2}
+  unit: °C^(-4)
+  tex_unit: °C^{-4}
+  type: editfield
+  internal_order: 20
+  external_order: 1020
+  description: Normed parameter of O2 Bunsen coefficient
+- name: K1HCO2
+  category: General
+  default: -0.03889
+  tex: K_{1HCO2}
+  unit: °C^(-1)
+  tex_unit: °C^{-1}
+  type: editfield
+  internal_order: 21
+  external_order: 1021
+  description: Normed parameter of CO2 Bunsen coefficient
+- name: K2HCO2
+  category: General
+  default: 0.0009442
+  tex: K_{2HCO2}
+  unit: °C^(-2)
+  tex_unit: °C^{-2}
+  type: editfield
+  internal_order: 22
+  external_order: 1022
+  description: Normed parameter of CO2 Bunsen coefficient
+- name: K3HCO2
+  category: General
+  default: -1.328e-05
+  tex: K_{3HCO2}
+  unit: °C^(-3)
+  tex_unit: °C^{-3}
+  type: editfield
+  internal_order: 23
+  external_order: 1023
+  description: Normed parameter of CO2 Bunsen coefficient
+- name: K4HCO2
+  category: General
+  default: 8.11e-08
+  tex: K_{4HCO2}
+  unit: °C^(-4)
+  tex_unit: °C^{-4}
+  type: editfield
+  internal_order: 24
+  external_order: 1024
+  description: Normed parameter of CO2 Bunsen coefficient
+- name: KC1
+  category: General
+  default: 4.31e-07
+  tex: K_{C1}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 25
+  external_order: 1025
+  description: 1. CO2 dissociation constant
+- name: KC2
+  category: General
+  default: 5.61e-11
+  tex: K_{C2}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 26
+  external_order: 1026
+  description: 2. CO2 dissociation constant
+- name: alpha
+  category: General
+  default: 0.5
+  tex: \alpha
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 27
+  external_order: 1027
+  description: Parameter for kLa calculation
+- name: beta
+  category: General
+  default: 0.5
+  tex: \beta
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 28
+  external_order: 1028
+  description: Parameter for kLa calculation
+- name: gamma
+  category: General
+  default: -0.05
+  tex: \gamma
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 29
+  external_order: 1029
+  description: Parameter for kLa calculation
+- name: cH2O
+  category: General
+  default: 1.167
+  tex: c_{H2O}
+  unit: h/(kgK)
+  tex_unit: hkg^{-1]K^{-1}
+  type: editfield
+  internal_order: 30
+  external_order: 1030
+  description: Specific heat capacity of water
+- name: deltahv
+  category: General
+  default: 2170.0
+  tex: \delta_{hv}
+  unit: kJ/kg
+  tex_unit: kJkg^{-1}
+  type: editfield
+  internal_order: 31
+  external_order: 1031
+  description: Evaporation enthalpie of water
+- name: CH0
+  category: General
+  default: 1.0e-07
+  tex: C_{H0}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  type: editfield
+  internal_order: 32
+  external_order: 1032
+  description: pH norm concentration
+- name: my1opt
+  category: Cell growth
+  default: 0.46
+  tex: μ_{1opt}
+  unit: 1/h
+  tex_unit: h^{-1}
+  type: editfield
+  internal_order: 1
+  external_order: 1101
+  description: Maximum specific growth rate glucose
+- name: yXpS1
+  category: Cell growth
+  default: 0.21921
+  tex: y_{X/S1}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 2
+  external_order: 1102
+  description: Yield coefficient of gram cells per gram substrate
+- name: yXpS1gr
+  category: Cell growth
+  default: 0.553
+  tex: y_{X/S1gr}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 3
+  external_order: 1103
+  description: Substrate growth yield coefficient glucose
+- name: yP1pS1
+  category: Cell growth
+  default: 0.2
+  tex: y_{P/S1}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 4
+  external_order: 1104
+  description: Product yield coefficient glucose
+- name: qS1pXm
+  category: Cell growth
+  default: 0.06
+  tex: q_{S1/Xm}
+  unit: 1/h
+  tex_unit: h^{-1}
+  type: editfield
+  internal_order: 5
+  external_order: 1105
+  description: Spcific substrate maintenance rate glucose
+- name: kS1
+  category: Cell growth
+  default: 0.04
+  tex: k_{S1}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 6
+  external_order: 1106
+  description: Substrate limitation constant glucose
+- name: kI21
+  category: Cell growth
+  default: 0.0018
+  tex: k_{I21}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 7
+  external_order: 1107
+  description: Inhibition of glycerine uptake in presence of glucose
+- name: my2opt
+  category: Cell growth
+  default: 0.35
+  tex: μ_{2opt}
+  unit: 1/h
+  tex_unit: h^{-1}
+  type: editfield
+  internal_order: 8
+  external_order: 1108
+  description: Maximum specific growth rate glycerol
+- name: yXpS2gr
+  category: Cell growth
+  default: 0.4
+  tex: y_{X/S2gr}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 10
+  external_order: 1110
+  description: Substrate growth yield coefficient glycerine
+- name: yP1pS2
+  category: Cell growth
+  default: 0.1
+  tex: y_{P/S2}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 11
+  external_order: 1111
+  description: Product yield coefficient glycerine
+- name: kS2
+  category: Cell growth
+  default: 0.05
+  tex: k_{S2}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 13
+  external_order: 1113
+  description: Substrate limitation constant glycerol
+- name: my3opt
+  category: Cell growth
+  default: 0.1
+  tex: μ_{3opt}
+  unit: 1/h
+  tex_unit: h^{-1}
+  type: editfield
+  internal_order: 14
+  external_order: 1114
+  description: Maximum specific growth rate acetate
+- name: yXpS3gr
+  category: Cell growth
+  default: 0.2
+  tex: y_{X/S3gr}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 16
+  external_order: 1116
+  description: Substrate growth yield coefficient acetate
+- name: yP1pS3
+  category: Cell growth
+  default: 1.0
+  tex: y_{P/S3}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 17
+  external_order: 1117
+  description: Product yield coefficient acetate
+- name: kS3
+  category: Cell growth
+  default: 0.06
+  tex: k_{S3}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 19
+  external_order: 1119
+  description: Substrate limitation constant acetate
+- name: kI31
+  category: Cell growth
+  default: 0.0018
+  tex: k_{I31}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 20
+  external_order: 1120
+  description: Inhibition of acetate uptake in presence of glucose
+- name: kI32
+  category: Cell growth
+  default: 0.003
+  tex: k_{I32}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 21
+  external_order: 1121
+  description: Inhibition of acetate uptake due to glycerine
+- name: yXpO
+  category: Cell growth
+  default: 0.40601
+  tex: y_{X/O}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 22
+  external_order: 1122
+  description: Yield coefficient of gram cells per gram oxygen
+- name: yXpOgr
+  category: Cell growth
+  default: 1.367
+  tex: y_{X/Ogr}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 23
+  external_order: 1123
+  description: Oxygen growth yield coefficient
+- name: yCpO
+  category: Cell growth
+  default: 1.375
+  tex: y_{C/O}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 24
+  external_order: 1124
+  description: Cell internal respiratory behavior
+- name: qOpXm
+  category: Cell growth
+  default: 0.005
+  tex: q_{O/Xm}
+  unit: 1/h
+  tex_unit: h^{-1}
+  type: editfield
+  internal_order: 25
+  external_order: 1125
+  description: Specific O2 maintenance rate
+- name: deltaCpO
+  category: Cell growth
+  default: 0.69
+  tex: \delta_{C/O}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 26
+  external_order: 1126
+  description: Relation CO2/O2 transition
+- name: kO
+  category: Cell growth
+  default: 0.0004
+  tex: k_{O}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 27
+  external_order: 1127
+  description: Oxygen limitation constant
+- name: kIP1O
+  category: Cell growth
+  default: 0.0005
+  tex: k_{IP1O}
+  unit: g/l
+  tex_unit: gl^{-1}
+  type: editfield
+  internal_order: 28
+  external_order: 1128
+  description: Inhibition of acetate production due to O2
+- name: MP1
+  category: Cell growth
+  default: 60.0
+  tex: M_{P1}
+  unit: g/mol
+  tex_unit: gmol^{-1}
+  type: editfield
+  internal_order: 29
+  external_order: 1129
+  description: Molar mass of product
+- name: yAcpXgr
+  category: Cell growth
+  default: 0.0
+  tex: y_{Ac/Xgr}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 30
+  external_order: 1130
+  description: Titration acid yield coefficient cells
+- name: yAlpXgr
+  category: Cell growth
+  default: 0.185
+  tex: y_{Al/Xgr}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 31
+  external_order: 1131
+  description: Ammonia yield coefficient cells
+- name: thetaDJ_WP
+  category: Growth temperature
+  default: 32.0
+  tex: \vartheta_{DJ_WP}
+  unit: °C
+  tex_unit: °C
+  type: editfield
+  internal_order: 1
+  external_order: 1201
+  description: Added by me, working point of cascade temperature slave controller
+- name: thetaLoptgr
+  category: Growth temperature
+  default: 35.0
+  tex: \vartheta_{Loptgr}
+  unit: °C
+  tex_unit: °C
+  type: editfield
+  internal_order: 2
+  external_order: 1202
+  description: Optimal temperature required for growth
+- name: thetaLmingr
+  category: Growth temperature
+  default: 5.0
+  tex: \vartheta_{Lmingr}
+  unit: °C
+  tex_unit: °C
+  type: editfield
+  internal_order: 3
+  external_order: 1203
+  description: Minimum liquid temperature required for growth
+- name: thetaLmaxgr
+  category: Growth temperature
+  default: 47.0
+  tex: \vartheta_{Lmaxgr}
+  unit: °C
+  tex_unit: °C
+  type: editfield
+  internal_order: 4
+  external_order: 1204
+  description: Maximum liquid temperature required for growth
+- name: AAFtast
+  category: Foam
+  default: 100.0
+  tex: A_{AFtast}
+  unit: 1/h
+  tex_unit: h^{-1}
+  type: editfield
+  internal_order: 8
+  external_order: 1308
+  description: Antifoam-activity gain per addition step Ttast
+- name: KAF
+  category: Foam
+  default: 4.0
+  tex: K_{AF}
+  unit: (g*h)/l
+  tex_unit: ghl^{-1}
+  type: editfield
+  internal_order: 9
+  external_order: 1309
+  description: Cell antifoam adsorption constant
+- name: KFpX
+  category: Foam
+  default: 0.09
+  tex: K_{F/X}
+  unit: l/g
+  tex_unit: lg^{-1}
+  type: editfield
+  internal_order: 10
+  external_order: 1310
+  description: Foam consistency factor
+- name: qhpX
+  category: Foam
+  default: 0.1
+  tex: q_{h/X}
+  unit: l/(g*h)
+  tex_unit: lg^{-1}h^{-1}
+  type: editfield
+  internal_order: 11
+  external_order: 1311
+  description: Cellspecific foam build up rate
+- name: tauF0
+  category: Foam
+  default: 0.0125
+  tex: \tau_{F0}
+  unit: h
+  tex_unit: h^{-1}
+  type: editfield
+  internal_order: 12
+  external_order: 1312
+  description: Time constant of foam formation at cXL = 0 g/l
+- name: Ttast
+  category: Foam
+  default: 8.333e-05
+  tex: T_{tast}
+  unit: h
+  tex_unit: h^{-1}
+  type: editfield
+  internal_order: 13
+  external_order: 1313
+  description: Addition unit Ttast
+- name: VAF
+  category: Foam
+  default: 0.975
+  tex: V_{AF}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 14
+  external_order: 1314
+  description: Activity decline due to antifoam addition
+- name: pHLoptgr
+  category: pH
+  default: 6.8
+  tex: pH_{Loptgr}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 5
+  external_order: 1405
+  description: Optimal pH required for growth
+- name: pHLmingr
+  category: pH
+  default: 4.0
+  tex: pH_{Lmingr}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 6
+  external_order: 1406
+  description: Minimum pH required for growth
+- name: pHLmaxgr
+  category: pH
+  default: 9.0
+  tex: pH_{Lmaxgr}
+  unit: '-'
+  tex_unit: '-'
+  type: editfield
+  internal_order: 7
+  external_order: 1407
+  description: Maximum pH required for growth
+- name: deltatsec
+  category: Settings
+  default: 2.0
+  tex: \Deltat_{sec}
+  unit: s
+  tex_unit: s
+  type: editfield
+  internal_order: 1
+  external_order: 1501
+  description: Calculation interval
+- name: speedfactor
+  category: Settings
+  default: 1.0
+  tex: Factor_{speed}
+  unit: ''
+  tex_unit: ''
+  type: editfield
+  internal_order: 2
+  external_order: 1502
+  description: Speed factor of simulation
+- name: tmax
+  category: Settings
+  default: 5.0
+  tex: t_{max}
+  unit: h
+  tex_unit: h
+  type: editfield
+  internal_order: 3
+  external_order: 1503
+  description: Time limit for cultivation
+- name: f_Inoc
+  category: Settings
+  default: 0.0
+  tex: f_{Inoculation}
+  unit: ''
+  tex_unit: ''
+  type: switch
+  internal_order: 4
+  external_order: 1504
+  description: Inoculation flag
+variables:
+- name: cXL
+  shorttex: c_{XL}
+  longtex: c_{XL}
+  unit: g/l
+  tex_unit: gl^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.cXL0
+  process_variable: true
+- name: cS1L
+  shorttex: c_{S1L}
+  longtex: c_{S1L}
+  unit: g/l
+  tex_unit: gl^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.cS1L0
+  process_variable: true
+- name: cS2L
+  shorttex: c_{S2L}
+  longtex: c_{S2L}
+  unit: g/l
+  tex_unit: gl^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.cS2L0
+  process_variable: true
+- name: cS3L
+  shorttex: c_{S3L}
+  longtex: c_{S3L}
+  unit: g/l
+  tex_unit: gl^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.cS3L0
+  process_variable: true
+- name: qXpX
+  shorttex: μ
+  longtex: μ
+  unit: 1/h
+  tex_unit: h^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: '0'
+  process_variable: true
+- name: cP1X
+  shorttex: c_{P1X}
+  longtex: c_{P1X}
+  unit: g/l
+  tex_unit: gl^{-1}
+  description: ''
+  visible: false
+  upload_rate: cyclic
+  initial_assignment: app.p.cP1X0
+  process_variable: true
+- name: cP1L
+  shorttex: c_{P1L}
+  longtex: c_{P1L}
+  unit: g/l
+  tex_unit: gl^{-1}
+  description: ''
+  visible: false
+  upload_rate: cyclic
+  initial_assignment: app.p.cP1L0
+  process_variable: true
+- name: pO2
+  shorttex: pO_{2}
+  longtex: pO_{2}
+  unit: '%'
+  tex_unit: '%'
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.pO20
+  process_variable: true
+- name: NSt
+  shorttex: N_{St}
+  longtex: N_{St}
+  unit: rpm
+  tex_unit: rpm
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.NStw
+  process_variable: true
+- name: FnG
+  shorttex: F_{nG}
+  longtex: F_{nG}
+  unit: l/min
+  tex_unit: lmin^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.v.FnAIR(1)+app.v.FnO2(1)+app.v.FnN2(1)+app.v.FnCO2(1)
+  process_variable: true
+- name: FnAIR
+  shorttex: F_{nAIR}
+  longtex: F_{nAIR}
+  unit: l/min
+  tex_unit: lmin^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.FnAIRw
+  process_variable: true
+- name: FnO2
+  shorttex: F_{nO_2}
+  longtex: F_{nO_2}
+  unit: l/min
+  tex_unit: lmin^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.FnO2w
+  process_variable: true
+- name: FnN2
+  shorttex: F_{nN_2}
+  longtex: F_{nN_2}
+  unit: l/min
+  tex_unit: lmin^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.FnN2w
+  process_variable: true
+- name: FnCO2
+  shorttex: F_{nCO_2}
+  longtex: F_{nCO_2}
+  unit: l/min
+  tex_unit: lmin^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.FnCO2w
+  process_variable: true
+- name: pHL
+  shorttex: pH_{L}
+  longtex: pH_{L}
+  unit: '-'
+  tex_unit: '-'
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.pH0
+  process_variable: true
+- name: thetaL
+  shorttex: \vartheta_{L}
+  longtex: \vartheta_{L}
+  unit: °C
+  tex_unit: °C
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.thetaL0
+  process_variable: false
+- name: pG
+  shorttex: p_G
+  longtex: p_G
+  unit: pa
+  tex_unit: pa
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.pGcal+app.p.deltapGw*10^5
+  process_variable: false
+- name: xOGin
+  shorttex: x_{OGin}
+  longtex: x_{OGin}
+  unit: '-'
+  tex_unit: '-'
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.xOGcal
+  process_variable: true
+- name: xOG
+  shorttex: x_{OG}
+  longtex: x_{OG}
+  unit: '-'
+  tex_unit: '-'
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.xOGcal
+  process_variable: true
+- name: xCG
+  shorttex: x_{CG}
+  longtex: x_{CG}
+  unit: '-'
+  tex_unit: '-'
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.xCGcal
+  process_variable: false
+- name: xOL
+  shorttex: x_{OL}
+  longtex: x_{OL}
+  unit: '-'
+  tex_unit: '-'
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.xOL0
+  process_variable: false
+- name: cOL
+  shorttex: c_{OL}
+  longtex: c_{OL}
+  unit: g/l
+  tex_unit: gl^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: (app.p.pO20/100)*app.p.cOL100
+  process_variable: false
+- name: RQ
+  shorttex: RQ
+  longtex: RQ
+  unit: mol/mol
+  tex_unit: molmol^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: '0.1'
+  process_variable: false
+- name: QO2max
+  shorttex: Q_{O2max}
+  longtex: Q_{O2max}
+  unit: g/(lh)
+  tex_unit: g(lh)^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.v.FnG(1)*60*app.p.MO2/(app.v.VL(1)*app.p.VnM)
+  process_variable: false
+- name: QCO2max
+  shorttex: Q_{CO2max}
+  longtex: Q_{CO2max}
+  unit: g/(lh)
+  tex_unit: g(lh)^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.v.QO2max(1)*app.p.MCO2/app.p.MO2
+  process_variable: true
+- name: OTR
+  shorttex: OTR
+  longtex: OTR
+  unit: g/(lh)
+  tex_unit: g(lh)^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.v.OTRmax(end)*(app.p.xOAIR-app.v.cOL(end)/app.p.cOLmax)
+  process_variable: true
+- name: CTR
+  shorttex: CTR
+  longtex: CTR
+  unit: g/(lh)
+  tex_unit: g(lh)^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: '0'
+  process_variable: true
+- name: OUR
+  shorttex: OUR
+  longtex: OUR
+  unit: g/(lh)
+  tex_unit: g(lh)^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: '0'
+  process_variable: true
+- name: kLa
+  shorttex: k_La
+  longtex: k_La
+  unit: 1/h
+  tex_unit: h^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.kLamin+app.p.kLamax*((app.p.FnGw/app.p.FnGmax)^app.p.beta)*((app.p.NStw/app.p.NStmax)^(3*app.p.alpha))/((app.p.VL0/app.p.VLmin)^app.p.alpha)
+  process_variable: false
+- name: OURm
+  shorttex: OURm
+  longtex: OURm
+  unit: g/(lh)
+  tex_unit: g(lh)^{-1}
+  description: ''
+  visible: false
+  upload_rate: end
+  initial_assignment: '0'
+  process_variable: false
+- name: FH
+  shorttex: F_{H}
+  longtex: F_{H}
+  unit: l/h
+  tex_unit: lh^{-1}
+  description: ''
+  visible: false
+  upload_rate: cyclic
+  initial_assignment: app.p.FHrelw/100*app.p.Fhmax
+  process_variable: false
+- name: CAlLtot
+  shorttex: C_{AlLtot}
+  longtex: C_{AlLtot}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  description: ''
+  visible: false
+  upload_rate: cyclic
+  initial_assignment: app.p.CAlLtot0
+  process_variable: false
+- name: Vacid
+  shorttex: V_{acid}
+  longtex: added acid
+  unit: l
+  tex_unit: l
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: '0'
+  process_variable: false
+- name: Vbase
+  shorttex: V_{base}
+  longtex: added base
+  unit: l
+  tex_unit: l
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: '0'
+  process_variable: false
+- name: AAF
+  shorttex: A_{AF}
+  longtex: added antifoam
+  unit: l
+  tex_unit: l
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: '0'
+  process_variable: false
+- name: VL
+  shorttex: V_{L}
+  longtex: V_{L}
+  unit: l
+  tex_unit: l
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.VL0
+  process_variable: false
+- name: VT1
+  shorttex: V_{T1}
+  longtex: V_{T1}
+  unit: l
+  tex_unit: l
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.VT10
+  process_variable: false
+- name: VT2
+  shorttex: V_{T2}
+  longtex: V_{T2}
+  unit: l
+  tex_unit: l
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.VT20
+  process_variable: false
+- name: FT1
+  shorttex: F_{T1}
+  longtex: F_{T1}
+  unit: l/h
+  tex_unit: lh^{-1}
+  description: Pump rate acid
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.FT10
+  process_variable: false
+- name: FT2
+  shorttex: F_{T2}
+  longtex: F_{T2}
+  unit: l/h
+  tex_unit: lh^{-1}
+  description: Pump rate base
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.FT20
+  process_variable: false
+- name: CAcLtot
+  shorttex: C_{AcLtot}
+  longtex: C_{AcLtot}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  description: ''
+  visible: false
+  upload_rate: cyclic
+  initial_assignment: app.p.CAcLtot0
+  process_variable: false
+- name: pHLm
+  shorttex: pH_{Lm}
+  longtex: pH_{Lm}
+  unit: '-'
+  tex_unit: '-'
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.pH0
+  process_variable: false
+- name: thetaLm
+  shorttex: \vartheta_{Lm}
+  longtex: \vartheta_{Lm}
+  unit: °C
+  tex_unit: °C
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.thetaL0
+  process_variable: false
+- name: pO2m
+  shorttex: pO_{2m}
+  longtex: pO_{2m}
+  unit: '%'
+  tex_unit: '%'
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.pO20
+  process_variable: false
+- name: hF
+  shorttex: hF
+  longtex: hF
+  unit: '%'
+  tex_unit: '%'
+  description: ''
+  visible: false
+  upload_rate: end
+  initial_assignment: '0'
+  process_variable: false
+- name: CCLtot
+  shorttex: C_{CLtot}
+  longtex: C_{CLtot}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  description: ''
+  visible: false
+  upload_rate: end
+  initial_assignment: (1+app.p.KC1*10^app.p.pH0+app.p.KC1*app.p.KC2*10^(2*app.p.pH0))*app.p.xCAIR*app.cCLmax0/app.p.MCO2
+  process_variable: false
+- name: CB1Ltot
+  shorttex: C_{B1Ltot}
+  longtex: C_{B1Ltot}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  description: ''
+  visible: false
+  upload_rate: end
+  initial_assignment: app.p.CB1Ltot0
+  process_variable: false
+- name: CB2Ltot
+  shorttex: C_{B2Ltot}
+  longtex: C_{B2Ltot}
+  unit: mol/l
+  tex_unit: moll^{-1}
+  description: ''
+  visible: false
+  upload_rate: end
+  initial_assignment: app.p.CB2Ltot0
+  process_variable: false
+- name: pH
+  shorttex: pH
+  longtex: pH
+  unit: '-'
+  tex_unit: '-'
+  description: ''
+  visible: false
+  upload_rate: end
+  initial_assignment: app.p.pH0
+  process_variable: false
+- name: thetaD
+  shorttex: \vartheta_{D}
+  longtex: \vartheta_{D}
+  unit: °C
+  tex_unit: °C
+  description: ''
+  visible: false
+  upload_rate: end
+  initial_assignment: app.p.thetaD0
+  process_variable: true
+- name: VR1
+  shorttex: V_{R1}
+  longtex: V_{R1}
+  unit: l
+  tex_unit: l
+  description: ''
+  visible: false
+  upload_rate: end
+  initial_assignment: app.p.VR10
+  process_variable: true
+- name: VR2
+  shorttex: V_{R2}
+  longtex: V_{R2}
+  unit: l
+  tex_unit: l
+  description: ''
+  visible: false
+  upload_rate: never
+  initial_assignment: app.p.VR20
+  process_variable: false
+- name: VR3
+  shorttex: V_{R3}
+  longtex: V_{R3}
+  unit: l
+  tex_unit: l
+  description: ''
+  visible: false
+  upload_rate: never
+  initial_assignment: app.p.VR30
+  process_variable: false
+- name: FR1
+  shorttex: F_{R1}
+  longtex: F_{R1}
+  unit: l/h
+  tex_unit: lh^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.FR1w
+  process_variable: false
+- name: FR2
+  shorttex: F_{R2}
+  longtex: F_{R2}
+  unit: l/h
+  tex_unit: lh^{-1}
+  description: ''
+  visible: false
+  upload_rate: never
+  initial_assignment: app.p.FR2w
+  process_variable: true
+- name: FR3
+  shorttex: F_{R3}
+  longtex: F_{R3}
+  unit: l/h
+  tex_unit: lh^{-1}
+  description: ''
+  visible: false
+  upload_rate: never
+  initial_assignment: app.p.FR3w
+  process_variable: true
+- name: t
+  shorttex: t
+  longtex: t
+  unit: h
+  tex_unit: h
+  description: ''
+  visible: false
+  upload_rate: never
+  initial_assignment: '0'
+  process_variable: true
+- name: VR1in
+  shorttex: V_{R1in}
+  longtex: V_{R1in}
+  unit: l
+  tex_unit: l
+  description: ''
+  visible: false
+  upload_rate: cyclic
+  initial_assignment: '0'
+  process_variable: false
+- name: VR2in
+  shorttex: V_{R2in}
+  longtex: V_{R2in}
+  unit: l
+  tex_unit: l
+  description: ''
+  visible: false
+  upload_rate: never
+  initial_assignment: '0'
+  process_variable: false
+- name: VR3in
+  shorttex: V_{R3in}
+  longtex: V_{R3in}
+  unit: l
+  tex_unit: l
+  description: ''
+  visible: false
+  upload_rate: never
+  initial_assignment: '0'
+  process_variable: false
+- name: qS2pXind
+  shorttex: q_{S2/Xind}
+  longtex: q_{S2/Xind}
+  unit: 1/h
+  tex_unit: h^{-1}
+  description: AOX induction
+  visible: false
+  upload_rate: never
+  initial_assignment: '0'
+  process_variable: false
+- name: qS2pXscript
+  shorttex: q_{S2/Xscript}
+  longtex: q_{S2/Xscript}
+  unit: 1/h
+  tex_unit: h^{-1}
+  description: AOX induction
+  visible: false
+  upload_rate: never
+  initial_assignment: '0'
+  process_variable: false
+- name: qP1pXscriptw
+  shorttex: q_{P1/Xscriptw}
+  longtex: q_{P1/Xscriptw}
+  unit: 1/h
+  tex_unit: h^{-1}
+  description: AOX induction
+  visible: false
+  upload_rate: never
+  initial_assignment: '0'
+  process_variable: false
+- name: qS2pXtrans
+  shorttex: q_{S2/Xtrans}
+  longtex: q_{S2/Xtrans}
+  unit: 1/h
+  tex_unit: h^{-1}
+  description: AOX induction
+  visible: false
+  upload_rate: never
+  initial_assignment: '0'
+  process_variable: false
+- name: qS2pXact
+  shorttex: q_{S2/Xact}
+  longtex: q_{S2/Xact}
+  unit: 1/h
+  tex_unit: h^{-1}
+  description: AOX induction
+  visible: false
+  upload_rate: never
+  initial_assignment: '0'
+  process_variable: false
+- name: qS2pX
+  shorttex: q_{S2/X}
+  longtex: q_{S2/X}
+  unit: 1/h
+  tex_unit: h^{-1}
+  description: AOX induction
+  visible: false
+  upload_rate: never
+  initial_assignment: '0'
+  process_variable: false
+- name: qP1pXind
+  shorttex: q_{P1/Xind}
+  longtex: q_{P1/Xind}
+  unit: 1/h
+  tex_unit: h^{-1}
+  description: Protein expression
+  visible: false
+  upload_rate: never
+  initial_assignment: '0'
+  process_variable: false
+- name: qP1pXback
+  shorttex: q_{P1/Xback}
+  longtex: q_{P1/Xback}
+  unit: 1/h
+  tex_unit: h^{-1}
+  description: Protein expression
+  visible: false
+  upload_rate: never
+  initial_assignment: '0'
+  process_variable: false
+- name: qP1pXscript
+  shorttex: q_{P1/Xscript}
+  longtex: q_{P1/Xscript}
+  unit: 1/h
+  tex_unit: h^{-1}
+  description: Protein expression
+  visible: false
+  upload_rate: never
+  initial_assignment: '0'
+  process_variable: false
+- name: qP1pXtrans
+  shorttex: q_{P1/Xtrans}
+  longtex: q_{P1/Xtrans}
+  unit: 1/h
+  tex_unit: h^{-1}
+  description: Protein expression
+  visible: false
+  upload_rate: never
+  initial_assignment: '0'
+  process_variable: false
+- name: qP1pXact
+  shorttex: q_{P1/Xact}
+  longtex: q_{P1/Xact}
+  unit: 1/h
+  tex_unit: h^{-1}
+  description: Protein expression
+  visible: false
+  upload_rate: never
+  initial_assignment: '0'
+  process_variable: false
+- name: qP1pX
+  shorttex: q_{P1/X}
+  longtex: q_{P1/X}
+  unit: 1/h
+  tex_unit: h^{-1}
+  description: Protein expression
+  visible: false
+  upload_rate: never
+  initial_assignment: '0'
+  process_variable: false
+- name: cS1Lm
+  shorttex: c_{S1Lm}
+  longtex: c_{S1Lm}
+  unit: g/l
+  tex_unit: gl^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.cS1L0
+  process_variable: false
+- name: cS2Lm
+  shorttex: c_{S2Lm}
+  longtex: c_{S2Lm}
+  unit: g/l
+  tex_unit: gl^{-1}
+  description: ''
+  visible: true
+  upload_rate: cyclic
+  initial_assignment: app.p.cS2L0
+  process_variable: false
+- name: cS3Lm
+  shorttex: c_{S3Lm}
+  longtex: c_{S3Lm}
+  unit: g/l
+  tex_unit: gl^{-1}
+  description: ''
+  visible: true
+  upload_rate: never
+  initial_assignment: app.p.cS3L0
+  process_variable: false

@@ -169,13 +169,40 @@ MATLAB-Projektordner.
 |---|---|---|
 | 0 | Fundament, Referenzdaten | **abgeschlossen**, bis auf die Referenzläufe und das GitHub-Repository |
 | 1 | Datenschicht | **abgeschlossen** |
-| 2 | Kern, Plugin-Architektur, ODE-Übersetzung | offen |
+| 2 | Kern, Plugin-Architektur, ODE-Übersetzung | **abgeschlossen**, Verifikation blockiert |
 | 3 | Phasenautomat | offen |
 | 4 | GUI-Grundgerüst, Timer | offen |
 | 5 | ControlApp, Phasenmanager | offen |
 | 6 | Plot-Engine | offen |
 | 7 | Verteilung Windows/macOS | offen |
 | 8 | Dokumentation | offen |
+
+### Offen aus Phase 2
+
+- **Referenzläufe fehlen weiterhin.** Beide Organismen sind übersetzt und
+  laufen, aber `test_organisms.py` kann nur Struktur und Plausibilität prüfen.
+  Ohne `ecoli_reference.csv` ist keine einzige Zahl verifiziert. Das ist der
+  wichtigste offene Punkt des Projekts.
+- **Pichia-Defaults sind verfälscht.** `default_modelTab` hat für Pichia je
+  zwei Zeilen für `yXpOgr`, `yCpO` und `qOpXm` (parameterID 206/207/208). Die
+  jeweils zweite trägt Wert *und* Beschreibung der Methanol-Toxizitätsparameter
+  `kS2tox`/`kappatox`/`qXpXtox` (309/310/311), die daneben korrekt existieren.
+  Die falschen Werte sind in `project_parameterTab` gelandet: Projekt 519
+  rechnet mit `yXpOgr` = 40 statt 1,773, `yCpO` = 15 statt 1,375, `qOpXm` = 0,5
+  statt 0,0117. Das verdoppelt die Sauerstoffaufnahmerate. Es ist das in der
+  MATLAB-Dokumentation genannte Duplikat — dort nur als Blocker beim Anlegen
+  von Projekten beschrieben, nicht als Wertverfälschung.
+  Festgehalten als `xfail(strict=True)` in `test_definitions.py`.
+- **`variable_handlingTab` passt zu keinem der beiden Modelle.** Sieben
+  E.-coli- und sechs Pichia-Zeitreihen werden gerechnet, aber keinem
+  Organismus zugeordnet und daher nie gespeichert — darunter `xO2` und `xCO2`,
+  die ODE-Zustände sind. Ein fortgesetzter Lauf startet sie still neu;
+  `load_project_state` meldet sie jetzt in `a.restarted_variables`.
+  Umgekehrt sind E. coli 19 Pichia-Variablen zugeordnet, für die es keine
+  Bilanz gibt. `xfail(strict=True)` in `test_organisms.py`.
+- **pO2 überschwingt bei Pichia** auf über 1000 %, auch mit korrigierten
+  Parametern. E. coli bleibt bei ~133 %. Ob MATLAB dasselbe zeigt, entscheidet
+  der Referenzlauf.
 
 ### Offen aus Phase 1
 
@@ -196,6 +223,29 @@ MATLAB-Projektordner.
   (Plan §0.2). Der Workflow liegt bereit.
 - **Lizenz** ist noch nicht festgelegt; `pyproject.toml` hat deshalb kein
   `license`-Feld.
+
+---
+
+## Konventionen des Simulationskerns
+
+- **Preallokation bleibt, die Blockgröße nicht.** `np.append` je Schritt ist
+  O(n²) und kostet 7,3 s über 20 000 Schritte; MATLABs fester 20er-Block ist
+  ebenfalls noch O(n²) (1,7 s bei 50 000 Schritten). `ensure_capacity`
+  verdoppelt stattdessen und liegt bei 0,25 µs pro Schritt.
+- **NaN heißt „nicht gerechnet".** `carry_forward` schreibt am Ende jedes
+  Schritts Reihen fort, die das Modell nicht neu berechnet, statt eine Lücke
+  zu hinterlassen.
+- **`LSODA`, nicht `BDF`.** Über ein Fenster von 0,005 h ist das System nicht
+  steif. LSODA bei rtol 1e-8 ist 6,7-mal schneller als BDF bei 1e-10 und weicht
+  um 1e-6 ab. Begründung und Messreihe stehen in `core/integrate.py`.
+  numba ist damit nicht nötig — 24 h Prozesszeit rechnen in 2,3 s.
+- **MATLAB-Eigenheiten werden wörtlich übersetzt, nicht repariert.** Wo das
+  Original einen Wert bei `idx` schreibt und im nächsten Ausdruck den bei
+  `idx-1` liest, steht im Python-Code `# MATLAB lag`. Eine Korrektur vor dem
+  Referenzlauf würde jede Abweichung unzuordenbar machen.
+- **Die beiden Organismen sind nicht vereinheitlicht.** Pichias MATLAB-Datei
+  ist eine spätere Revision mit anderen Reglerabgriffen, D-Anteil auf der
+  Messgröße und Anti-Windup. Jede Datei ist die Referenz für ihren Organismus.
 
 ### Arbeitsweise
 

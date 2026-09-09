@@ -1,1 +1,5 @@
-"""Pichia pastoris model — 2 reservoirs, 19 ODE states, AOX induction."""
+"""Pichia pastoris plugin. Importing it registers the model."""
+
+from .model import PichiaPastoris
+
+__all__ = ["PichiaPastoris"]
