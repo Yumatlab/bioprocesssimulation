@@ -175,7 +175,7 @@ MATLAB-Projektordner.
 | 4 | GUI-Grundgerüst, Timer | **abgeschlossen** |
 | 5 | ControlApp, Phasenmanager | **abgeschlossen** |
 | 6 | Plot-Engine | **abgeschlossen** |
-| 7 | Verteilung Windows/macOS | offen |
+| 7 | Verteilung Windows/macOS | **abgeschlossen** |
 | 8 | Dokumentation | offen |
 
 ### Offen aus Phase 2
@@ -222,8 +222,20 @@ MATLAB-Projektordner.
   Parametern. E. coli bleibt bei ~133 %. Ob MATLAB dasselbe zeigt, entscheidet
   der Referenzlauf.
 
+### Offen aus Phase 7
+
+- **Der Windows-Build ist ungetestet.** Cross-Compiling gibt es bei
+  PyInstaller nicht; `build/windows.spec` ist geschrieben und geprüft, aber
+  nur die CI kann ihn tatsächlich bauen. Das macOS-Bündel ist lokal gebaut
+  und gestartet.
+- **Kein Anwendungssymbol.** `icon=None` in beiden Spezifikationen.
+- **Nicht signiert**, bewusst — siehe `docs/installation.md`.
+
 ### Offen aus Phase 6
 
+- **Feinschliff am Plot steht aus.** Die grobe Darstellung stimmt seit
+  `0109fd9` (bündige Achsen, gleiche Teilung, kein Gitter); Kleinigkeiten
+  wurden zurückgestellt und sind noch nicht im Einzelnen benannt.
 - **Kein `TemplateManager`.** Templates lassen sich laden, ändern und
   speichern, aber nicht anlegen, kopieren oder löschen. Farbe und Linienstil
   sind über die Oberfläche nicht wählbar — `QColorDialog` und ein Dropdown
@@ -383,6 +395,14 @@ Kopieren der `.db` ohne WAL sind sie verloren.
 - **Die Optik ist eine Textdatei.** `resources/styles/default.qss`; eine
   `style.qss` neben der Datenbank ersetzt sie. Farben, Abstände und Schriften
   ohne Python und ohne Neuübersetzung.
+- **Plugins brauchen einen Eintrag in `build/specs.py`.** Die Registry
+  findet sie über `pkgutil.iter_modules`, also importiert sie niemand beim
+  Namen und PyInstallers Analyse sieht sie nicht. Fehlt einer, startet die
+  gebaute Anwendung **ohne Fehlermeldung** mit leerer Organismusliste.
+  `tests/test_packaging.py` vergleicht die Liste gegen `discover_organisms()`.
+- **Ressourcen über `resources.resource_root()`**, nie über
+  `Path(__file__).parent` — im gepackten Zustand liegen sie unter
+  `sys._MEIPASS`.
 - **Die mitgelieferte Vorlage wird nie beschrieben.** `default_database()`
   legt beim ersten Start eine Kopie im Benutzerverzeichnis an — über die
   sqlite3-Backup-API, damit ein etwaiges WAL mitkommt. Im PyInstaller-Bundle

@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
 
 jobs:
@@ -26,3 +27,60 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: pytest
+
+  # Plan section 7.2: every tag produces both installers, so neither has to
+  # be built by hand on a machine that happens to run the right system.
+  build:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            spec: build/windows.spec
+            artefact: BiofermentationSimulation-windows
+            path: dist/BiofermentationSimulation.exe
+          - os: macos-latest
+            spec: build/macos.spec
+            artefact: BiofermentationSimulation-macos
+            path: dist/Biofermentation Simulation.app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -e ".[build]"
+      - name: Build
+        run: pyinstaller --noconfirm ${{ matrix.spec }}
+      # A build that produces a file which cannot start is worse than none.
+      - name: Smoke test the build
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -c "import biofermentation.gui.app"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artefact }}
+          path: ${{ matrix.path }}
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artefacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artefacts/**
+          body: |
+            Neither build is signed. Windows warns about an unknown
+            publisher, macOS refuses the first double-click — see
+            docs/installation.md for how to allow them.
+          generate_release_notes: true

@@ -8,9 +8,9 @@ spacing or fonts without a Python file or a rebuild.
 
 from pathlib import Path
 
-from ..resources import default_database
+from ..resources import STYLES_DIR, default_database
 
-BUNDLED_STYLE = Path(__file__).resolve().parents[1] / "resources" / "styles" / "default.qss"
+BUNDLED_STYLE = STYLES_DIR / "default.qss"
 USER_STYLE_NAME = "style.qss"
 
 

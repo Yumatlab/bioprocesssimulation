@@ -9,9 +9,27 @@ import os
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
+
+def resource_root() -> Path:
+    """Where the bundled resources are, source tree or frozen build alike.
+
+    PyInstaller unpacks its data files into a temporary directory and puts
+    the path in sys._MEIPASS. The package modules themselves report a
+    __file__ inside that directory too, so both branches usually agree — but
+    only usually, and a resource that cannot be found in a frozen build is
+    found after the release rather than before it.
+    """
+    bundle = getattr(sys, "_MEIPASS", None)
+    if bundle is not None:
+        return Path(bundle) / "biofermentation" / "resources"
+    return Path(__file__).resolve().parent
+
+
+IS_FROZEN = getattr(sys, "frozen", False)
+HERE = resource_root()
 TEMPLATE_DB = HERE / "SimulationAppDB_template.db"
 DEFAULTS_DIR = HERE / "defaults"
+STYLES_DIR = HERE / "styles"
 
 APPLICATION_NAME = "Biofermentation Simulation"
 DATABASE_NAME = "SimulationAppDB.db"
@@ -67,11 +85,28 @@ def copy_template(target: Path | str) -> Path:
     return target
 
 
+def bundled_files() -> dict[str, Path]:
+    """Everything the application needs at runtime and does not compute.
+
+    Used by the packaging test, so a resource that stops being collected is
+    noticed by pytest rather than by a user opening the release.
+    """
+    return {
+        "template database": TEMPLATE_DB,
+        "default data set": DEFAULTS_DIR,
+        "stylesheet": STYLES_DIR / "default.qss",
+    }
+
+
 __all__ = [
     "DATABASE_ENV",
     "DEFAULTS_DIR",
+    "IS_FROZEN",
+    "STYLES_DIR",
     "TEMPLATE_DB",
+    "bundled_files",
     "copy_template",
     "default_database",
+    "resource_root",
     "user_data_dir",
 ]
