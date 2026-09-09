@@ -352,6 +352,21 @@ Kopieren der `.db` ohne WAL sind sie verloren.
 - **Fenster öffnen keine Fenster.** Jedes gibt über ein Signal bekannt, was
   der Anwender wollte; `gui/app.py` entscheidet, was aufgeht. Nur so ist ein
   Fenster einzeln testbar.
+- **Das Plot-Layout wird von Hand gebaut, nicht von `PlotItem` genommen.**
+  `PlotItem` hält seine linke Achse in Spalte 0 und die ViewBox in Spalte 1,
+  und `QGraphicsGridLayout` kann keine Spalte davor einfügen. Zusatzachsen in
+  einer eigenen Layoutzeile umfassen auch Titel und x-Achse und sitzen dann
+  ein paar Pixel versetzt. Deshalb: Zeile 1 trägt alle y-Achsen *und* die
+  ViewBox, Zeile 2 nur die x-Achse. Damit sind alle Achsen exakt so hoch wie
+  die Plotfläche.
+- **Alle y-Achsen bekommen dieselbe Anzahl Teilungen** (`axisytick` aus dem
+  Template), damit ihre Striche auf gleicher Höhe liegen und die Skalen
+  quer lesbar sind. Die Zeitachse nicht — sie wächst mit dem Lauf, und
+  erzwungene Teilungen ergäben dort krumme Zahlen.
+- **Kein Gitter im Plot** und kein `(×0.001)` über den Achsen
+  (`enableAutoSIPrefix(False)`).
+- **Kurvenendlabels mit `ignoreBounds=True`**, sonst zieht das Label hinter
+  dem letzten Datenpunkt die Achse bei jedem Schritt weiter.
 - **Jeder Qt-Stift muss kosmetisch sein.** Ein `QPen` von Hand ist es nicht,
   seine Breite gilt dann in Datenkoordinaten und wird von der
   ViewBox-Transformation skaliert — aus einer 1,5-pt-Linie wird ein 50 px

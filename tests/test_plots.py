@@ -174,8 +174,7 @@ def test_the_plot_builds_one_axis_per_variable(qapp):
     plot.set_template(_template("a", "b", "c"))
     assert len(plot._views) == 3
     assert len(plot._curves) == 3
-    # One extra axis per variable past the first; the first uses the plot's.
-    assert len(plot._placeholders) == 2
+    assert len(plot._axes) == 3
 
 
 def test_rebuilding_the_plot_does_not_pile_up_axes(qapp):
@@ -185,7 +184,7 @@ def test_rebuilding_the_plot_does_not_pile_up_axes(qapp):
     plot.set_template(_template("a", "b", "c"))
     plot.set_template(_template("a", "b"))
     assert len(plot._views) == 2
-    assert len(plot._placeholders) == 1
+    assert len(plot._axes) == 2
 
 
 def test_the_curves_receive_the_data(qapp):
@@ -325,7 +324,7 @@ def test_turning_auto_off_frees_the_fields(figure):
 def test_the_time_range_reaches_the_plot(figure):
     figure.tend_box.setValue(8.0)
     assert figure.template.tend == 8.0
-    assert figure.plot.plot_item.viewRange()[0][1] == pytest.approx(8.0)
+    assert figure.plot.main_view.viewRange()[0][1] == pytest.approx(8.0)
 
 
 def test_auto_update_can_be_switched_off(figure):
@@ -339,3 +338,60 @@ def test_saving_the_template_writes_the_selection(figure, db_copy):
     figure.save_template()
     again = load_plot_template(db_copy, figure.template.templateID)
     assert next(v for v in again.variables if v.name == "cS2L").selected is True
+
+
+def test_every_y_axis_is_flush_with_the_plot_area(qapp):
+    """The axes have to share their row with the ViewBox, not the x-axis.
+
+    Putting them in a row of their own makes each of them as tall as the
+    whole plot including its bottom axis, and every scale then sits a few
+    pixels off the one next to it.
+    """
+    from biofermentation.gui.widgets.plot_view import MultiAxisPlot
+
+    plot = MultiAxisPlot()
+    plot.set_template(_template("a", "b", "c"))
+    plot.resize(800, 400)
+    plot.show()
+    qapp.processEvents()
+
+    # geometry(), not sceneBoundingRect(): an AxisItem's bounding rect
+    # includes the overhang of its tick labels and says nothing about where
+    # the layout put it.
+    plot_area = plot.main_view.geometry()
+    for axis in plot._axes:
+        cell = axis.geometry()
+        assert cell.top() == pytest.approx(plot_area.top(), abs=0.5)
+        assert cell.height() == pytest.approx(plot_area.height(), abs=0.5)
+
+    # The bottom axis sits under the plot area alone, not under the scales.
+    assert plot.bottom_axis.geometry().top() > plot_area.bottom() - 1
+    assert plot.bottom_axis.geometry().left() == pytest.approx(plot_area.left(), abs=0.5)
+
+
+def test_every_axis_has_the_same_number_of_divisions(qapp):
+    """axisytick of the template, so the ticks of all scales line up."""
+    from biofermentation.gui.widgets.plot_view import MultiAxisPlot
+
+    template = _template("a", "b", "c")
+    template.axisytick = 5.0
+    plot = MultiAxisPlot()
+    plot.set_template(template)
+    plot.resize(800, 400)
+    plot.show()
+    qapp.processEvents()
+
+    for position, axis in enumerate(plot._axes):
+        variable = plot._variables[position]
+        expected = (variable.ymax - variable.ymin) / template.axisytick
+        assert axis._tickSpacing[0][0] == pytest.approx(expected)
+
+
+def test_the_plot_has_no_grid(qapp):
+    """A checkered background is not wanted."""
+    from biofermentation.gui.widgets.plot_view import MultiAxisPlot
+
+    plot = MultiAxisPlot()
+    plot.set_template(_template("a", "b"))
+    for axis in [*plot._axes, plot.bottom_axis]:
+        assert axis.grid is False

@@ -88,6 +88,11 @@ def _control_window(db_path: Path):
     state, organism = load_project_state(db_path, project_id)
     state.p["f_Inoc"] = 1.0
     state.p["f_InocStart"] = 1.0
+    # The step width the project is configured with, not the default — an
+    # 18 hour run makes a poor picture of a 5 hour template.
+    seconds = float(state.p.get("deltatsec", 0) or 0)
+    if seconds > 0:
+        state.dt = seconds / 3600
     runner = SimulationRunner(
         organism, state, phases=PhaseAutomaton.from_setup(setup), speedfactor=30
     )

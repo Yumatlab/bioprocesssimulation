@@ -1,21 +1,31 @@
 """The multi-axis live plot (plan section 6.1).
 
-pyqtgraph draws one PlotItem with its own ViewBox. Everything past the first
-curve needs a ViewBox of its own, linked to the same x-axis and given an
-AxisItem placed further to the left — that is the direct counterpart to the
-stacked y-axes of the MATLAB FigureApp.
+The layout is built by hand rather than taken from pyqtgraph's PlotItem, and
+that is the whole point of this module.
 
-Two things the original does that are easy to lose:
+PlotItem keeps its own left axis in column 0 of an internal grid and its
+ViewBox in column 1, and QGraphicsGridLayout cannot insert a column in front
+of an existing one. Extra axes therefore have to go somewhere else — and if
+they go into a row of the outer layout, that row also spans the PlotItem's
+title and x-axis, so every extra axis ends up taller than the plot area and
+sits a few pixels off. The original stacks its axes flush with the plot area,
+so the layout here is explicit:
 
-  * The axes are ordered by their upper limit, so the scales do not cross.
-    PlotTemplate.selected() does that sorting.
-  * Every curve carries its name at its right end, drawn in the curve's own
-    colour. Without it a plot with six scales is unreadable.
+    row 0   title, spanning everything
+    row 1   axis[n-1] … axis[1] axis[0] | ViewBox
+    row 2                               | bottom axis
+
+Every y-axis shares row 1 with the ViewBox and is therefore exactly as tall
+as the plot area. The bottom axis sits under the ViewBox alone.
+
+The tick spacing is forced to the template's axisytick on every axis, so the
+divisions of all scales line up horizontally — the way they do in the MATLAB
+figure. Without that each axis picks its own spacing and the gridlines of one
+scale fall between those of the next.
 """
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QPen
 from PySide6.QtWidgets import QWidget
 
@@ -32,64 +42,67 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.template: PlotTemplate | None = None
-        self.plot_item: pg.PlotItem | None = None
+        self.main_view: pg.ViewBox | None = None
+        self.bottom_axis: pg.AxisItem | None = None
+        self.title_item: pg.LabelItem | None = None
 
-        # ViewBox, AxisItem, curve and end label, one set per variable.
         self._views: list[pg.ViewBox] = []
         self._axes: list[pg.AxisItem] = []
         self._curves: list[pg.PlotDataItem] = []
         self._labels: list[pg.TextItem] = []
         self._variables: list[PlotVariable] = []
-        self._placeholders: list[pg.AxisItem] = []
 
     # ------------------------------------------------------------ build --
 
     def set_template(self, template: PlotTemplate) -> None:
-        """Rebuild for a template. Like the phase grid: throw away, build again.
-
-        The number of extra axes decides the layout, so the whole thing is
-        built here rather than patched. PlotItem keeps its own axis in column
-        0 and its ViewBox in column 1; an extra axis cannot go there, and
-        QGraphicsGridLayout cannot insert a column in front. So the axes are
-        placed in this widget's own layout instead, outermost first, and the
-        plot takes the last column.
-        """
+        """Rebuild for a template. Throw the layout away and build it again."""
         self.template = template
         self._clear()
 
         variables = template.selected()
         self._variables = variables
-        extra = max(0, len(variables) - 1)
-
-        # Outermost axis at column 0; variable[0] keeps the plot's own axis.
-        placeholders = [pg.AxisItem("left") for _ in range(extra)]
-        for column, axis in enumerate(placeholders):
-            self.addItem(axis, row=0, col=column)
-
-        self.plot_item = self.addPlot(row=0, col=extra)
-        self.plot_item.showGrid(x=True, y=True, alpha=0.25)
-        self.plot_item.setMenuEnabled(False)
-        self.plot_item.vb.sigResized.connect(self._resize_views)
-        self._placeholders = placeholders
-
         if not variables:
             return
 
-        # plot_templateTab.axisxunit stores the brackets ("[h]"), so they are
-        # stripped before being put back — otherwise the label reads [[h]].
+        count = len(variables)
+
+        if template.show_title and template.plottitle:
+            self.title_item = self.addLabel(
+                template.plottitle,
+                row=0,
+                col=0,
+                colspan=count + 1,
+                size=f"{template.graphtitlefontsize:.0f}pt",
+            )
+
+        # The ViewBox every curve shares an x-axis with.
+        self.main_view = pg.ViewBox()
+        self.main_view.setMouseEnabled(x=True, y=False)
+        # The x range is the template's, not whatever the data happens to
+        # span. Left on, autoRange also takes the end labels into account and
+        # drags the axis far past the run.
+        self.main_view.enableAutoRange(axis="x", enable=False)
+        self.addItem(self.main_view, row=1, col=count)
+        self.ci.layout.setColumnStretchFactor(count, 1)
+
         unit = template.axisxunit.strip("[] ")
-        self.plot_item.getAxis("bottom").setLabel(
+        self.bottom_axis = pg.AxisItem("bottom")
+        self.bottom_axis.linkToView(self.main_view)
+        self.bottom_axis.enableAutoSIPrefix(False)
+        self.bottom_axis.setLabel(
             f"{template.axisxlabel} [{unit}]" if unit else template.axisxlabel
         )
-        if template.show_title and template.plottitle:
-            self.plot_item.setTitle(template.plottitle, size=f"{template.graphtitlefontsize:.0f}pt")
-        self.plot_item.setXRange(template.tstart, template.tend, padding=0)
+        self.addItem(self.bottom_axis, row=2, col=count)
 
+        # Column 0 is the outermost axis, so the innermost variable — the one
+        # with the smallest range — ends up next to the plot area.
         for position, variable in enumerate(variables):
-            self._add_variable(position, variable)
+            self._add_variable(position, count - 1 - position, variable)
+
+        self.set_x_range(template.tstart, template.tend)
         self._resize_views()
 
-    def _add_variable(self, position: int, variable: PlotVariable) -> None:
+    def _add_variable(self, position: int, column: int, variable: PlotVariable) -> None:
         color = QColor(*variable.color)
         pen = QPen(color)
         pen.setWidthF(self.template.graphlinewidth if self.template else 1.5)
@@ -99,47 +112,65 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         # built by hand does not.
         pen.setCosmetic(True)
         if variable.dash_pattern:
-            pen.setStyle(Qt.PenStyle.CustomDashLine)
-            pen.setDashPattern([float(x) for x in variable.dash_pattern])
+            pen.setStyle(pg.QtCore.Qt.PenStyle.CustomDashLine)
+            pen.setDashPattern([float(step) for step in variable.dash_pattern])
 
         if position == 0:
-            # The first variable owns the plot's own ViewBox and axis, so it
-            # sits closest to the plot area — the innermost scale.
-            view = self.plot_item.vb
-            axis = self.plot_item.getAxis("left")
-            curve = self.plot_item.plot([], [], pen=pen)
+            view = self.main_view
         else:
+            # Only the first ViewBox is in the layout; the rest live in the
+            # scene and are moved onto it in _resize_views.
             view = pg.ViewBox()
-            # Ascending ymax means later variables belong further out.
-            axis = self._placeholders[len(self._placeholders) - position]
-            self.plot_item.scene().addItem(view)
-            axis.linkToView(view)
-            view.setXLink(self.plot_item.vb)
-            curve = pg.PlotDataItem([], [], pen=pen)
-            view.addItem(curve)
+            view.setMouseEnabled(x=False, y=False)
+            self.scene().addItem(view)
+            view.setXLink(self.main_view)
 
+        axis = pg.AxisItem("left")
+        axis.linkToView(view)
         axis.setPen(QPen(color))
         axis.setTextPen(QPen(color))
-        unit = tex_to_html(variable.tex_unit) if variable.tex_unit else ""
+        # No "(x0.001)" over the axis; the original prints the numbers as
+        # they are, and the unit is already in the caption.
+        axis.enableAutoSIPrefix(False)
         caption = tex_to_html(variable.label())
-        axis.setLabel(f"{caption} [{unit}]" if unit else caption)
-        view.setYRange(variable.ymin, variable.ymax, padding=0)
-        view.enableAutoRange(axis="y", enable=False)
+        rendered_unit = tex_to_html(variable.tex_unit) if variable.tex_unit else ""
+        axis.setLabel(f"{caption} [{rendered_unit}]" if rendered_unit else caption)
+        self.addItem(axis, row=1, col=column)
 
-        # The end label carries the curve's colour, so six scales stay
-        # readable — plotFlags of the original.
-        caption_html = f'<span style="color:{color.name()}">{caption}</span>'
-        label = pg.TextItem(html=caption_html, anchor=(0, 0.5))
+        curve = pg.PlotDataItem([], [], pen=pen)
+        view.addItem(curve)
+
+        # The curve's name at its right end, in its own colour — plotFlags of
+        # the original. With six scales the plot is unreadable without it.
+        label = pg.TextItem(
+            html=f'<span style="color:{color.name()}">{caption}</span>', anchor=(0, 0.5)
+        )
         font = QFont()
         font.setPointSizeF(self.template.flagfontsize * 0.6 if self.template else 10)
         label.setFont(font)
-        view.addItem(label)
+        # ignoreBounds: the label sits past the last data point, and letting
+        # it count towards the range would stretch the axis every step.
+        view.addItem(label, ignoreBounds=True)
         label.hide()
 
         self._views.append(view)
         self._axes.append(axis)
         self._curves.append(curve)
         self._labels.append(label)
+        self._apply_range(position, variable.ymin, variable.ymax)
+
+    def _apply_range(self, position: int, lower: float, upper: float) -> None:
+        """Set an axis range and pin its divisions to the template's count.
+
+        Every scale gets the same number of intervals, so their ticks sit at
+        the same heights and the scales can be read across.
+        """
+        self._views[position].setYRange(lower, upper, padding=0)
+        self._views[position].enableAutoRange(axis="y", enable=False)
+        divisions = int(self.template.axisytick) if self.template else 5
+        if divisions > 0 and upper > lower:
+            step = (upper - lower) / divisions
+            self._axes[position].setTickSpacing(major=step, minor=step)
 
     def _clear(self) -> None:
         for position, view in enumerate(self._views):
@@ -153,16 +184,16 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         self._curves.clear()
         self._labels.clear()
         self._variables.clear()
-        self._placeholders = []
-        # clear() takes the plot and every axis out of the layout at once.
+        self.main_view = None
+        self.bottom_axis = None
+        self.title_item = None
         self.clear()
-        self.plot_item = None
 
     # ------------------------------------------------------------- data --
 
     def update_data(self, t: np.ndarray, series: dict[str, np.ndarray]) -> None:
         """Redraw from the trimmed time series of the simulation state."""
-        if not self._variables or t.size == 0 or self.plot_item is None:
+        if not self._variables or t.size == 0 or self.main_view is None:
             return
 
         for position, variable in enumerate(self._variables):
@@ -177,16 +208,15 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
                 lower, upper = auto_limits(y, variable.ymin, variable.ymax)
                 if (lower, upper) != (variable.ymin, variable.ymax):
                     variable.ymin, variable.ymax = lower, upper
-                    self._views[position].setYRange(lower, upper, padding=0)
+                    self._apply_range(position, lower, upper)
 
             self._place_label(position, x, y)
 
         if self.template is not None and t[-1] > self.template.tend:
             # The window follows the run rather than cutting it off.
-            self.plot_item.setXRange(self.template.tstart, float(t[-1]), padding=0.02)
+            self.set_x_range(self.template.tstart, float(t[-1]))
 
     def _place_label(self, position: int, x: np.ndarray, y: np.ndarray) -> None:
-        """The curve's name at its right end — plotFlags of the original."""
         finite = np.isfinite(y)
         if not finite.any():
             self._labels[position].hide()
@@ -200,14 +230,23 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         self._labels[position].show()
 
     def set_x_range(self, start: float, end: float) -> None:
-        if self.plot_item is not None:
-            self.plot_item.setXRange(start, end, padding=0)
+        """The time axis picks its own ticks.
+
+        The y-axes get a fixed number of divisions because their limits are
+        the user's and the scales have to be readable across. The time axis
+        grows with the run, and forcing axisxtick divisions onto a range of
+        0 to 18 h gives ticks at 3.6 h — pyqtgraph's own choice of round
+        numbers is better here.
+        """
+        if self.main_view is None:
+            return
+        self.main_view.setXRange(start, end, padding=0)
 
     def set_y_range(self, name: str, lower: float, upper: float) -> None:
         for position, variable in enumerate(self._variables):
             if variable.name == name:
                 variable.ymin, variable.ymax = lower, upper
-                self._views[position].setYRange(lower, upper, padding=0)
+                self._apply_range(position, lower, upper)
                 return
 
     # ---------------------------------------------------------- layout --
@@ -217,8 +256,7 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
 
         An extra ViewBox is not in the layout — it only lives in the scene —
         so nothing moves it when the widget changes size. Without this the
-        curves are drawn through a stale transform and come out as filled
-        shapes rather than lines.
+        curves are drawn through a stale transform.
         """
         super().resizeEvent(event)
         self._resize_views()
@@ -228,15 +266,16 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         self._resize_views()
 
     def _resize_views(self) -> None:
-        """Extra ViewBoxes do not follow the plot on their own.
+        """Put every extra ViewBox exactly on top of the main one.
 
-        getattr, not self.plot_item: pyqtgraph's GraphicsView calls
+        getattr, not self.main_view: pyqtgraph's GraphicsView calls
         resizeEvent from inside its own __init__, before this class has set
         any attribute at all.
         """
-        if getattr(self, "plot_item", None) is None:
+        main = getattr(self, "main_view", None)
+        if main is None:
             return
-        geometry = self.plot_item.vb.sceneBoundingRect()
+        geometry = main.sceneBoundingRect()
         for view in self._views[1:]:
             view.setGeometry(geometry)
-            view.linkedViewChanged(self.plot_item.vb, view.XAxis)
+            view.linkedViewChanged(main, view.XAxis)
