@@ -19,6 +19,27 @@ Plattformen: Windows und macOS, verteilt als einzelne ausführbare Datei.
 
 Der MATLAB-Code wird **nicht** verändert. Er ist Lesequelle, sonst nichts.
 
+### An den Quellcode der `.mlapp`-Dateien kommen
+
+Die Organismusmodelle liegen als `.m` offen, die gesamte Oberflächenlogik
+aber in `.mlapp`-Dateien — und die sind ZIP-Archive. Der Code steht in
+`matlab/document.xml`, verteilt auf `<w:t>`-Elemente:
+
+```python
+import re, html, zipfile
+with zipfile.ZipFile("ControlApp.mlapp") as z:
+    xml = z.read("matlab/document.xml").decode("utf-8", "replace")
+code = "".join(html.unescape(t) for t in re.findall(r"<w:t[^>]*>(.*?)</w:t>", xml, re.S))
+```
+
+`ControlApp.mlapp` ergibt so 3737 Zeilen mit `loadPhases`, `savePhases`,
+`saveProject`, `conditionCheck`, `checkStartCondition`, `createPhasePanel`
+und dem Timer-Callback `calculationFcn`. `FigureApp.mlapp` enthält
+`calculateYLimits` und `plotFlags`, `ClosingScreen.mlapp` und
+`SelectProject.mlapp` die Lösch- und Anlegepfade.
+
+Ohne diesen Schritt ist die halbe Vorlage unlesbar.
+
 ---
 
 ## Zielarchitektur
@@ -281,10 +302,9 @@ MATLAB-Projektordner.
 
 ### Offen aus Phase 0
 
-- **MATLAB-Referenzläufe** für E. coli und Pichia. Exportanleitung und
-  Format: `tests/reference_data/README.md`. Blocker für Phase 2.4.
 - **GitHub-Repository** anlegen und `main` pushen, damit die CI-Matrix läuft
-  (Plan §0.2). Der Workflow liegt bereit.
+  (Plan §0.2). Der Workflow liegt bereit und baut auf jeden `v*`-Tag beide
+  Installationsdateien.
 - **Lizenz** ist noch nicht festgelegt; `pyproject.toml` hat deshalb kein
   `license`-Feld.
 
