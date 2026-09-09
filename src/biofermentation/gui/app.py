@@ -54,6 +54,14 @@ class SimulationApp(QApplication):
         self.starting_screen.quick_start_requested.connect(self.show_create_project)
         self.starting_screen.exit_requested.connect(self.quit)
 
+        # The model configurator is not ported. A button that emits into
+        # nothing is worse than one that says so.
+        self.starting_screen.model_configurator_button.setEnabled(False)
+        self.starting_screen.model_configurator_button.setToolTip(
+            "Not ported yet — models are edited in the database or through "
+            "an organism definition.yaml"
+        )
+
     # ------------------------------------------------------ navigation --
 
     def show_starting_screen(self) -> None:

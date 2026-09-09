@@ -337,3 +337,28 @@ def test_the_windows_render_to_png(tmp_path, qapp):
     assert len(written) == 6
     for path in written:
         assert path.is_file() and path.stat().st_size > 2000
+
+
+def test_every_starting_screen_button_leads_somewhere(qapp):
+    """A button that emits into nothing is worse than one that says so.
+
+    The model configurator is not ported, so the application disables its
+    button. Every other button has a target in SimulationApp.
+    """
+    import inspect
+
+    from biofermentation.gui import app as app_module
+
+    source = inspect.getsource(app_module.SimulationApp.__init__)
+    screen = StartingScreen()
+    signals = [name for name in dir(screen) if name.endswith("_requested")]
+
+    connected = {name for name in signals if f"{name}.connect" in source}
+    disabled = {
+        name
+        for name in signals
+        if f"{name.removesuffix('_requested')}_button.setEnabled(False)" in source
+    }
+    assert set(signals) == connected | disabled, (
+        f"no target and not disabled: {set(signals) - connected - disabled}"
+    )
