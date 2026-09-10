@@ -154,6 +154,16 @@ class PhasePanel(QGroupBox):
         self.lamp.set_status(phase.statusID or 1)
         self.lamp.setToolTip(statuses.get(phase.statusID, ""))
 
+        # A phase that has run, or is running, is part of the record. Deleting
+        # it would leave a process history that never happened.
+        finished = phase.statusID in (PhaseStatus.ACTIVE, PhaseStatus.COMPLETED)
+        self.delete_button.setEnabled(not finished)
+        self.delete_button.setToolTip(
+            "A running or completed phase cannot be deleted"
+            if finished
+            else "Delete this phase"
+        )
+
         if phase.statusID == PhaseStatus.PENDING and phase.start.time is not None:
             self.setToolTip(f"Start: t = {phase.start.time:.3f} h")
         elif phase.statusID == PhaseStatus.ACTIVE and phase.end.time is not None:

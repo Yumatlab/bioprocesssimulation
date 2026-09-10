@@ -53,6 +53,28 @@ QLineEdit[readOnly="true"] {
     color: #303030;
 }
 
+/* Styling a QComboBox at all switches macOS off the native rendering, and
+ * the popup then comes up without a selection colour — the current entry is
+ * white on white and the list looks empty. The popup has to be styled too. */
+QComboBox QAbstractItemView {
+    background: white;
+    color: #202020;
+    border: 1px solid #adadad;
+    selection-background-color: #2f7fd1;
+    selection-color: white;
+    outline: none;
+}
+
+QComboBox QAbstractItemView::item {
+    min-height: 22px;
+    padding: 2px 6px;
+}
+
+QComboBox::drop-down {
+    width: 18px;
+    border-left: 1px solid #c8c8c8;
+}
+
 QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox {
     padding: 2px 4px;
     border: 1px solid #b4b4b4;
@@ -80,6 +102,32 @@ QHeaderView::section {
     font-weight: bold;
 }
 
+QTabWidget::pane {
+    border: 1px solid #b4b4b4;
+    border-radius: 3px;
+    top: -1px;
+}
+
 QTabBar::tab {
-    padding: 6px 14px;
+    padding: 7px 18px;
+    margin-right: 2px;
+    border: 1px solid #c0c0c0;
+    border-bottom: none;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    background: #e8e8e8;
+    color: #4a4a4a;
+}
+
+QTabBar::tab:hover:!selected {
+    background: #f0f0f0;
+}
+
+QTabBar::tab:selected {
+    background: white;
+    color: #1a1a1a;
+    font-weight: bold;
+    /* One pixel over the pane border, so the active tab joins the page. */
+    margin-bottom: -1px;
+    padding-bottom: 8px;
 }

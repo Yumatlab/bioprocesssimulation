@@ -35,6 +35,9 @@ from .tex import tex_to_html
 pg.setConfigOption("background", "w")
 pg.setConfigOption("foreground", "k")
 
+# Positive length points away from the plot area — ticks on the outside.
+TICK_LENGTH = 6
+
 
 class MultiAxisPlot(pg.GraphicsLayoutWidget):
     """One x-axis, one y-axis per variable, all sharing the same time base."""
@@ -89,6 +92,7 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         self.bottom_axis = pg.AxisItem("bottom")
         self.bottom_axis.linkToView(self.main_view)
         self.bottom_axis.enableAutoSIPrefix(False)
+        self.bottom_axis.setStyle(tickLength=TICK_LENGTH)
         self.bottom_axis.setLabel(
             f"{template.axisxlabel} [{unit}]" if unit else template.axisxlabel
         )
@@ -132,6 +136,9 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         # No "(x0.001)" over the axis; the original prints the numbers as
         # they are, and the unit is already in the caption.
         axis.enableAutoSIPrefix(False)
+        # Ticks outside the plot area, as in the original. pyqtgraph counts a
+        # positive length towards the labels, which for a left axis is out.
+        axis.setStyle(tickLength=TICK_LENGTH)
         caption = tex_to_html(variable.label())
         rendered_unit = tex_to_html(variable.tex_unit) if variable.tex_unit else ""
         axis.setLabel(f"{caption} [{rendered_unit}]" if rendered_unit else caption)

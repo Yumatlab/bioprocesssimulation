@@ -240,9 +240,30 @@ def test_adding_a_phase_extends_the_grid(window):
 
 def test_deleting_a_phase_shrinks_the_grid(window):
     before = len(window.setup.phases)
-    window.phase_grid.panels[0].delete_button.click()
+    upcoming = next(
+        index
+        for index, phase in enumerate(window.setup.phases)
+        if phase.statusID == PhaseStatus.UPCOMING
+    )
+    window.phase_grid.panels[upcoming].delete_button.click()
     assert len(window.setup.phases) == before - 1
     assert len(window.phase_grid.panels) == before - 1
+
+
+def test_a_running_or_finished_phase_cannot_be_deleted(window):
+    """Deleting one would leave a process history that never happened."""
+    for phase, panel in zip(window.setup.phases, window.phase_grid.panels, strict=True):
+        protected = phase.statusID in (PhaseStatus.ACTIVE, PhaseStatus.COMPLETED)
+        assert panel.delete_button.isEnabled() is not protected
+
+    before = len(window.setup.phases)
+    completed = next(
+        index
+        for index, phase in enumerate(window.setup.phases)
+        if phase.statusID == PhaseStatus.COMPLETED
+    )
+    window.phase_grid.panels[completed].delete_button.click()
+    assert len(window.setup.phases) == before
 
 
 def test_the_arrow_forces_the_next_phase(window):
@@ -355,3 +376,82 @@ def test_select_data_survives_an_int_enum(qapp):
     assert box.currentIndex() == 0
     assert select_data(box, 99) is False
     assert select_data(box, None) is False
+
+
+def test_a_stop_phase_has_no_end_condition(window):
+    """The process is standing, so no condition on it could ever be met."""
+    from biofermentation.control import PhaseType
+
+    phase = window.setup.phases[-1]
+    dialog = PhaseEditor(phase, window.setup.lookups, reservoirs=2)
+    assert select_data(dialog.type_box, PhaseType.STOP)
+    assert dialog.end_editor.isVisibleTo(dialog) is False
+
+    dialog.accept()
+    assert phase.end.typeID is None
+    assert phase.end.value is None
+
+
+def test_the_reservoir_only_shows_for_a_feed_phase(window):
+    from biofermentation.control import PhaseType
+
+    dialog = PhaseEditor(window.setup.phases[-1], window.setup.lookups, reservoirs=2)
+    for phase_type, expected in (
+        (PhaseType.PULSE_FEED, True),
+        (PhaseType.EXPONENTIAL_FEED, True),
+        (PhaseType.MANUAL, False),
+        (PhaseType.PARAMETER_UPDATE, False),
+        (PhaseType.STOP, False),
+    ):
+        assert select_data(dialog.type_box, phase_type)
+        assert dialog.reservoir_box.isVisibleTo(dialog) is expected, phase_type.name
+
+
+def test_the_inoculate_button_toggles_before_the_run(window):
+    """A setting before the first step, a one-shot event during the run."""
+    state = window.runner.state
+    state.a["inoc_occ"] = 0
+    state.idx = 0
+    window.refresh()
+
+    assert window.inoculate_button.isCheckable() is True
+    window.inoculate_button.setChecked(True)
+    window.inoculate()
+    assert state.p["f_Inoc"] == 1.0
+
+    window.inoculate_button.setChecked(False)
+    window.inoculate()
+    assert state.p["f_Inoc"] == 0.0, "it must be possible to take it back"
+
+
+def test_the_inoculate_button_fires_once_during_the_run(window):
+    state = window.runner.state
+    state.p["f_Inoc"] = 0.0
+    state.a["inoc_occ"] = 0
+    window.runner._on_tick()
+    window.refresh()
+
+    assert window.inoculate_button.isCheckable() is False
+    assert window.inoculate_button.isEnabled() is True
+
+    window.inoculate()
+    assert state.p["f_Inoc"] == 1.0
+
+    state.a["inoc_occ"] = 1
+    window.refresh()
+    assert window.inoculate_button.isEnabled() is False
+
+
+def test_the_plot_ticks_point_outwards(qapp):
+    from biofermentation.db.plots import PlotTemplate, PlotVariable
+    from biofermentation.gui.widgets.plot_view import TICK_LENGTH, MultiAxisPlot
+
+    template = PlotTemplate(
+        templateID=0,
+        variables=[PlotVariable(variableID=1, name="a", selected=True, color=(0, 0, 0))],
+    )
+    plot = MultiAxisPlot()
+    plot.set_template(template)
+    assert TICK_LENGTH > 0
+    for axis in [*plot._axes, plot.bottom_axis]:
+        assert axis.style["tickLength"] == TICK_LENGTH

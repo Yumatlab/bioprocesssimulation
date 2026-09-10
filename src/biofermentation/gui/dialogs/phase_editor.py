@@ -25,9 +25,12 @@ from PySide6.QtWidgets import (
 )
 
 from ...control import EndCondition, PhaseType, StartCondition
-from ...db.models import Phase
+from ...db.models import Condition, Phase
 from ..widgets.indicators import select_data
 from ..widgets.tex import tex_to_html
+
+#: The only two phase types that draw from a reservoir.
+FEED_TYPES = (PhaseType.PULSE_FEED, PhaseType.EXPONENTIAL_FEED)
 
 
 def plain_tex(text: str | None) -> str:
@@ -156,7 +159,8 @@ class PhaseEditor(QDialog):
         self.reservoir_box = QComboBox()
         for number in range(1, max(1, reservoirs) + 1):
             self.reservoir_box.addItem(f"R{number}", number)
-        form.addRow("Reservoir:", self.reservoir_box)
+        self.reservoir_label = QLabel("Reservoir:")
+        form.addRow(self.reservoir_label, self.reservoir_box)
         layout.addLayout(form)
 
         starts = {
@@ -176,6 +180,8 @@ class PhaseEditor(QDialog):
         layout.addWidget(self.start_editor)
         layout.addWidget(self.end_editor)
 
+        self.type_box.currentIndexChanged.connect(self._update_for_type)
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -190,14 +196,38 @@ class PhaseEditor(QDialog):
         select_data(self.reservoir_box, self._draft.reservoirID or 1)
         self.start_editor.load(self._draft.start)
         self.end_editor.load(self._draft.end)
+        self._update_for_type()
+
+    def _update_for_type(self) -> None:
+        """What the phase type does and does not need.
+
+        A reservoir only means something for the two feed types, and a stop
+        phase has no end condition at all — the process is standing, so any
+        condition on it could never be met.
+        """
+        phase_type = self.type_box.currentData()
+        needs_reservoir = phase_type in FEED_TYPES
+        self.reservoir_label.setVisible(needs_reservoir)
+        self.reservoir_box.setVisible(needs_reservoir)
+
+        is_stop = phase_type == PhaseType.STOP
+        self.end_editor.setVisible(not is_stop)
 
     def accept(self) -> None:
         """Write the draft back. Only here, and only on Ok."""
         self._phase.name = self.name_edit.text().strip() or self._phase.name
         self._phase.typeID = self.type_box.currentData()
-        self._phase.reservoirID = self.reservoir_box.currentData()
+        # Asking the widget would be wrong: a hidden parent makes every child
+        # report invisible, so the type is the only reliable source here.
+        self._phase.reservoirID = (
+            self.reservoir_box.currentData() if self._phase.typeID in FEED_TYPES else None
+        )
         self.start_editor.apply_to(self._phase.start)
-        self.end_editor.apply_to(self._phase.end)
+        if self._phase.typeID == PhaseType.STOP:
+            # No end condition on a phase that stops the process.
+            self._phase.end = Condition()
+        else:
+            self.end_editor.apply_to(self._phase.end)
         super().accept()
 
     def summary(self) -> str:

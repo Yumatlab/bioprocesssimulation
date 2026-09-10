@@ -139,6 +139,7 @@ class ControlWindow(QMainWindow):
         layout.addWidget(self.run_button)
 
         self.inoculate_button = QPushButton("Inoculate")
+        self.inoculate_button.setCheckable(True)
         self.inoculate_button.clicked.connect(self.inoculate)
         layout.addWidget(self.inoculate_button)
         layout.addSpacing(20)
@@ -235,7 +236,7 @@ class ControlWindow(QMainWindow):
         self.lamps["Process Running"].set_on(self.runner.running)
         self.lamps["Inoculated"].set_on(bool(state.a.get("inoc_occ", 0)))
         self.run_button.setText("Pause" if self.runner.running else "Run")
-        self.inoculate_button.setEnabled(not state.a.get("inoc_occ", 0))
+        self._update_inoculate_button()
 
         for panel in self.panels.values():
             panel.update_actuals(state.v, index)
@@ -290,10 +291,41 @@ class ControlWindow(QMainWindow):
             self.note("Process started")
         self.refresh()
 
+    def _update_inoculate_button(self) -> None:
+        """Toggle before the run, one shot during it, dead afterwards.
+
+        Before the first step the flag is just a setting and may be turned
+        on and off. Once the simulation is running, inoculating is an event
+        that happens once — so the button fires once and is then done.
+        """
+        state = self.runner.state
+        happened = bool(state.a.get("inoc_occ", 0))
+        started = state.idx > 0
+
+        self.inoculate_button.setEnabled(not happened)
+        self.inoculate_button.setCheckable(not started)
+        if not started:
+            self.inoculate_button.blockSignals(True)
+            self.inoculate_button.setChecked(bool(state.p.get("f_Inoc", 0)))
+            self.inoculate_button.blockSignals(False)
+            self.inoculate_button.setToolTip("Inoculate at the first step")
+        elif happened:
+            self.inoculate_button.setToolTip("Already inoculated")
+        else:
+            self.inoculate_button.setToolTip("Inoculate now")
+
     def inoculate(self) -> None:
-        with self.runner.editing() as state:
-            state.p["f_Inoc"] = 1.0
-        self.note("Inoculation requested")
+        state = self.runner.state
+        if state.idx == 0:
+            # Still a setting: on and off as often as you like.
+            wanted = self.inoculate_button.isChecked()
+            with self.runner.editing() as editable:
+                editable.p["f_Inoc"] = float(wanted)
+            self.note(f"Inoculation at start {'armed' if wanted else 'disarmed'}")
+        else:
+            with self.runner.editing() as editable:
+                editable.p["f_Inoc"] = 1.0
+            self.note("Inoculation requested")
         self.refresh()
 
     def force_start(self, index: int) -> None:

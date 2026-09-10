@@ -23,7 +23,6 @@ class StartingScreen(QWidget):
     without opening anything: a test clicks a button and checks a signal.
     """
 
-    quick_start_requested = Signal()
     new_project_requested = Signal()
     load_project_requested = Signal()
     model_configurator_requested = Signal()
@@ -51,11 +50,13 @@ class StartingScreen(QWidget):
         layout.addWidget(version)
         layout.addSpacing(24)
 
-        self.quick_start_button = self._button("Quick Start", self.quick_start_requested)
+        # Quick Start and Start New Project did the same thing here, so there
+        # is one button. The original's Quick Start created a project without
+        # asking anything; that is a shortcut inside the creation window, not
+        # a second entry point.
         self.new_project_button = self._button("Start New Project", self.new_project_requested)
         self.load_project_button = self._button("Load Project", self.load_project_requested)
         for button in (
-            self.quick_start_button,
             self.new_project_button,
             self.load_project_button,
         ):

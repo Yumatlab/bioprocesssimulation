@@ -51,7 +51,6 @@ class SimulationApp(QApplication):
 
         self.starting_screen.load_project_requested.connect(self.show_select_project)
         self.starting_screen.new_project_requested.connect(self.show_create_project)
-        self.starting_screen.quick_start_requested.connect(self.show_create_project)
         self.starting_screen.exit_requested.connect(self.quit)
 
         # The model configurator is not ported. A button that emits into
