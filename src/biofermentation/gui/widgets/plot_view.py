@@ -33,7 +33,7 @@ from typing import ClassVar
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QPen
 from PySide6.QtWidgets import QWidget
 
@@ -45,6 +45,82 @@ pg.setConfigOption("foreground", "k")
 
 # Positive length points away from the plot area — ticks on the outside.
 TICK_LENGTH = 7
+
+#: Tick numbers are drawn smaller than the axis caption above them, and set
+#: away from the axis line. Both let the scales stand closer together without
+#: the numbers of one touching the line of the next.
+TICK_FONT_SCALE = 0.78
+TICK_TEXT_OFFSET = 6
+
+#: The caption above an axis, relative to the template's axislabelfontsize.
+#: It is the caption, not the tick numbers, that sets how wide an axis column
+#: is — measured with six scales, the captions are 56 to 81 px wide and the
+#: axes themselves 26 to 48. Shrinking the numbers alone moves the stack by
+#: four pixels; this brings the scales about fifty pixels closer together.
+CAPTION_FONT_SCALE = 0.85
+
+
+class EndLabelledAxis(pg.AxisItem):
+    """An axis that always prints the two ends of its range.
+
+    pyqtgraph picks round numbers, and the first and last of them rarely fall
+    on the limits themselves — a time axis from 0 to 5 h ends up labelled
+    0.5 … 4.5 with nothing at either end, so the window the plot actually
+    shows cannot be read off it.
+
+    Two things are needed. tickValues puts the limits into the tick list, and
+    generateDrawSpecs puts their labels back: pyqtgraph drops any tick text
+    whose rectangle is not fully inside the axis item, and a label centred on
+    the very first pixel is half outside by construction. The two end labels
+    are pulled inside instead of being dropped.
+    """
+
+    def tickValues(self, minVal, maxVal, size):  # noqa: N802 - pyqtgraph API
+        levels = super().tickValues(minVal, maxVal, size)
+        if not levels:
+            return levels
+        spacing, values = levels[0]
+        lower, upper = min(minVal, maxVal), max(minVal, maxVal)
+        # Close to an end, a chosen tick would collide with the end label.
+        margin = 0.3 * abs(spacing) if spacing else 0.0
+        kept = [v for v in values if lower + margin < v < upper - margin]
+        return [(spacing, sorted({lower, upper, *kept})), *levels[1:]]
+
+    def generateDrawSpecs(self, p):  # noqa: N802 - pyqtgraph API
+        specs = super().generateDrawSpecs(p)
+        if specs is None or self.orientation not in ("bottom", "top"):
+            return specs
+        axis_spec, tick_specs, text_specs = specs
+        if not tick_specs:
+            return specs
+
+        bounds = self.boundingRect()
+        positions = [start.x() for _, start, _ in tick_specs]
+        offset = max(0, self.style["tickLength"]) + self.style["tickTextOffset"][0]
+        spacing = self.tickValues(*sorted(self.range), bounds.width())[0][0]
+
+        added = list(text_specs)
+        for value, x in zip(sorted(self.range), (min(positions), max(positions)), strict=True):
+            if any(abs(rect.center().x() - x) < 1.0 for rect, _, _ in text_specs):
+                continue  # pyqtgraph found room for it after all
+            text = self.tickStrings([value], self.scale, spacing)[0]
+            if text is None:
+                continue
+            size = p.boundingRect(QRectF(0, 0, 0, 0), Qt.AlignmentFlag.AlignCenter, text)
+            top = (
+                bounds.top() + offset
+                if self.orientation == "bottom"
+                else bounds.bottom() - offset - size.height()
+            )
+            left = min(max(x - size.width() / 2, bounds.left()), bounds.right() - size.width())
+            added.append(
+                (
+                    QRectF(left, top, size.width(), size.height()),
+                    Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextDontClip,
+                    text,
+                )
+            )
+        return axis_spec, tick_specs, added
 
 
 class OutwardAxis(pg.AxisItem):
@@ -79,6 +155,16 @@ class OutwardAxis(pg.AxisItem):
                 for pen, start, stop in tick_specs
             ]
         return axis_spec, tick_specs, text_specs
+
+
+class OutwardTimeAxis(EndLabelledAxis, OutwardAxis):
+    """The x-axis: ticks outside, and the ends of the range labelled."""
+
+
+def _tick_font(base: float) -> QFont:
+    font = QFont()
+    font.setPointSizeF(max(6.0, base * TICK_FONT_SCALE))
+    return font
 
 
 class MultiAxisPlot(pg.GraphicsLayoutWidget):
@@ -147,7 +233,7 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         self.ci.layout.setVerticalSpacing(0)
 
         unit = template.axisxunit.strip("[] ")
-        self.bottom_axis = OutwardAxis("bottom")
+        self.bottom_axis = OutwardTimeAxis("bottom")
         self.bottom_axis.linkToView(self.main_view)
         self.bottom_axis.enableAutoSIPrefix(False)
         self.bottom_axis.setStyle(tickLength=TICK_LENGTH)
@@ -155,9 +241,8 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         bottom_pen.setWidthF(template.axislinewidth)
         bottom_pen.setCosmetic(True)
         self.bottom_axis.setPen(bottom_pen)
-        bottom_font = QFont()
-        bottom_font.setPointSizeF(template.graphfontsize)
-        self.bottom_axis.setTickFont(bottom_font)
+        self.bottom_axis.setTickFont(_tick_font(template.graphfontsize))
+        self.bottom_axis.setStyle(tickLength=TICK_LENGTH, tickTextOffset=TICK_TEXT_OFFSET)
         self.bottom_axis.setLabel(
             f"{template.axisxlabel} [{unit}]" if unit else template.axisxlabel,
             **{"font-size": f"{template.axislabelfontsize:.0f}pt"},
@@ -206,19 +291,18 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         axis_pen.setCosmetic(True)
         axis.setPen(axis_pen)
         axis.setTextPen(QPen(color))
-        tick_font = QFont()
-        tick_font.setPointSizeF(self.template.graphfontsize if self.template else 12.0)
-        axis.setTickFont(tick_font)
+        axis.setTickFont(_tick_font(self.template.graphfontsize if self.template else 12.0))
         # No "(x0.001)" over the axis; the original prints the numbers as
         # they are, and the unit is already in the caption.
         axis.enableAutoSIPrefix(False)
         # Ticks outside the plot area, as in the original. pyqtgraph counts a
         # positive length towards the labels, which for a left axis is out.
-        axis.setStyle(tickLength=TICK_LENGTH)
+        axis.setStyle(tickLength=TICK_LENGTH, tickTextOffset=TICK_TEXT_OFFSET)
         # The caption sits above the axis, in the colour of the axis, as the
         # figures of the thesis have it. setLabel would rotate it alongside
         # and draw it in the foreground colour instead.
-        size = f"{self.template.axislabelfontsize:.0f}pt" if self.template else "12pt"
+        base = self.template.axislabelfontsize if self.template else 12.0
+        size = f"{max(6.0, base * CAPTION_FONT_SCALE):.1f}pt"
         label = self.addLabel(heading, row=1, col=column, color=color.name(), size=size, bold=True)
         self._captions.append(label)
         self.addItem(axis, row=2, col=column)

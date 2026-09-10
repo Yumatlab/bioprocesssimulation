@@ -547,3 +547,77 @@ def test_a_caption_sits_above_its_own_axis(qapp):
         assert caption.geometry().bottom() <= axis.geometry().top() + 1
         # Right edges line up: both are pinned to the right of their column.
         assert abs(caption.geometry().right() - axis.geometry().right()) < 2.0
+
+
+def test_the_time_axis_prints_both_ends_of_its_range(qapp):
+    """A window from 0 to 5 h was labelled 0.5 … 4.5 and nothing at the ends.
+
+    pyqtgraph picks round numbers, and it drops any tick text whose rectangle
+    is not fully inside the axis item — a label centred on the first pixel is
+    half outside by construction.
+    """
+    from PySide6.QtGui import QPainter, QPixmap
+
+    plot = _probe_plot(qapp, count=1)
+    pixmap = QPixmap(10, 10)
+    painter = QPainter(pixmap)
+    try:
+        specs = plot.bottom_axis.generateDrawSpecs(painter)
+    finally:
+        painter.end()
+    labels = {text for _, _, text in specs[2]}
+    assert {"0", "5"} <= labels, labels
+
+
+def test_an_end_label_stays_inside_the_axis(qapp):
+    from PySide6.QtGui import QPainter, QPixmap
+
+    plot = _probe_plot(qapp, count=1)
+    axis = plot.bottom_axis
+    pixmap = QPixmap(10, 10)
+    painter = QPainter(pixmap)
+    try:
+        specs = axis.generateDrawSpecs(painter)
+    finally:
+        painter.end()
+    bounds = axis.boundingRect()
+    for rect, _, _ in specs[2]:
+        assert bounds.left() - 0.5 <= rect.left()
+        assert rect.right() <= bounds.right() + 0.5
+
+
+def test_the_tick_numbers_are_smaller_than_the_caption(qapp):
+    """Point 1 of the third round: smaller numbers, further from the line."""
+    from biofermentation.gui.widgets.plot_view import (
+        CAPTION_FONT_SCALE,
+        TICK_FONT_SCALE,
+        TICK_TEXT_OFFSET,
+    )
+
+    assert TICK_FONT_SCALE < CAPTION_FONT_SCALE <= 1.0
+    assert TICK_TEXT_OFFSET > 2
+
+    plot = _probe_plot(qapp)
+    template = plot.template
+    # tickTextOffset is a pair; pyqtgraph puts a scalar into the entry that
+    # belongs to the orientation — 0 horizontal, 1 vertical.
+    for axis, index in [(a, 0) for a in plot._axes] + [(plot.bottom_axis, 1)]:
+        assert axis.style["tickFont"].pointSizeF() < template.axislabelfontsize
+        assert axis.style["tickTextOffset"][index] == TICK_TEXT_OFFSET
+
+
+def test_narrower_captions_bring_the_scales_closer(qapp):
+    """The caption sets the column width, not the tick numbers."""
+    import biofermentation.gui.widgets.plot_view as plot_view
+
+    def stack_width(caption_scale):
+        original = plot_view.CAPTION_FONT_SCALE
+        plot_view.CAPTION_FONT_SCALE = caption_scale
+        try:
+            plot = _probe_plot(qapp)
+            left = min(axis.geometry().left() for axis in plot._axes)
+            return plot.main_view.sceneBoundingRect().left() - left
+        finally:
+            plot_view.CAPTION_FONT_SCALE = original
+
+    assert stack_width(0.85) < stack_width(1.0)

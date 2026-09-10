@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -102,6 +103,10 @@ class ControlPanel(QGroupBox):
             # panel can be given the same width without one of them
             # overflowing.
             self.mode_box.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+            # Its size hint is the longest entry, so nothing is cut off, and
+            # it grows into whatever the panel has left over. Without this the
+            # box stops halfway and leaves a gap before the lamp.
+            self.mode_box.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             for value, text in spec.modes.items():
                 self.mode_box.addItem(text, value)
             self.mode_box.currentIndexChanged.connect(self._mode_changed)

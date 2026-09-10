@@ -91,15 +91,15 @@ default_modelparameterID,organismID,parameterID,value,description
 90,1,120,10.0,Gain of P part of temperature heating slave controller
 91,1,121,0.01,Gain of P part of temperature heating slave controller
 92,1,122,20.0,
-93,1,123,10.0,Gain of P part of agitation controller
-94,1,124,1000.0,Gain of I part of agitation controller
-95,1,125,20.0,Gain of P part of aeration controller
-96,1,126,0.015,Gain of D part of agitation controller
-97,1,127,1000.0,Gain of I part of aeration controller
-98,1,128,0.0188,Gain of D part of aeration controller
-99,1,129,0.4,Gain of P part of gasmix controller
-100,1,130,0.003,Gain of I part of gasmix controller
-101,1,131,0.0005,Gain of D part of gasmix controller
+93,1,123,1.0,Gain of P part of agitation controller
+94,1,124,60.0,Gain of I part of agitation controller
+95,1,125,5.0,Gain of P part of aeration controller
+96,1,126,0.002,Gain of D part of agitation controller
+97,1,127,500.0,Gain of I part of aeration controller
+98,1,128,0.005,Gain of D part of aeration controller
+99,1,129,0.012,Gain of P part of gasmix controller
+100,1,130,1.0,Gain of I part of gasmix controller
+101,1,131,1e-05,Gain of D part of gasmix controller
 102,1,132,-2.0,Gain of P part of feed controller
 103,1,133,-15.0,Gain of I part of feed controller
 104,1,134,-0.009,Gain of D part of feed controller

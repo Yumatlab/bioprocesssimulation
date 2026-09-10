@@ -334,6 +334,33 @@ diesem Panel — das Feld mit der Beschriftung `F_T1` liest `v.FT2`.
 - **Kein Anwendungssymbol und kein Logo.** Das Logo des Originals ist ein
   Bildmittel der Hochschule und gehört nicht in diese Portierung.
 
+### Reglereinstellung
+
+Die Verstärkungen der drei pO2-Regler sind experimentell neu bestimmt worden;
+`tools/tune_po2.py` ist der Messstand dazu und hält die Zahlen reproduzierbar.
+Gemessen an Projekt 716, bewertet über die Wachstumsphase (nach dem
+Substratende steigt pO2 zwangsläufig zurück auf ~100 %, das ist keine
+Reglerfrage): RMS-Abweichung Rührer 8,3 → 2,0 %, Gasmischung 16,8 → 0,9 %,
+Begasung 0,9 → 0,8 %; die Stellwegsummen fallen um zwei Größenordnungen.
+
+Zwei Dinge, die dabei zu wissen sind:
+
+- **Die Regelabweichung wird je Regler anders normiert** — Rührer und
+  Begasung durch 99, Gasmischung durch `1 - xOAIR` ≈ 0,79. Zwei
+  Größenordnungen Unterschied; `KP_gasmix` stand trotzdem auf 0,4 wie ein
+  Faktor für die andere Skala.
+- **Der Integrator hat kein Anti-Windup.** Er integriert weiter, während der
+  Ausgang am Anschlag klemmt. Das ist die MATLAB-Struktur und bleibt so; die
+  Verstärkungen sind so gewählt, dass der Aufzug beim Sprung von 100 % auf
+  den Sollwert klein genug bleibt, dass der Regler sich wieder erholt.
+
+**Pichia bleibt außen vor.** Dort steht pO2 über die ganze Laufzeit über
+100 % — die oben genannte Überschwingung der Sauerstoffbilanz, nicht die
+Reglereinstellung. Auch mit den dokumentierten Werten für
+`yXpOgr`/`yCpO`/`qOpXm` bleibt es bei RMS 93, mit alten wie mit neuen
+Verstärkungen. Solange die Bilanz pO2 > 100 % zulässt, ist dort nichts zu
+tunen.
+
 ### Offen aus Phase 3
 
 - **`Mode_pH` 0, `Mode_temp` 0 und `Mode_pO2` 2/3/4 sind ungeprüft.** Der

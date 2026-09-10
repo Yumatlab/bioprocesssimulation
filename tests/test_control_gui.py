@@ -499,3 +499,12 @@ def test_the_plot_ticks_point_outwards(qapp):
     assert TICK_LENGTH > 0
     for axis in [*plot._axes, plot.bottom_axis]:
         assert axis.style["tickLength"] == TICK_LENGTH
+
+
+def test_the_mode_dropdown_fills_its_row(window):
+    """It stopped at its own size hint and left a gap before the lamp."""
+    for title, panel in window.panels.items():
+        box, lamp = panel.mode_box, panel.lamp
+        assert box.width() > box.sizeHint().width(), title
+        gap = lamp.geometry().left() - box.geometry().right()
+        assert gap < 20, f"{title}: {gap} px between dropdown and lamp"

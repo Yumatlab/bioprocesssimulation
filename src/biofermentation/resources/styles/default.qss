@@ -145,10 +145,10 @@ QComboBox:on {
     color: #202020;
 }
 
-QComboBox::drop-down {
-    width: 18px;
-    border-left: 1px solid #c8c8c8;
-}
+/* The drop-down button is deliberately not styled. Touching ::drop-down or
+ * ::down-arrow makes Qt stop drawing the arrow itself, and a style sheet
+ * cannot put a decent one back without an image file — the CSS triangle
+ * trick comes out as a dash. Fusion draws a proper one, so it is left to it. */
 
 QComboBox QAbstractItemView {
     background: white;
