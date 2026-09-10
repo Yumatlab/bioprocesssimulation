@@ -219,7 +219,17 @@ gelten über den Anlass hinaus:
    und damit auch die Markierung der ausgewählten Zeile im Popup. Wer
    `QComboBox` in der QSS anfasst, muss `QComboBox QAbstractItemView` und
    dessen `selection-background-color` mitliefern.
-3. **`isVisible()` ist keine Zustandsabfrage.** Ein Widget in einem nicht
+3. **Ein `clicked`/`triggered`-Signal liefert ein `bool` als erstes Argument.**
+   `plot_button.clicked.connect(self.open_plot)` ruft `open_plot(False)` auf,
+   und `False` landete als `template_id` in der Datenbankabfrage. Slots mit
+   optionalen Argumenten immer über ein `lambda` anbinden.
+4. **Ein einfaches `QWidget` malt keinen Stylesheet-Hintergrund**, solange
+   nicht `WA_StyledBackground` gesetzt ist. Betrifft alle Tabseiten; die
+   Erlaubnis steht im Code, die Farbe in der QSS.
+5. **Der Zustand des Phasenautomaten steht in `processTab`.** Beim Laden
+   eines Projekts muss die laufende Phase übernommen werden
+   (`adopt_active_phase`), sonst startet der Automat sie neu.
+6. **`isVisible()` ist keine Zustandsabfrage.** Ein Widget in einem nicht
    angezeigten Dialog meldet `False`, egal wie es gesetzt wurde. Für "ist
    dieses Feld gerade gemeint?" gilt `isVisibleTo(parent)` — oder besser die
    Bedingung selbst, so wie `PhaseEditor.accept()` den Phasentyp liest statt

@@ -15,7 +15,7 @@ Two rules the window keeps to:
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QDialog,
@@ -85,6 +85,7 @@ class ControlWindow(QMainWindow):
         self.tabs.addTab(self._build_log(), "Log")
         self.information_tab = self._build_information()
         self.tabs.addTab(self.information_tab, "Information")
+        self._style_tab_pages()
         # Connected only now: adding a tab fires currentChanged, and refresh
         # reads widgets the later tabs have not built yet.
         self.tabs.currentChanged.connect(lambda _: self.refresh())
@@ -98,6 +99,25 @@ class ControlWindow(QMainWindow):
         self.load_from_state()
 
     # ------------------------------------------------------------ build --
+
+    def _style_tab_pages(self) -> None:
+        """Let the stylesheet paint the pages.
+
+        A plain QWidget ignores a background from a style sheet unless it is
+        told to draw itself through the style — QFrame and friends do it on
+        their own, QWidget does not. The colour stays in default.qss; only the
+        permission is given here.
+        """
+        for index in range(self.tabs.count()):
+            page = self.tabs.widget(index)
+            page.setObjectName("tabPage")
+            page.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            if isinstance(page, QScrollArea):
+                page.setFrameShape(QScrollArea.Shape.NoFrame)
+                inner = page.widget()
+                if inner is not None:
+                    inner.setObjectName("tabPage")
+                    inner.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
     def _build_menus(self) -> None:
         """The menu bar of the original: Project, Export, Settings.
@@ -129,16 +149,16 @@ class ControlWindow(QMainWindow):
         add(project, "Parameters…", self.open_parameters, "Ctrl+P")
         add(project, "Project information", self.show_information)
         project.addSeparator()
-        add(project, "Save", self.save, "Ctrl+S")
+        add(project, "Save", lambda: self.save(), "Ctrl+S")
         add(project, "Save and exit", self.save_and_exit)
         add(project, "Exit", self.close, "Ctrl+W")
 
         export = bar.addMenu("Export")
-        add(export, "Open data table", self.open_data_table, "Ctrl+T")
+        add(export, "Open data table", lambda: self.open_data_table(), "Ctrl+T")
         add(export, "Export project…", self.export_project, "Ctrl+E")
 
         plots = bar.addMenu("Plots")
-        add(plots, "Open plot", self.open_plot, "Ctrl+G")
+        add(plots, "Open plot", lambda: self.open_plot(), "Ctrl+G")
         self.template_menu = plots.addMenu("Open plot from template")
         self.template_menu.aboutToShow.connect(self._fill_template_menu)
 
@@ -207,12 +227,12 @@ class ControlWindow(QMainWindow):
         font = self.run_button.font()
         font.setPointSize(font.pointSize() + 4)
         self.run_button.setFont(font)
-        self.run_button.clicked.connect(self.toggle_run)
+        self.run_button.clicked.connect(lambda: self.toggle_run())
         layout.addWidget(self.run_button)
 
         self.inoculate_button = QPushButton("Inoculate")
         self.inoculate_button.setCheckable(True)
-        self.inoculate_button.clicked.connect(self.inoculate)
+        self.inoculate_button.clicked.connect(lambda: self.inoculate())
         layout.addWidget(self.inoculate_button)
 
         self.parameters_button = QPushButton("Parameters…")
@@ -220,7 +240,7 @@ class ControlWindow(QMainWindow):
             "All parameters of the project. Before the first step everything "
             "is editable, afterwards only what the model re-reads each cycle."
         )
-        self.parameters_button.clicked.connect(self.open_parameters)
+        self.parameters_button.clicked.connect(lambda: self.open_parameters())
         layout.addWidget(self.parameters_button)
         layout.addSpacing(20)
 
@@ -240,14 +260,16 @@ class ControlWindow(QMainWindow):
 
         layout.addStretch()
         self.plot_button = QPushButton("Open Plot")
-        self.plot_button.clicked.connect(self.open_plot)
+        # clicked(bool) would arrive as template_id; the same trap as
+        # QAction.triggered(bool) in the menus below.
+        self.plot_button.clicked.connect(lambda: self.open_plot())
         layout.addWidget(self.plot_button)
 
         self.save_button = QPushButton("Save")
-        self.save_button.clicked.connect(self.save)
+        self.save_button.clicked.connect(lambda: self.save())
         layout.addWidget(self.save_button)
         self.exit_button = QPushButton("Exit")
-        self.exit_button.clicked.connect(self.close)
+        self.exit_button.clicked.connect(lambda: self.close())
         layout.addWidget(self.exit_button)
         return column
 
@@ -310,6 +332,7 @@ class ControlWindow(QMainWindow):
         index = state.idx
         self.time_label.setText(f"{float(state.v.t[index]):.3f}")
         self.lamps["Process Running"].set_on(self.runner.running)
+        self.phase_grid.set_editable(not self.runner.running)
         self.lamps["Inoculated"].set_on(bool(state.a.get("inoc_occ", 0)))
         self.run_button.setText("Pause" if self.runner.running else "Run")
         self._update_inoculate_button()
@@ -325,6 +348,9 @@ class ControlWindow(QMainWindow):
             table.refresh()
 
     def refresh_phases(self) -> None:
+        # A phase changed under a running automaton would take effect halfway
+        # through a block; the process is paused for that, not guarded.
+        self.phase_grid.set_editable(not self.runner.running)
         self.phase_grid.rebuild(
             self.setup.phases,
             {row["process_typeID"]: row["type"] for row in self.setup.lookups.process_type},
@@ -349,35 +375,43 @@ class ControlWindow(QMainWindow):
         with self.runner.editing() as state:
             state.p["deltatsec"] = float(seconds)
             state.dt = seconds / 3600
-        self.note(f"Δt set to {seconds} s")
+        # The refresh rate follows the step width, so speedfactor 1 is real
+        # time whatever Δt is.
+        self.runner.sync_interval_to_dt()
+        self.note(f"Δt set to {seconds} s, refresh every {self.runner.interval_ms} ms")
 
     def toggle_run(self) -> None:
         if self.runner.running:
             self.runner.pause()
-            self.note("Process paused")
+            self.note("Process paused", "Process")
         else:
             self.runner.start()
-            self.note("Process started")
+            self.note("Process started", "Process")
         self.refresh()
+        self.refresh_phases()
 
     def _update_inoculate_button(self) -> None:
         """Toggle before the run, one shot during it, dead afterwards.
 
-        Before the first step the flag is just a setting and may be turned
-        on and off. Once the simulation is running, inoculating is an event
-        that happens once — so the button fires once and is then done.
+        The model reads two flags. f_InocStart is the setting the initial
+        values are built from — inoculated at t = 0 or not. f_Inoc is the
+        event: the step that sees it replaces cXL once and lets the growth
+        terms out of the gate. Before the first step the button writes both,
+        afterwards only the event.
         """
         state = self.runner.state
         happened = bool(state.a.get("inoc_occ", 0))
         started = state.idx > 0
 
-        self.inoculate_button.setEnabled(not happened)
+        self.inoculate_button.setEnabled(not (happened and started))
         self.inoculate_button.setCheckable(not started)
         if not started:
             self.inoculate_button.blockSignals(True)
-            self.inoculate_button.setChecked(bool(state.p.get("f_Inoc", 0)))
+            self.inoculate_button.setChecked(bool(state.p.get("f_InocStart", 0)))
             self.inoculate_button.blockSignals(False)
-            self.inoculate_button.setToolTip("Inoculate at the first step")
+            self.inoculate_button.setToolTip(
+                "Start the process with the culture already inoculated"
+            )
         elif happened:
             self.inoculate_button.setToolTip("Already inoculated")
         else:
@@ -386,15 +420,19 @@ class ControlWindow(QMainWindow):
     def inoculate(self) -> None:
         state = self.runner.state
         if state.idx == 0:
-            # Still a setting: on and off as often as you like.
+            # Still a setting: on and off as often as you like. cXL at t = 0
+            # has to follow, because initialize() has already run.
             wanted = self.inoculate_button.isChecked()
             with self.runner.editing() as editable:
+                editable.p["f_InocStart"] = float(wanted)
                 editable.p["f_Inoc"] = float(wanted)
-            self.note(f"Inoculation at start {'armed' if wanted else 'disarmed'}")
+                editable.a["inoc_occ"] = 1 if wanted else 0
+                editable.v.cXL[0] = float(editable.p["cXL0"]) if wanted else 0.0
+            self.note(f"Inoculation at start {'armed' if wanted else 'disarmed'}", "Process")
         else:
             with self.runner.editing() as editable:
                 editable.p["f_Inoc"] = 1.0
-            self.note("Inoculation requested")
+            self.note("Inoculation requested", "Process")
         self.refresh()
 
     def open_controller_parameters(self, title: str) -> None:
@@ -533,7 +571,7 @@ class ControlWindow(QMainWindow):
         self.requested_open_project.emit()
 
     def save_and_exit(self) -> None:
-        self.save()
+        self.save(announce=False)
         self.close()
 
     def show_information(self) -> None:
@@ -568,8 +606,12 @@ class ControlWindow(QMainWindow):
         }
         self._apply_changes(changes, "Controller gains reset")
 
-    def save(self) -> None:
-        """The one write at session end, with the backup of plan 1.3."""
+    def save(self, announce: bool = True) -> None:
+        """The one write at session end, with the backup of plan 1.3.
+
+        announce = False for the automatic save on exit, which must not stop
+        to be acknowledged.
+        """
         was_running = self.runner.running
         self.runner.pause()
         state = self.runner.state
@@ -591,9 +633,30 @@ class ControlWindow(QMainWindow):
                 for entry in self.log_view.entries
             ],
         )
-        self.note(f"Saved: {result['times']} time points, backup at {backup.name}", "Project")
+        message = (
+            f"Saved {result['times']} time points and {result['parameters']} "
+            f"parameters — backup {backup.name}"
+        )
+        self.note(message, "Project")
+        # Feedback that does not have to be clicked away: the status bar keeps
+        # it, and the button says so for a moment. A modal box on every save
+        # would be in the way of the one thing the operator does most often.
+        self.statusBar().showMessage(message, 10_000)
+        if announce:
+            self._flash_saved()
         if was_running:
             self.runner.start()
+        return result
+
+    def _flash_saved(self) -> None:
+        """The Save button confirms, then goes back to being a Save button."""
+        self.save_button.setText("Saved ✓")
+        self.save_button.setEnabled(False)
+        QTimer.singleShot(1500, self._reset_save_button)
+
+    def _reset_save_button(self) -> None:
+        self.save_button.setText("Save")
+        self.save_button.setEnabled(True)
 
     # ------------------------------------------------------------- log --
 

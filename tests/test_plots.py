@@ -395,3 +395,116 @@ def test_the_plot_has_no_grid(qapp):
     plot.set_template(_template("a", "b"))
     for axis in [*plot._axes, plot.bottom_axis]:
         assert axis.grid is False
+
+
+# ------------------------------------------ axes: outward ticks, alignment --
+
+
+def _probe_plot(qapp, count: int = 3):
+    """A plot with straight lines and known limits, for pixel measurements."""
+    from biofermentation.db.plots import PlotTemplate, PlotVariable
+    from biofermentation.gui.widgets.plot_view import MultiAxisPlot
+
+    template = PlotTemplate(templateID=0, tstart=0, tend=10, plottitle="", titlebool=0)
+    template.variables = [
+        PlotVariable(
+            variableID=index,
+            name=name,
+            shorttex=name,
+            tex_unit="-",
+            selected=True,
+            limit_type=0,
+            ymin=0,
+            ymax=maximum,
+            color=color,
+        )
+        for index, (name, maximum, color) in enumerate(
+            [("a", 10, (255, 0, 0)), ("b", 100, (0, 0, 255)), ("c", 1000, (0, 160, 0))][:count],
+            start=1,
+        )
+    ]
+    plot = MultiAxisPlot()
+    plot.resize(900, 500)
+    plot.set_template(template)
+    plot.show()
+    qapp.processEvents()
+    t = np.linspace(0, 10, 200)
+    plot.update_data(t, {"a": t, "b": t * 10, "c": t * 100})
+    qapp.processEvents()
+    return plot
+
+
+def test_every_stacked_view_sits_on_the_main_one(qapp):
+    """The curves of the second and further axes were a few pixels right.
+
+    They live in the scene rather than in the layout, so nothing moves them
+    when the layout runs again after the axis labels are measured.
+    """
+    plot = _probe_plot(qapp)
+    main = plot.main_view.sceneBoundingRect()
+    for index, view in enumerate(plot._views[1:], start=1):
+        rect = view.sceneBoundingRect()
+        assert abs(rect.x() - main.x()) < 1.0, f"view {index} is off in x"
+        assert abs(rect.width() - main.width()) < 1.0, f"view {index} is off in width"
+
+
+def test_a_late_resize_still_lines_the_views_up(qapp):
+    plot = _probe_plot(qapp)
+    plot.resize(1200, 600)
+    qapp.processEvents()
+    main = plot.main_view.sceneBoundingRect()
+    for view in plot._views[1:]:
+        assert abs(view.sceneBoundingRect().x() - main.x()) < 1.0
+
+
+def test_a_tick_starts_on_the_axis_line_not_past_it(qapp, monkeypatch):
+    """Point 5. pyqtgraph draws the axis line one pixel towards the plot.
+
+    The tick starts where the axis *item* ends, so it always crossed that line
+    and poked into the plot; with the minor ticks two pixels long the whole
+    row read as pointing inwards. OutwardAxis moves the inner end onto the
+    line. The shift is checked against the offsets generateDrawSpecs applies.
+    """
+    import pyqtgraph as pg
+
+    from biofermentation.gui.widgets.plot_view import OutwardAxis
+
+    raw = (
+        ("axis", pg.Point(0, 0), pg.Point(0, 100)),
+        [("pen", pg.Point(50.0, 10.0), pg.Point(44.0, 10.0))],
+        [],
+    )
+    monkeypatch.setattr(pg.AxisItem, "generateDrawSpecs", lambda self, p: raw)
+
+    left = OutwardAxis("left").generateDrawSpecs(None)
+    _, ticks, _ = left
+    # The plot is to the right of a left axis, so the start moves left.
+    assert ticks[0][1].x() == 49.0
+    assert ticks[0][2].x() == 44.0, "the outer end must not move"
+
+    bottom = OutwardAxis("bottom").generateDrawSpecs(None)
+    _, ticks, _ = bottom
+    # The plot is above a bottom axis, so the start moves down.
+    assert ticks[0][1].y() == 11.0
+    assert ticks[0][2].y() == 10.0
+
+
+def test_the_axis_override_passes_a_missing_spec_through(qapp, monkeypatch):
+    import pyqtgraph as pg
+
+    from biofermentation.gui.widgets.plot_view import OutwardAxis
+
+    monkeypatch.setattr(pg.AxisItem, "generateDrawSpecs", lambda self, p: None)
+    assert OutwardAxis("left").generateDrawSpecs(None) is None
+
+
+def test_the_ticks_of_a_built_plot_point_away_from_the_data(qapp):
+    plot = _probe_plot(qapp, count=1)
+    main = plot.main_view.sceneBoundingRect()
+
+    axis = plot._axes[0]
+    right = axis.sceneBoundingRect().right()
+    assert right <= main.left(), "the y-axis overlaps the plot area"
+
+    bottom = plot.bottom_axis.sceneBoundingRect()
+    assert bottom.top() >= main.bottom() - 1.0, "the x-axis overlaps the plot area"

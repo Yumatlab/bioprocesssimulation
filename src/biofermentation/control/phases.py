@@ -107,8 +107,8 @@ class PhaseAutomaton:
 
     @classmethod
     def from_setup(cls, setup, **kwargs) -> "PhaseAutomaton":
-        """Build from what load_phases() returned."""
-        return cls(
+        """Build from what load_phases() returned, resuming where it stopped."""
+        automaton = cls(
             setup.phases,
             variable_names={
                 row["variableID"]: row["name"] for row in setup.lookups.process_variable
@@ -118,6 +118,27 @@ class PhaseAutomaton:
             },
             **kwargs,
         )
+        automaton.adopt_active_phase()
+        return automaton
+
+    def adopt_active_phase(self) -> int | None:
+        """Pick up a phase that was running when the project was last saved.
+
+        processTab stores the status of every phase, so a reloaded project
+        knows which one was active. Without this the automaton starts blank,
+        finds no PENDING phase, and puts the *next* one to PENDING instead —
+        the running phase is silently restarted, its start time overwritten
+        and its actions applied a second time.
+        """
+        self.current = next(
+            (
+                index
+                for index, phase in enumerate(self.phases)
+                if phase.statusID == PhaseStatus.ACTIVE
+            ),
+            None,
+        )
+        return self.current
 
     # -------------------------------------------------------- conditions --
 
@@ -238,6 +259,33 @@ class PhaseAutomaton:
         phase.statusID = PhaseStatus.COMPLETED
         phase.end.time = float(state.v.t[state.idx])
         self._note(f"{phase.name} [Phase {index + 1}] ended at t = {phase.end.time:.3f} h")
+
+        if index + 1 < len(self.phases):
+            self.phases[index + 1].statusID = PhaseStatus.PENDING
+
+        self.current = None
+        state.a.switch_exp = False
+        state.a.switch_pulse = False
+        return index
+
+    def release_stop(self, state: SimulationState) -> int | None:
+        """Finish the stop phase the process is standing on. Returns its index.
+
+        A stop phase has no end condition — the process is halted, so no
+        condition on it could ever be met (see the phase editor). It is
+        therefore ended from the outside, when the operator presses Run again.
+        The next phase goes to PENDING and starts when *its* start condition
+        is met, exactly like any other transition.
+        """
+        self.stop_requested = False
+        index = self.current
+        if index is None:
+            return None
+
+        phase = self.phases[index]
+        phase.statusID = PhaseStatus.COMPLETED
+        phase.end.time = float(state.v.t[state.idx])
+        self._note(f"{phase.name} [Phase {index + 1}] released at t = {phase.end.time:.3f} h")
 
         if index + 1 < len(self.phases):
             self.phases[index + 1].statusID = PhaseStatus.PENDING

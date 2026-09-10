@@ -502,3 +502,45 @@ def test_steps_per_check_delays_the_transition(ecoli):
     assert phase.statusID == PhaseStatus.COMPLETED
     # The end is stamped at the end of the block, not when the timer expired.
     assert phase.end.time > phase.start.time
+
+
+@pytest.fixture
+def saved_setup():
+    """A project whose phases were stored mid-run, as load_phases returns it."""
+    return load_phases(TEMPLATE_DB, PICHIA_PROJECT)
+
+
+def test_a_reloaded_automaton_picks_up_the_running_phase(saved_setup):
+    """processTab knows which phase was active; the automaton has to use it.
+
+    Starting blank, it finds no PENDING phase, moves the *next* one to PENDING
+    and restarts it — overwriting the start time of the phase that was really
+    running and applying its actions twice.
+    """
+    automaton = PhaseAutomaton.from_setup(saved_setup)
+    active = [
+        index
+        for index, phase in enumerate(saved_setup.phases)
+        if phase.statusID == PhaseStatus.ACTIVE
+    ]
+    assert active, "the fixture project has no phase in progress"
+    assert automaton.current == active[0]
+
+
+def test_a_finished_project_adopts_nothing(saved_setup):
+    for phase in saved_setup.phases:
+        phase.statusID = PhaseStatus.COMPLETED
+    assert PhaseAutomaton.from_setup(saved_setup).current is None
+
+
+def test_the_running_phase_is_not_restarted_on_reload(saved_setup, ecoli):
+    state, _ = ecoli
+    automaton = PhaseAutomaton.from_setup(saved_setup)
+    running = saved_setup.phases[automaton.current]
+    started_at = running.start.time
+    following = saved_setup.phases[automaton.current + 1]
+
+    assert automaton.check_start(state) is None, "nothing may start under it"
+    assert running.start.time == started_at
+    assert running.statusID == PhaseStatus.ACTIVE
+    assert following.statusID == PhaseStatus.UPCOMING, "the next one was pulled forward"

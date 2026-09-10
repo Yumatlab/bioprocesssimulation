@@ -43,6 +43,26 @@ QPushButton:disabled {
     background: #f6f6f6;
 }
 
+/* A checkable button — Inoculate — must look pressed when it is. Styling
+ * QPushButton at all takes the native macOS rendering away, and with it the
+ * only thing that showed the checked state. Same trap as the QComboBox popup
+ * below. */
+QPushButton:checked {
+    background: #2f7fd1;
+    border-color: #1d63a8;
+    color: white;
+    font-weight: bold;
+}
+
+QPushButton:checked:hover:enabled {
+    background: #3b8ee0;
+    border-color: #1d63a8;
+}
+
+QPushButton:pressed {
+    background: #d8d8d8;
+}
+
 QPushButton#runButton {
     font-size: 16px;
     font-weight: bold;
@@ -102,10 +122,28 @@ QHeaderView::section {
     font-weight: bold;
 }
 
+/* The page is white, like the active tab above it — the two read as one
+ * sheet of paper rather than a grey box under a white flap. */
 QTabWidget::pane {
     border: 1px solid #b4b4b4;
     border-radius: 3px;
     top: -1px;
+    background: white;
+}
+
+/* The pages themselves. #tabPage is set in control_app._style_tab_pages,
+ * which also lets a plain QWidget draw a styled background at all. */
+QWidget#tabPage {
+    background: white;
+}
+
+QScrollArea#tabPage {
+    border: none;
+}
+
+/* QGroupBox on white needs no ground of its own, only its frame. */
+QTabWidget QGroupBox {
+    background: transparent;
 }
 
 QTabBar::tab {

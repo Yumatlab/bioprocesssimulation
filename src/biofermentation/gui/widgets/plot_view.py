@@ -24,6 +24,8 @@ figure. Without that each axis picks its own spacing and the gridlines of one
 scale fall between those of the next.
 """
 
+from typing import ClassVar
+
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtGui import QColor, QFont, QPen
@@ -36,7 +38,41 @@ pg.setConfigOption("background", "w")
 pg.setConfigOption("foreground", "k")
 
 # Positive length points away from the plot area — ticks on the outside.
-TICK_LENGTH = 6
+TICK_LENGTH = 7
+
+
+class OutwardAxis(pg.AxisItem):
+    """An axis whose ticks lie strictly outside the plot area.
+
+    pyqtgraph already draws a positive tickLength away from the plot, but it
+    offsets the axis *line* by one pixel towards the plot relative to where
+    the ticks start (`left_offset`/`bottom_offset` in generateDrawSpecs).
+    Every tick therefore pokes one pixel across the line into the plot, and
+    with the minor ticks only two pixels long the whole row reads as pointing
+    inwards. Moving each tick's inner end onto the axis line removes the
+    overhang; nothing else about the drawing changes.
+    """
+
+    #: The offset generateDrawSpecs applies to the axis line, per orientation.
+    _LINE_OFFSET: ClassVar[dict[str, tuple[int, int]]] = {
+        "left": (-1, 0),
+        "right": (1, 0),
+        "top": (0, -1),
+        "bottom": (0, 1),
+    }
+
+    def generateDrawSpecs(self, p):  # noqa: N802 - pyqtgraph API
+        specs = super().generateDrawSpecs(p)
+        if specs is None:
+            return specs
+        axis_spec, tick_specs, text_specs = specs
+        dx, dy = self._LINE_OFFSET.get(self.orientation, (0, 0))
+        if dx or dy:
+            tick_specs = [
+                (pen, pg.Point(start.x() + dx, start.y() + dy), stop)
+                for pen, start, stop in tick_specs
+            ]
+        return axis_spec, tick_specs, text_specs
 
 
 class MultiAxisPlot(pg.GraphicsLayoutWidget):
@@ -85,11 +121,17 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         # span. Left on, autoRange also takes the end labels into account and
         # drags the axis far past the run.
         self.main_view.enableAutoRange(axis="x", enable=False)
+        # The extra ViewBoxes are not in the layout and only follow when this
+        # fires. resizeEvent alone is not enough: the layout runs again after
+        # the axis labels are known, without the widget being resized, and the
+        # stacked views would keep the geometry from the pass before — the
+        # curves then sit a few pixels to the right of their axes.
+        self.main_view.sigResized.connect(self._resize_views)
         self.addItem(self.main_view, row=1, col=count)
         self.ci.layout.setColumnStretchFactor(count, 1)
 
         unit = template.axisxunit.strip("[] ")
-        self.bottom_axis = pg.AxisItem("bottom")
+        self.bottom_axis = OutwardAxis("bottom")
         self.bottom_axis.linkToView(self.main_view)
         self.bottom_axis.enableAutoSIPrefix(False)
         self.bottom_axis.setStyle(tickLength=TICK_LENGTH)
@@ -137,7 +179,7 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
             self.scene().addItem(view)
             view.setXLink(self.main_view)
 
-        axis = pg.AxisItem("left")
+        axis = OutwardAxis("left")
         axis.linkToView(view)
         axis_pen = QPen(color)
         axis_pen.setWidthF(self.template.axislinewidth if self.template else 1.75)
@@ -285,6 +327,11 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         """
         super().resizeEvent(event)
         self._resize_views()
+
+    def paintEvent(self, event) -> None:  # noqa: N802 - Qt API
+        """Last chance before anything is drawn with a stale transform."""
+        self._resize_views()
+        super().paintEvent(event)
 
     def showEvent(self, event) -> None:  # noqa: N802 - Qt API
         super().showEvent(event)

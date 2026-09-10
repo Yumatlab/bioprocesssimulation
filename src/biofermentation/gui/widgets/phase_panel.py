@@ -156,11 +156,8 @@ class PhasePanel(QGroupBox):
 
         # A phase that has run, or is running, is part of the record. Deleting
         # it would leave a process history that never happened.
-        finished = phase.statusID in (PhaseStatus.ACTIVE, PhaseStatus.COMPLETED)
-        self.delete_button.setEnabled(not finished)
-        self.delete_button.setToolTip(
-            "A running or completed phase cannot be deleted" if finished else "Delete this phase"
-        )
+        self._finished = phase.statusID in (PhaseStatus.ACTIVE, PhaseStatus.COMPLETED)
+        self.apply_editable()
 
         if phase.statusID == PhaseStatus.PENDING and phase.start.time is not None:
             self.setToolTip(f"Start: t = {phase.start.time:.3f} h")
@@ -168,6 +165,29 @@ class PhasePanel(QGroupBox):
             self.setToolTip(f"End: t = {phase.end.time:.3f} h")
         else:
             self.setToolTip("")
+
+    def set_editable(self, editable: bool) -> None:
+        """Whether the process is standing still and may be re-planned."""
+        self._editable = editable
+        self.apply_editable()
+
+    def apply_editable(self) -> None:
+        """Two reasons a button may be dead, and they say different things."""
+        editable = getattr(self, "_editable", True)
+        finished = getattr(self, "_finished", False)
+
+        self.edit_button.setEnabled(editable)
+        self.edit_button.setToolTip(
+            "Edit this phase" if editable else "Pause the process to edit a phase"
+        )
+
+        self.delete_button.setEnabled(editable and not finished)
+        if not editable:
+            self.delete_button.setToolTip("Pause the process to delete a phase")
+        elif finished:
+            self.delete_button.setToolTip("A running or completed phase cannot be deleted")
+        else:
+            self.delete_button.setToolTip("Delete this phase")
 
 
 class ArrowButton(QPushButton):
@@ -200,6 +220,7 @@ class PhaseGrid(QWidget):
         self._layout.setSpacing(8)
         self.panels: list[PhasePanel] = []
         self.arrows: list[ArrowButton] = []
+        self._editable = True
         self.add_button = QPushButton("+")
         self.add_button.setFixedWidth(100)
         self.add_button.setToolTip("Add a phase")
@@ -221,6 +242,7 @@ class PhaseGrid(QWidget):
             panel.edit_requested.connect(self.edit_requested.emit)
             panel.delete_requested.connect(self.delete_requested.emit)
             panel.update_from(phase, types, statuses, variables, operators)
+            panel.set_editable(self._editable)
             self._layout.addWidget(panel)
             self.panels.append(panel)
 
@@ -238,6 +260,22 @@ class PhaseGrid(QWidget):
 
         self._layout.addWidget(self.add_button)
         self._layout.addStretch()
+        self.set_editable(self._editable)
+
+    def set_editable(self, editable: bool) -> None:
+        """Phases are planned on a standing process (point 10 of the review).
+
+        Adding, editing or deleting a phase while the automaton is stepping
+        would take effect halfway through a block. The guard flag protects a
+        single write, not a change of plan.
+        """
+        self._editable = bool(editable)
+        self.add_button.setEnabled(self._editable)
+        self.add_button.setToolTip(
+            "Add a phase" if self._editable else "Pause the process to add a phase"
+        )
+        for panel in self.panels:
+            panel.set_editable(self._editable)
 
     def _clear(self) -> None:
         for panel in self.panels:

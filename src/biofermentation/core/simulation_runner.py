@@ -23,6 +23,9 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from ..organisms.base import OrganismModel
 from .state import SimulationState
 
+#: Fallback when the project carries no step width at all.
+DEFAULT_INTERVAL_MS = 2000
+
 
 class SimulationRunner(QObject):
     """Advances a SimulationState on a timer, in the GUI thread.
@@ -47,7 +50,7 @@ class SimulationRunner(QObject):
         *,
         phases=None,
         speedfactor: int = 1,
-        interval_ms: int = 100,
+        interval_ms: int | None = None,
         parent: QObject | None = None,
     ):
         super().__init__(parent)
@@ -60,8 +63,11 @@ class SimulationRunner(QObject):
         self._ticking = False  # re-entrancy guard for the tick itself
 
         self._timer = QTimer(self)
-        self._timer.setInterval(interval_ms)
         self._timer.timeout.connect(self._on_tick)
+        if interval_ms is None:
+            self.sync_interval_to_dt()
+        else:
+            self._timer.setInterval(interval_ms)
 
     # ------------------------------------------------------------ state --
 
@@ -74,7 +80,17 @@ class SimulationRunner(QObject):
         return self._timer.interval()
 
     def set_interval(self, interval_ms: int) -> None:
-        self._timer.setInterval(interval_ms)
+        self._timer.setInterval(max(1, int(interval_ms)))
+
+    def sync_interval_to_dt(self) -> None:
+        """One tick per step width: the timer runs at deltat, not faster.
+
+        MATLAB refreshes on a fixed two-second timer that happens to equal the
+        default step width. Tying the two together keeps a speedfactor of 1 at
+        real time whatever deltat is set to.
+        """
+        seconds = float(self.state.p.get("deltatsec", 0) or 0)
+        self.set_interval(round(seconds * 1000) if seconds > 0 else DEFAULT_INTERVAL_MS)
 
     def set_speedfactor(self, speedfactor: int) -> None:
         self.speedfactor = max(1, int(speedfactor))
@@ -82,6 +98,16 @@ class SimulationRunner(QObject):
     # ----------------------------------------------------------- control --
 
     def start(self) -> None:
+        """Run, or carry on from a stop phase.
+
+        A stop phase halts the process and stays active; pressing Run means
+        the operator has dealt with whatever the stop was for, so the phase is
+        finished here and the next one waits for its own start condition.
+        """
+        if self.phases is not None and self.phases.stop_requested:
+            index = self.phases.release_stop(self.state)
+            if index is not None:
+                self.phase_ended.emit(index)
         self._timer.start()
 
     def pause(self) -> None:

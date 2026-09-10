@@ -454,3 +454,181 @@ def test_resetting_the_gains_leaves_other_categories_alone(window):
         state.p["cS1L0"] = before + 1.0
     window.reset_controller_gains()
     assert window.runner.state.p["cS1L0"] == pytest.approx(before + 1.0)
+
+
+# ------------------------------------------------- the second UX round --
+
+
+def test_the_timer_runs_at_the_step_width(window):
+    """Point 1: refresh rate and Δt are the same number."""
+    window.dt_box.setValue(2)
+    assert window.runner.interval_ms == 2000
+    window.dt_box.setValue(5)
+    assert window.runner.interval_ms == 5000
+    assert window.runner.state.p["deltatsec"] == 5.0
+
+
+def test_a_runner_without_an_interval_takes_it_from_the_project(db, qapp):
+    from biofermentation.core.simulation_runner import SimulationRunner
+
+    state, organism = load_project_state(db, PROJECT, dt=DEFAULT_DT)
+    state.p["deltatsec"] = 3.0
+    runner = SimulationRunner(organism, state)
+    assert runner.interval_ms == 3000
+
+
+def test_run_carries_on_after_a_stop_phase(window):
+    """Point 29: the stop phase ends when the operator says so."""
+    from biofermentation.control import PhaseStatus, PhaseType, StartCondition
+    from biofermentation.db.models import Condition
+
+    automaton = window.runner.phases
+    for phase in window.setup.phases:
+        phase.statusID = PhaseStatus.UPCOMING
+    stop, following = window.setup.phases[0], window.setup.phases[1]
+    stop.typeID = PhaseType.STOP
+    stop.statusID = PhaseStatus.PENDING
+    stop.start = Condition(typeID=StartCondition.PREVIOUS_ENDED)
+    stop.end = Condition()
+    automaton.current = None
+    automaton.stop_requested = False
+
+    stopped = []
+    window.runner.stopped.connect(stopped.append)
+    window.runner._on_tick()
+
+    assert automaton.stop_requested is True
+    assert stop.statusID == PhaseStatus.ACTIVE
+    assert stopped == ["stop phase"]
+
+    # Run again: the stop is released and the next phase is up.
+    window.runner.start()
+    try:
+        assert automaton.stop_requested is False
+        assert stop.statusID == PhaseStatus.COMPLETED
+        assert stop.end.time is not None
+        assert following.statusID == PhaseStatus.PENDING
+        assert automaton.current is None
+        assert window.runner.running is True
+    finally:
+        window.runner.pause()
+
+
+def test_a_released_stop_does_not_stop_again(window):
+    from biofermentation.control import PhaseStatus, PhaseType, StartCondition
+    from biofermentation.db.models import Condition
+
+    automaton = window.runner.phases
+    for phase in window.setup.phases:
+        phase.statusID = PhaseStatus.UPCOMING
+    stop = window.setup.phases[0]
+    stop.typeID = PhaseType.STOP
+    stop.statusID = PhaseStatus.PENDING
+    stop.start = Condition(typeID=StartCondition.PREVIOUS_ENDED)
+    stop.end = Condition()
+    automaton.current = None
+    automaton.stop_requested = False
+
+    window.runner._on_tick()
+    window.runner.start()
+    before = window.runner.state.idx
+    window.runner._on_tick()
+    assert window.runner.state.idx > before, "the process has to move again"
+    window.runner.pause()
+
+
+def test_phases_cannot_be_changed_while_the_process_runs(window):
+    """Point 10: re-planning happens on a standing process."""
+    grid = window.phase_grid
+    window.runner.start()
+    window.refresh_phases()
+    try:
+        assert grid.add_button.isEnabled() is False
+        for panel in grid.panels:
+            assert panel.edit_button.isEnabled() is False
+            assert panel.delete_button.isEnabled() is False
+            assert "Pause" in panel.edit_button.toolTip()
+    finally:
+        window.runner.pause()
+
+    window.refresh_phases()
+    assert grid.add_button.isEnabled() is True
+    assert grid.panels[-1].edit_button.isEnabled() is True
+
+
+def test_pausing_reopens_the_phase_editor(window):
+    from biofermentation.control import PhaseStatus
+
+    window.run_button.click()  # start
+    assert window.runner.running is True
+    assert window.phase_grid.add_button.isEnabled() is False
+
+    window.run_button.click()  # pause
+    assert window.runner.running is False
+    assert window.phase_grid.add_button.isEnabled() is True
+    upcoming = next(
+        panel
+        for phase, panel in zip(window.setup.phases, window.phase_grid.panels, strict=True)
+        if phase.statusID == PhaseStatus.UPCOMING
+    )
+    assert upcoming.delete_button.isEnabled() is True
+
+
+def test_the_inoculate_toggle_writes_both_flags(window):
+    """Point 6: f_InocStart is the setting, f_Inoc the event."""
+    state = window.runner.state
+    assert state.idx == 0
+    button = window.inoculate_button
+    assert button.isCheckable() is True
+
+    button.click()
+    assert button.isChecked() is True
+    assert state.p["f_InocStart"] == 1.0
+    assert state.p["f_Inoc"] == 1.0
+    assert state.a["inoc_occ"] == 1
+    assert state.v.cXL[0] == pytest.approx(state.p["cXL0"])
+
+    button.click()
+    assert button.isChecked() is False
+    assert state.p["f_InocStart"] == 0.0
+    assert state.p["f_Inoc"] == 0.0
+    assert state.a["inoc_occ"] == 0
+    assert state.v.cXL[0] == 0.0
+
+
+def test_the_inoculate_button_is_a_one_shot_once_the_run_started(window):
+    state = window.runner.state
+    state.p["f_Inoc"] = 0.0
+    state.a["inoc_occ"] = 0
+    window.runner._on_tick()
+    window.refresh()
+
+    assert state.idx > 0
+    assert window.inoculate_button.isCheckable() is False
+    assert window.inoculate_button.isEnabled() is True
+
+    window.inoculate_button.click()
+    assert state.p["f_Inoc"] == 1.0
+
+    state.a["inoc_occ"] = 1
+    window.refresh()
+    assert window.inoculate_button.isEnabled() is False
+
+
+def test_the_open_plot_button_does_not_pass_its_checked_state(window):
+    """clicked(bool) used to arrive as template_id and raise LookupError."""
+    window.plot_button.click()
+    try:
+        assert len(window.figure_windows) == 1
+        assert window.figure_windows[0].template.templateID == 1
+    finally:
+        for figure in list(window.figure_windows):
+            figure.close()
+
+
+def test_saving_reports_back(window):
+    window.save()
+    assert window.save_button.text() == "Saved ✓"
+    assert "Saved" in window.statusBar().currentMessage()
+    window._reset_save_button()
+    assert window.save_button.text() == "Save"
