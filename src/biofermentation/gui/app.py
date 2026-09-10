@@ -17,10 +17,10 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from ..control import PhaseAutomaton
 from ..core.runner import DEFAULT_DT, load_project_state
 from ..core.simulation_runner import SimulationRunner
-from ..db import load_phases
+from ..db import ensure_columns, load_phases
 from ..organisms import discover_organisms
 from ..resources import default_database
-from .style import load_stylesheet
+from .style import apply_theme
 from .windows import (
     ControlWindow,
     CreateProjectWindow,
@@ -35,14 +35,18 @@ class SimulationApp(QApplication):
     def __init__(self, argv: list[str] | None = None, *, db_path: Path | str | None = None):
         super().__init__(argv if argv is not None else sys.argv)
         self.setApplicationName("Biofermentation Simulation")
-        # The whole look is a text file; see gui/style.py.
-        self.setStyleSheet(load_stylesheet())
+        # Style, palette and stylesheet. The palette is ours, not the
+        # system's — see gui/style.py.
+        apply_theme(self)
 
         # The plugin registry is filled once, at start, before any window can
         # ask what organisms exist.
         discover_organisms()
 
         self.db_path = Path(db_path) if db_path else default_database()
+        # A user's database is a copy of the template taken when they first
+        # ran the program; it can be older than the schema this code expects.
+        ensure_columns(self.db_path)
         self.starting_screen = StartingScreen()
         self.select_window: SelectProjectWindow | None = None
         self.create_window: CreateProjectWindow | None = None

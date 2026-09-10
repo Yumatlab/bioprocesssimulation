@@ -16,7 +16,7 @@ Two rules the window keeps to:
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QPalette
 from PySide6.QtWidgets import (
     QDialog,
     QFormLayout,
@@ -115,6 +115,16 @@ class ControlWindow(QMainWindow):
             page.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
             if isinstance(page, QScrollArea):
                 page.setFrameShape(QScrollArea.Shape.NoFrame)
+                # The viewport is a widget of its own and paints its palette
+                # over the page — that is why the Process Manager stayed
+                # grey. Neither a style sheet rule nor a transparent viewport
+                # reaches it reliably, so it is pointed at the palette role
+                # that is white: Base, the ground of an editable surface.
+                # Renaming it is not an option, Qt looks the viewport up by
+                # its own object name internally.
+                page.setBackgroundRole(QPalette.ColorRole.Base)
+                page.viewport().setBackgroundRole(QPalette.ColorRole.Base)
+                page.viewport().setAutoFillBackground(True)
                 inner = page.widget()
                 if inner is not None:
                     inner.setObjectName("tabPage")
@@ -194,7 +204,13 @@ class ControlWindow(QMainWindow):
             panel.parameter_changed.connect(self._set_parameter)
             panel.parameters_requested.connect(self.open_controller_parameters)
             self.panels[spec.title] = panel
-            layout.addWidget(panel)
+            layout.addWidget(panel, 1)
+
+        # One width for all five, taken from the panel that needs the most —
+        # pO2-Control, whose mode list is the longest.
+        width = max(panel.content_width() for panel in self.panels.values())
+        for panel in self.panels.values():
+            panel.setMinimumWidth(width)
         return page
 
     def _build_run_column(self) -> QWidget:

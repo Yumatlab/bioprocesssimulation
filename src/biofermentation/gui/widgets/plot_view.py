@@ -12,11 +12,16 @@ sits a few pixels off. The original stacks its axes flush with the plot area,
 so the layout here is explicit:
 
     row 0   title, spanning everything
-    row 1   axis[n-1] … axis[1] axis[0] | ViewBox
-    row 2                               | bottom axis
+    row 1   caption[n-1] … caption[1] caption[0]
+    row 2   axis[n-1]    … axis[1]    axis[0]    | ViewBox
+    row 3                                        | bottom axis
 
 Every y-axis shares row 1 with the ViewBox and is therefore exactly as tall
 as the plot area. The bottom axis sits under the ViewBox alone.
+
+Each y-axis carries its caption above itself rather than rotated alongside,
+in the colour of the axis, the way the figures of the thesis do it. Row 1
+exists only for those captions.
 
 The tick spacing is forced to the template's axisytick on every axis, so the
 divisions of all scales line up horizontally — the way they do in the MATLAB
@@ -28,6 +33,7 @@ from typing import ClassVar
 
 import numpy as np
 import pyqtgraph as pg
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QPen
 from PySide6.QtWidgets import QWidget
 
@@ -80,6 +86,10 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
+        # Explicitly, not only through pg.setConfigOption: the config option
+        # is read when a widget is built, and a plot built before this module
+        # is imported would take the platform background — grey, in dark mode.
+        self.setBackground("w")
         self.template: PlotTemplate | None = None
         self.main_view: pg.ViewBox | None = None
         self.bottom_axis: pg.AxisItem | None = None
@@ -87,6 +97,7 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
 
         self._views: list[pg.ViewBox] = []
         self._axes: list[pg.AxisItem] = []
+        self._captions: list[pg.LabelItem] = []
         self._curves: list[pg.PlotDataItem] = []
         self._labels: list[pg.TextItem] = []
         self._variables: list[PlotVariable] = []
@@ -127,8 +138,13 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         # stacked views would keep the geometry from the pass before — the
         # curves then sit a few pixels to the right of their axes.
         self.main_view.sigResized.connect(self._resize_views)
-        self.addItem(self.main_view, row=1, col=count)
+        self.addItem(self.main_view, row=2, col=count)
         self.ci.layout.setColumnStretchFactor(count, 1)
+        # No spacing between the axis columns and the plot area: the gap left
+        # the innermost y-axis standing away from the x-axis, with nothing in
+        # between.
+        self.ci.layout.setHorizontalSpacing(0)
+        self.ci.layout.setVerticalSpacing(0)
 
         unit = template.axisxunit.strip("[] ")
         self.bottom_axis = OutwardAxis("bottom")
@@ -146,7 +162,7 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
             f"{template.axisxlabel} [{unit}]" if unit else template.axisxlabel,
             **{"font-size": f"{template.axislabelfontsize:.0f}pt"},
         )
-        self.addItem(self.bottom_axis, row=2, col=count)
+        self.addItem(self.bottom_axis, row=3, col=count)
 
         # Column 0 is the outermost axis, so the innermost variable — the one
         # with the smallest range — ends up next to the plot area.
@@ -158,6 +174,10 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
 
     def _add_variable(self, position: int, column: int, variable: PlotVariable) -> None:
         color = QColor(*variable.color)
+        caption = tex_to_html(variable.label())
+        rendered_unit = tex_to_html(variable.tex_unit) if variable.tex_unit else ""
+        heading = f"{caption} [{rendered_unit}]" if rendered_unit else caption
+
         pen = QPen(color)
         pen.setWidthF(self.template.graphlinewidth if self.template else 1.5)
         # Cosmetic, or the width is taken in data units and scaled by the
@@ -195,35 +215,50 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         # Ticks outside the plot area, as in the original. pyqtgraph counts a
         # positive length towards the labels, which for a left axis is out.
         axis.setStyle(tickLength=TICK_LENGTH)
-        caption = tex_to_html(variable.label())
-        rendered_unit = tex_to_html(variable.tex_unit) if variable.tex_unit else ""
+        # The caption sits above the axis, in the colour of the axis, as the
+        # figures of the thesis have it. setLabel would rotate it alongside
+        # and draw it in the foreground colour instead.
         size = f"{self.template.axislabelfontsize:.0f}pt" if self.template else "12pt"
-        axis.setLabel(
-            f"{caption} [{rendered_unit}]" if rendered_unit else caption,
-            **{"font-size": size},
-        )
-        self.addItem(axis, row=1, col=column)
+        label = self.addLabel(heading, row=1, col=column, color=color.name(), size=size, bold=True)
+        self._captions.append(label)
+        self.addItem(axis, row=2, col=column)
+
+        # The caption is wider than the axis and therefore sets the width of
+        # the column. Centred, half of that surplus ends up to the right of
+        # the axis — and for the innermost axis that is the gap between it
+        # and the plot area, with nothing in it. Both are pinned to the right
+        # edge of their column instead, so every axis line sits under the
+        # right edge of its own caption and the innermost one is flush with
+        # the plot.
+        right = Qt.AlignmentFlag.AlignRight
+        self.ci.layout.setAlignment(axis, right | Qt.AlignmentFlag.AlignVCenter)
+        self.ci.layout.setAlignment(label, right | Qt.AlignmentFlag.AlignBottom)
+
+        # Data over decoration: a curve running along x = 0 lies on the
+        # innermost axis, and behind it there is no telling which one it is.
+        axis.setZValue(0)
+        view.setZValue(1)
 
         curve = pg.PlotDataItem([], [], pen=pen)
         view.addItem(curve)
 
         # The curve's name at its right end, in its own colour — plotFlags of
         # the original. With six scales the plot is unreadable without it.
-        label = pg.TextItem(
+        flag = pg.TextItem(
             html=f'<span style="color:{color.name()}">{caption}</span>', anchor=(0, 0.5)
         )
         font = QFont()
         font.setPointSizeF(self.template.flagfontsize * 0.6 if self.template else 10)
-        label.setFont(font)
+        flag.setFont(font)
         # ignoreBounds: the label sits past the last data point, and letting
         # it count towards the range would stretch the axis every step.
-        view.addItem(label, ignoreBounds=True)
-        label.hide()
+        view.addItem(flag, ignoreBounds=True)
+        flag.hide()
 
         self._views.append(view)
         self._axes.append(axis)
         self._curves.append(curve)
-        self._labels.append(label)
+        self._labels.append(flag)
         self._apply_range(position, variable.ymin, variable.ymax)
 
     def _apply_range(self, position: int, lower: float, upper: float) -> None:
@@ -248,6 +283,7 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
                 scene.removeItem(view)
         self._views.clear()
         self._axes.clear()
+        self._captions.clear()
         self._curves.clear()
         self._labels.clear()
         self._variables.clear()

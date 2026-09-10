@@ -108,6 +108,9 @@ class VariablePool(QWidget):
         super().__init__(parent)
         self.variables = {row["name"]: row for row in variables}
         self.reservoirs = max(1, int(reservoirs or 1))
+        # The last state the table was filled from, so ticking a box can
+        # redraw immediately instead of waiting for the next step.
+        self._state = None
 
         layout = QHBoxLayout(self)
         layout.addWidget(self._build_readouts(), 0)
@@ -183,8 +186,12 @@ class VariablePool(QWidget):
             name for name, item in self.items.items() if item.checkState(0) == Qt.CheckState.Checked
         ]
 
-    def refresh(self, state) -> None:
+    def refresh(self, state=None) -> None:
         """Read the step just computed. Nothing is calculated here but the trend."""
+        state = state if state is not None else self._state
+        if state is None:
+            return
+        self._state = state
         v, index = state.v, state.idx
         rho = float(state.p.get("rhoL", 1.0) or 1.0)
 
@@ -227,4 +234,6 @@ class VariablePool(QWidget):
         return tex_label(row.get("shorttex") or name, row.get("tex_unit"))
 
     def _selection_changed(self, *_) -> None:
-        self.table.setRowCount(0)
+        """Redraw at once. Clearing the table and waiting for the next step
+        made a variable look empty until the process ran again."""
+        self.refresh()

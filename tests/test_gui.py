@@ -33,6 +33,7 @@ from biofermentation.resources import copy_template, default_database
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_DB = REPO_ROOT / "src" / "biofermentation" / "resources" / "SimulationAppDB_template.db"
 ECOLI_PROJECT = 716
+PICHIA_PROJECT = 519
 
 
 @pytest.fixture(scope="session")
@@ -362,3 +363,95 @@ def test_every_starting_screen_button_leads_somewhere(qapp):
     assert set(signals) == connected | disabled, (
         f"no target and not disabled: {set(signals) - connected - disabled}"
     )
+
+
+# ----------------------------------------------- theme and readability --
+
+
+def test_the_application_brings_its_own_palette(qapp, monkeypatch):
+    """A style sheet only sets what it names.
+
+    Everything it leaves out comes from the platform palette, and on a Mac in
+    dark mode that meant white text on the light grounds the sheet sets. Half
+    the application was unreadable.
+    """
+    from PySide6.QtGui import QColor, QPalette
+
+    from biofermentation.gui.style import apply_theme
+
+    dark = QPalette()
+    dark.setColor(QPalette.ColorRole.WindowText, QColor("#ffffff"))
+    dark.setColor(QPalette.ColorRole.Window, QColor("#2b2b2b"))
+    dark.setColor(QPalette.ColorRole.Text, QColor("#ffffff"))
+    qapp.setPalette(dark)
+
+    apply_theme(qapp)
+    palette = qapp.palette()
+    assert palette.windowText().color().name() == "#1a1a1a"
+    assert palette.window().color().name() == "#f2f2f2"
+    assert palette.text().color().name() == "#1a1a1a"
+    assert palette.base().color().name() == "#ffffff"
+
+
+def test_the_stylesheet_never_sets_a_background_without_a_colour(qapp):
+    """The rule that keeps a dark platform theme out.
+
+    A block that paints a light ground and says nothing about the text hands
+    the text colour back to the platform.
+    """
+    import re
+
+    from biofermentation.gui.style import BUNDLED_STYLE
+
+    sheet = BUNDLED_STYLE.read_text(encoding="utf-8")
+    # Strip comments, then look at each block on its own.
+    sheet = re.sub(r"/\*.*?\*/", "", sheet, flags=re.S)
+
+    offenders = []
+    for match in re.finditer(r"([^{}]+)\{([^{}]*)\}", sheet):
+        selector, body = match.group(1).strip(), match.group(2)
+        # Only plain widget rules. A ":hover" or "::handle" block refines one
+        # that has already set a colour, and a sub-control draws no text.
+        if ":" in selector:
+            continue
+        sets_background = re.search(r"(^|\s)background\s*:", body)
+        sets_color = re.search(r"(^|\s)color\s*:", body)
+        if sets_background and not sets_color and "transparent" not in body:
+            offenders.append(selector)
+    assert offenders == [], f"background without a colour: {offenders}"
+
+
+@pytest.fixture
+def control_window(db_copy, qapp):
+    from biofermentation.control import PhaseAutomaton
+    from biofermentation.core.runner import DEFAULT_DT, load_project_state
+    from biofermentation.gui.windows.control_app import ControlWindow
+
+    discover_organisms()
+    setup = load_phases(db_copy, PICHIA_PROJECT)
+    state, organism = load_project_state(db_copy, PICHIA_PROJECT, dt=DEFAULT_DT)
+    runner = SimulationRunner(
+        organism, state, phases=PhaseAutomaton.from_setup(setup), interval_ms=1
+    )
+    window = ControlWindow(setup, runner, db_copy)
+    yield window
+    window.close()
+
+
+def test_every_tab_page_of_the_control_window_is_white(control_window):
+    """Point 1 of the second round: the Process Manager stayed grey.
+
+    Its page is a QScrollArea, and the viewport paints its own palette over
+    whatever the page was given.
+    """
+    from PySide6.QtGui import QPalette
+    from PySide6.QtWidgets import QScrollArea
+
+    tabs = control_window.tabs
+    for index in range(tabs.count()):
+        page = tabs.widget(index)
+        assert page.objectName() == "tabPage", f"tab {index} was not styled"
+        if isinstance(page, QScrollArea):
+            viewport = page.viewport()
+            assert viewport.backgroundRole() == QPalette.ColorRole.Base
+            assert viewport.palette().base().color().name() == "#ffffff"

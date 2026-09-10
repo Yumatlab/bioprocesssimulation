@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from PySide6.QtGui import QColor
 
 from biofermentation.db.plots import (
     PlotTemplate,
@@ -508,3 +509,41 @@ def test_the_ticks_of_a_built_plot_point_away_from_the_data(qapp):
 
     bottom = plot.bottom_axis.sceneBoundingRect()
     assert bottom.top() >= main.bottom() - 1.0, "the x-axis overlaps the plot area"
+
+
+def test_the_innermost_axis_is_flush_with_the_plot(qapp):
+    """Point 11: a gap with nothing in it between the last y-axis and the x-axis.
+
+    The caption above an axis is wider than the axis and therefore sets the
+    width of the column. Centred, half of that surplus lands to the right of
+    the axis line — for the innermost axis, right where the plot begins.
+    """
+    plot = _probe_plot(qapp)
+    left = plot.main_view.sceneBoundingRect().left()
+    assert abs(plot._axes[0].sceneBoundingRect().right() - left) < 1.0
+
+
+def test_the_curves_are_drawn_over_the_axes(qapp):
+    """A curve running along x = 0 lies on the innermost axis."""
+    plot = _probe_plot(qapp)
+    for axis, view in zip(plot._axes, plot._views, strict=True):
+        assert view.zValue() > axis.zValue()
+
+
+def test_each_axis_caption_carries_the_colour_of_its_axis(qapp):
+    """Point 13: the captions were in the foreground colour, not the curve's."""
+    plot = _probe_plot(qapp)
+    assert len(plot._captions) == len(plot._variables)
+    for caption, variable in zip(plot._captions, plot._variables, strict=True):
+        expected = QColor(*variable.color).name()
+        assert caption.opts["color"] == expected, f"{variable.name}: {caption.opts}"
+
+
+def test_a_caption_sits_above_its_own_axis(qapp):
+    plot = _probe_plot(qapp)
+    # geometry(), not sceneBoundingRect(): an AxisItem's bounding rect reaches
+    # past its cell to make room for the tick text.
+    for caption, axis in zip(plot._captions, plot._axes, strict=True):
+        assert caption.geometry().bottom() <= axis.geometry().top() + 1
+        # Right edges line up: both are pinned to the right of their column.
+        assert abs(caption.geometry().right() - axis.geometry().right()) < 2.0

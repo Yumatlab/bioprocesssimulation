@@ -46,6 +46,21 @@ def _add_missing_columns(conn: sqlite3.Connection) -> list[str]:
     return added
 
 
+def ensure_columns(db_path: Path | str) -> list[str]:
+    """Add the columns of LOG_COLUMNS if a database predates them.
+
+    The application calls this at start. A user's database is a copy of the
+    template taken whenever they first ran the program, so it can be older
+    than the schema the code expects — the full migration would be too heavy
+    for every launch, but this is two PRAGMA reads and, once, two ALTERs.
+    """
+    conn = sqlite3.connect(db_path, isolation_level=None)
+    try:
+        return _add_missing_columns(conn)
+    finally:
+        conn.close()
+
+
 def apply_migration(db_path: Path | str, *, backup: bool = True) -> Path | None:
     """Run migrate_schema.sql against db_path.
 

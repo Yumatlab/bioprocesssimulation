@@ -98,6 +98,10 @@ class ControlPanel(QGroupBox):
             row = QHBoxLayout()
             row.addWidget(QLabel("Mode:"))
             self.mode_box = QComboBox()
+            # Sized by its longest entry, so no mode is cut off and every
+            # panel can be given the same width without one of them
+            # overflowing.
+            self.mode_box.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
             for value, text in spec.modes.items():
                 self.mode_box.addItem(text, value)
             self.mode_box.currentIndexChanged.connect(self._mode_changed)
@@ -138,6 +142,19 @@ class ControlPanel(QGroupBox):
             layout.addWidget(self.parameters_button)
 
     # ------------------------------------------------------------ state --
+
+    def content_width(self) -> int:
+        """How wide this panel has to be for nothing in it to be cut off."""
+        width = self.sizeHint().width()
+        if self.mode_box is not None:
+            metrics = self.mode_box.fontMetrics()
+            longest = max(
+                (metrics.horizontalAdvance(text) for text in self.spec.modes.values()),
+                default=0,
+            )
+            # Dropdown arrow, frame, the "Mode:" caption and the layout margins.
+            width = max(width, longest + 130)
+        return width
 
     def current_mode(self) -> int | None:
         return self.mode_box.currentData() if self.mode_box else None

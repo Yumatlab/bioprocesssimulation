@@ -1,7 +1,7 @@
 """Database access layer — phase 1. All access via get_connection()."""
 
 from .connection import get_connection
-from .migrate import apply_migration
+from .migrate import apply_migration, ensure_columns
 from .models import (
     Condition,
     Lookups,
@@ -36,6 +36,7 @@ __all__ = [
     "apply_migration",
     "create_project",
     "delete_project",
+    "ensure_columns",
     "export_defaults",
     "get_connection",
     "list_models",

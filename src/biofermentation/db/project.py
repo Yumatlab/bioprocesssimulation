@@ -28,6 +28,7 @@ from pathlib import Path
 import numpy as np
 
 from .connection import get_connection
+from .migrate import LOG_COLUMNS
 from .models import (
     Condition,
     Lookups,
@@ -238,10 +239,18 @@ def load_project_log(db_path: Path | str, project_id: int) -> list[dict]:
     text. Rows that have neither get the event type "Log".
     """
     with get_connection(db_path, readonly=True) as conn:
+        # A database that predates the two columns still has to open. The
+        # application calls ensure_columns() at start, but a file handed over
+        # from elsewhere may not have been through it.
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(logTab)")}
+        selected = ", ".join(
+            name if name in columns else f"NULL AS {name}"
+            for name in ("event_type", "process_time")
+        )
         rows = _rows(
             conn,
-            """
-            SELECT logID, datetime, event_type, message, process_time
+            f"""
+            SELECT logID, datetime, message, {selected}
               FROM logTab
              WHERE projectID = ?
              ORDER BY logID
@@ -549,6 +558,14 @@ def _save_log(conn: sqlite3.Connection, project_id: int, log: list[dict], result
     saves twice, and silently duplicates or swallows entries as soon as it
     does either.
     """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(logTab)")}
+    if not set(LOG_COLUMNS) <= columns:
+        raise sqlite3.OperationalError(
+            "logTab is missing "
+            + ", ".join(sorted(set(LOG_COLUMNS) - columns))
+            + " — run biofermentation.db.ensure_columns() on this database"
+        )
+
     written = 0
     for entry in log:
         if entry.get("logID") is not None:
