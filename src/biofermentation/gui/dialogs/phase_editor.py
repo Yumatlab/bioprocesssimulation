@@ -30,6 +30,11 @@ from ..widgets.indicators import select_data
 from ..widgets.tex import tex_to_html
 
 
+def plain_tex(text: str | None) -> str:
+    """A TeX fragment as plain text, for places that cannot render markup."""
+    return (text or "").replace("{", "").replace("}", "")
+
+
 class ConditionEditor(QGroupBox):
     """Start or end of a phase: the type, and whatever that type needs."""
 
@@ -54,8 +59,12 @@ class ConditionEditor(QGroupBox):
 
         self.variable_box = QComboBox()
         for row in variables:
-            label = row.get("shorttex") or row["name"]
-            self.variable_box.addItem(f"{row['name']} ({label})", row["variableID"])
+            # A combo box entry is plain text, so the TeX braces are dropped
+            # rather than rendered. Name and unit are enough — repeating the
+            # symbol next to the name only makes the list harder to scan.
+            unit = plain_tex(row.get("tex_unit"))
+            name = row["name"]
+            self.variable_box.addItem(f"{name} [{unit}]" if unit else name, row["variableID"])
         self.variable_label = QLabel("Variable:")
         layout.addRow(self.variable_label, self.variable_box)
 
@@ -97,6 +106,14 @@ class ConditionEditor(QGroupBox):
         return self.which == "end" and self.type_box.currentData() == EndCondition.TIMER
 
     def _update_visibility(self) -> None:
+        """Grey out what the condition type does not use, never hide it.
+
+        Hiding was the first attempt and it reads as a bug: four of the five
+        phases of a real project start on "end of previous phase", so the
+        editor came up with a single row and the variable picker nowhere to
+        be seen. Greying is what the controller panels already do, and it
+        shows that the setting exists and why it is not available.
+        """
         needs_variable = self._needs_variable()
         for widget in (
             self.variable_label,
@@ -104,10 +121,10 @@ class ConditionEditor(QGroupBox):
             self.operator_label,
             self.operator_box,
         ):
-            widget.setVisible(needs_variable)
+            widget.setEnabled(needs_variable)
         needs_value = self._needs_value()
-        self.value_label.setVisible(needs_value)
-        self.value_box.setVisible(needs_value)
+        self.value_label.setEnabled(needs_value)
+        self.value_box.setEnabled(needs_value)
         # A timer takes a duration, a variable condition a threshold.
         if self.which == "end" and self.type_box.currentData() == EndCondition.TIMER:
             self.value_label.setText("Duration [h]:")

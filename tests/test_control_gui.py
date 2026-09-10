@@ -317,17 +317,31 @@ def test_accepting_the_editor_writes_back(window):
     assert dialog.result() == QDialog.DialogCode.Accepted
 
 
-def test_the_editor_only_shows_what_the_condition_type_needs(window):
+def test_the_editor_greys_out_what_the_condition_type_does_not_use(window):
+    """Greyed, not hidden — hiding reads as a missing dropdown."""
     phase = window.setup.phases[0]
     dialog = PhaseEditor(phase, window.setup.lookups)
     editor = dialog.end_editor
 
     assert select_data(editor.type_box, EndCondition.TIMER)
-    assert editor.variable_box.isVisible() is False
+    assert editor.variable_box.isEnabled() is False
+    assert editor.variable_box.count() > 0, "still populated, just not usable"
     assert editor.value_label.text() == "Duration [h]:"
 
     assert select_data(editor.type_box, EndCondition.VARIABLE)
+    assert editor.variable_box.isEnabled() is True
     assert editor.value_label.text() == "Value:"
+
+
+def test_the_variable_entries_are_readable(window):
+    """cXL (c_{XL}) is not something to put in front of a user."""
+    dialog = PhaseEditor(window.setup.phases[0], window.setup.lookups)
+    entries = [
+        dialog.start_editor.variable_box.itemText(i)
+        for i in range(dialog.start_editor.variable_box.count())
+    ]
+    assert not any("{" in entry or "}" in entry for entry in entries)
+    assert "cXL [gl^-1]" in entries
 
 
 def test_select_data_survives_an_int_enum(qapp):
