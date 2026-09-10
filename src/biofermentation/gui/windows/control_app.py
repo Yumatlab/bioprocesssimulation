@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 
 from ...control import PhaseStatus
 from ...core.simulation_runner import SimulationRunner
-from ...db import save_project_with_backup
+from ...db import load_project_log, save_project_with_backup
 from ...db.models import ProjectSetup
 from ..widgets import CONTROL_PANELS, ControlPanel, PhaseGrid, StatusLamp
 from ..widgets.log_view import LogView
@@ -97,6 +97,7 @@ class ControlWindow(QMainWindow):
         runner.failed.connect(self._on_failed)
 
         self.load_from_state()
+        self.load_log()
 
     # ------------------------------------------------------------ build --
 
@@ -318,6 +319,21 @@ class ControlWindow(QMainWindow):
         return page
 
     # ------------------------------------------------------------ state --
+
+    def load_log(self) -> None:
+        """Put the stored log back, so a reopened project keeps its history.
+
+        A log that cannot be read back is only half a log — the phase
+        transitions and parameter changes of the run so far are exactly what
+        someone reopening a project wants to see.
+        """
+        try:
+            rows = load_project_log(self.db_path, self.setup.info.projectID)
+        except Exception as error:  # a logTab that will not read
+            self.note(f"Log could not be loaded: {error}", "Error")
+            return
+        if rows:
+            self.log_view.load(rows)
 
     def load_from_state(self) -> None:
         state = self.runner.state
@@ -619,20 +635,18 @@ class ControlWindow(QMainWindow):
 
         trimmed = state.trimmed()
         series = VariableSeries(t=trimmed.get("t"), v=trimmed, real_t=[""] * (state.idx + 1))
+        rows = self.log_view.rows()
         result, backup = save_project_with_backup(
             self.db_path,
             self.setup.info.projectID,
             p=dict(state.p),
             series=series,
             phases=self.setup.phases,
-            log=[
-                {
-                    "datetime": entry.datetime,
-                    "message": f"[{entry.event_type}] {entry.message}",
-                }
-                for entry in self.log_view.entries
-            ],
+            log=rows,
         )
+        # The ids the write handed out; without them the next save would
+        # store the same entries again.
+        self.log_view.adopt_ids(rows)
         message = (
             f"Saved {result['times']} time points and {result['parameters']} "
             f"parameters — backup {backup.name}"

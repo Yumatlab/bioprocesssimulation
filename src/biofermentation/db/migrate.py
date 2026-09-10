@@ -12,6 +12,39 @@ from pathlib import Path
 
 MIGRATION_SQL = Path(__file__).with_name("migrate_schema.sql")
 
+#: Columns logTab is missing, as name -> declaration.
+#:
+#: The application holds five things per log entry — timestamp, event type,
+#: message, project and process time — and the table has room for three of
+#: them. The event type ended up folded into the message as a "[...]" prefix
+#: and the process time was dropped, so a reloaded project could not put its
+#: own log back together.
+#:
+#: Added here and not in migrate_schema.sql because ALTER TABLE ADD COLUMN
+#: has no IF NOT EXISTS in SQLite and a .sql script cannot branch. Rebuilding
+#: the table the way the script does for the other defects would drop these
+#: two columns again on every rerun, taking the entries written since with
+#: them.
+#:
+#: Existing rows get NULL in both. Their text is left exactly as it is —
+#: load_project_log() reads the "[...]" prefix back out for them. A schema
+#: migration should not rewrite stored data.
+LOG_COLUMNS = {
+    "event_type": "TEXT",
+    "process_time": "REAL",
+}
+
+
+def _add_missing_columns(conn: sqlite3.Connection) -> list[str]:
+    """The additive half of the migration. Returns the columns it added."""
+    present = {row[1] for row in conn.execute("PRAGMA table_info(logTab)")}
+    added = []
+    for name, declaration in LOG_COLUMNS.items():
+        if name not in present:
+            conn.execute(f"ALTER TABLE logTab ADD COLUMN {name} {declaration}")
+            added.append(name)
+    return added
+
 
 def apply_migration(db_path: Path | str, *, backup: bool = True) -> Path | None:
     """Run migrate_schema.sql against db_path.
@@ -20,6 +53,9 @@ def apply_migration(db_path: Path | str, *, backup: bool = True) -> Path | None:
     False, and returns the path of that copy. Raises if the migration leaves
     a foreign key violation behind; the database is untouched in that case,
     because the rebuild itself runs inside a single transaction.
+
+    Runs the script and then adds the logTab columns of LOG_COLUMNS, which
+    cannot be expressed idempotently in SQL.
     """
     db_path = Path(db_path)
     backup_path = None
@@ -31,6 +67,7 @@ def apply_migration(db_path: Path | str, *, backup: bool = True) -> Path | None:
     conn = sqlite3.connect(db_path, isolation_level=None)
     try:
         conn.executescript(script)
+        _add_missing_columns(conn)
         violations = conn.execute("PRAGMA foreign_key_check").fetchall()
     finally:
         conn.close()

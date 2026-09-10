@@ -20,6 +20,7 @@ Three places where this deviates from the MATLAB original, all deliberate:
 """
 
 import math
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -221,6 +222,50 @@ def load_phases(db_path: Path | str, project_id: int) -> ProjectSetup:
         lookups=lookups,
         next_process_id=next_process_id,
     )
+
+
+#: How the event type was smuggled into the message before logTab had a
+#: column for it: "[Phase Event] the message".
+_LOG_PREFIX = re.compile(r"^\s*\[([^\]]{1,40})\]\s*(.*)$", re.S)
+
+
+def load_project_log(db_path: Path | str, project_id: int) -> list[dict]:
+    """Every log entry of a project, oldest first.
+
+    Rows written before logTab had an event_type column carry it as a
+    "[...]" prefix on the message; it is read back out here rather than
+    rewritten in the database, so a schema migration never touches stored
+    text. Rows that have neither get the event type "Log".
+    """
+    with get_connection(db_path, readonly=True) as conn:
+        rows = _rows(
+            conn,
+            """
+            SELECT logID, datetime, event_type, message, process_time
+              FROM logTab
+             WHERE projectID = ?
+             ORDER BY logID
+            """,
+            (project_id,),
+        )
+
+    entries = []
+    for row in rows:
+        event_type = row["event_type"]
+        message = row["message"] or ""
+        if not event_type:
+            match = _LOG_PREFIX.match(message)
+            event_type, message = match.groups() if match else ("Log", message)
+        entries.append(
+            {
+                "logID": row["logID"],
+                "datetime": row["datetime"],
+                "event_type": event_type,
+                "message": message,
+                "process_time": _number(row["process_time"]) or 0.0,
+            }
+        )
+    return entries
 
 
 def load_model_defaults(db_path: Path | str, organism_id: int | None) -> dict[str, float]:
@@ -496,29 +541,40 @@ def _save_phases(
 
 
 def _save_log(conn: sqlite3.Connection, project_id: int, log: list[dict], result: dict) -> None:
-    """Append the entries that are not in logTab yet."""
-    saved = conn.execute(
-        "SELECT COUNT(*) FROM logTab WHERE projectID = ?", (project_id,)
-    ).fetchone()[0]
-    payload = [
-        (
-            project_id,
-            entry.get("datetime") or datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
-            entry.get("message"),
-            entry.get("parameterID"),
-            entry.get("old_value"),
-            entry.get("new_value"),
+    """Append the entries that are not in logTab yet.
+
+    An entry knows whether it is stored: logID is None until it is written,
+    and this function fills it in. Counting the rows already there — what
+    this did before — only works while a session neither loads a log nor
+    saves twice, and silently duplicates or swallows entries as soon as it
+    does either.
+    """
+    written = 0
+    for entry in log:
+        if entry.get("logID") is not None:
+            continue
+        cursor = conn.execute(
+            """
+            INSERT INTO logTab
+                (projectID, datetime, event_type, message, process_time,
+                 parameterID, old_value, new_value)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                project_id,
+                entry.get("datetime") or datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
+                entry.get("event_type"),
+                entry.get("message"),
+                _number(entry.get("process_time")),
+                entry.get("parameterID"),
+                entry.get("old_value"),
+                entry.get("new_value"),
+            ),
         )
-        for entry in log[saved:]
-    ]
-    conn.executemany(
-        """
-        INSERT INTO logTab (projectID, datetime, message, parameterID, old_value, new_value)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        payload,
-    )
-    result["log"] = len(payload)
+        # Back into the caller's dict, so the next save skips this one.
+        entry["logID"] = cursor.lastrowid
+        written += 1
+    result["log"] = written
 
 
 # --------------------------------------------------------------- backup --

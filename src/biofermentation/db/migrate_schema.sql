@@ -35,7 +35,18 @@
 -- The script is idempotent: rerunning it rebuilds the same tables from
 -- themselves and changes nothing.
 --
+-- A fifth defect is repaired next to this script rather than in it: logTab
+-- is missing the event type and the process time that belong to every entry,
+-- and both are added by migrate.apply_migration(). They are ALTER TABLE ...
+-- ADD COLUMN, which SQLite cannot make conditional and this file cannot
+-- branch on — rebuilding the table instead would drop the two columns again
+-- on the next run. See migrate.py, LOG_COLUMNS.
+--
 -- Usage:
+--   python -c "from biofermentation.db import apply_migration; \
+--              apply_migration('SimulationAppDB.db')"
+--
+-- Running the script on its own repairs defects 1 to 4 but not 5:
 --   sqlite3 SimulationAppDB.db < migrate_schema.sql
 --   sqlite3 SimulationAppDB.db "PRAGMA foreign_key_check;"   -- must be empty
 --

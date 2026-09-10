@@ -153,10 +153,15 @@ Reglerzustände (nicht persistiert).
 
 ## Altlasten in der Datenbank — Stand nach Phase 1
 
-`src/biofermentation/db/migrate_schema.sql` behebt alle vier. Angewendet auf
-das mitgelieferte Template; **auf die produktive `SimulationAppDB.db` im
-MATLAB-Ordner noch nicht**. Das Skript ist idempotent und legt über
-`apply_migration()` vorher eine Kopie an.
+`db/apply_migration()` behebt alle fünf. Angewendet auf das mitgelieferte
+Template; **auf die produktive `SimulationAppDB.db` im MATLAB-Ordner noch
+nicht**. Der Aufruf ist idempotent und legt vorher eine Kopie an.
+
+`apply_migration()` ist der Einstiegspunkt, nicht das SQL-Skript allein:
+Punkt 5 sind zwei `ALTER TABLE ADD COLUMN`, und SQLite kennt dafür kein
+`IF NOT EXISTS`. In `migrate_schema.sql` müssten sie als Tabellenneuaufbau
+stehen — der beim nächsten Lauf beide Spalten samt Inhalt wieder wegwirft.
+Deshalb stehen sie als `LOG_COLUMNS` in `migrate.py`.
 
 1. **`processTab.start_typeID`/`end_typeID` zeigten auf `process_typeTab`**,
    gespeichert sind aber Bedingungstypen aus `process_conditiontypeTab`
@@ -174,6 +179,18 @@ MATLAB-Ordner noch nicht**. Das Skript ist idempotent und legt über
    Zeilen fehlten ganz. **Behoben** aus `Parameter Overview.xlsx`. Die
    Bioreaktoren sind die einzige Stelle, an der die Excel gegenüber der
    Datenbank Vorrang hat — überall sonst gilt die Datenbank.
+5. **`logTab` fehlten `event_type` und `process_time`.** Die Anwendung führt
+   fünf Felder pro Eintrag, die Tabelle hatte Platz für drei: der
+   Ereignistyp landete als `[…]`-Präfix im Text, die Prozesszeit fiel weg.
+   Ein wieder geöffnetes Projekt konnte seinen Log nicht rekonstruieren.
+   **Behoben**, additiv. Bestandszeilen bekommen `NULL` und behalten ihren
+   Text — `load_project_log()` liest das Präfix für sie zur Laufzeit heraus.
+   Eine Schemamigration schreibt keine gespeicherten Daten um.
+
+   Dazu: `_save_log` hat über `COUNT(*)` bestimmt, ab welchem Eintrag
+   geschrieben wird. Das trägt nur, solange eine Sitzung genau einmal
+   speichert und nie einen Log geladen hat. Jetzt trägt jeder Eintrag seine
+   `logID`, und geschrieben wird, was noch keine hat.
 
 Die produktive DB hatte zusätzlich eine inkonsistente Freelist
 (`integrity_check` meldete vier nie benutzte Seiten). Das Template ist über

@@ -19,6 +19,7 @@ from biofermentation.db import (
     get_connection,
     load_phases,
     load_project_info,
+    load_project_log,
     load_project_variables,
     save_project,
     save_project_with_backup,
@@ -580,3 +581,114 @@ def test_empty_project_loads_without_data(db_copy: Path):
     assert setup.next_process_id == 1
     series = load_project_variables(db_copy, 733)
     assert series.n == 0
+
+
+# ------------------------------------------------------------- the log --
+
+
+def test_the_log_table_carries_the_event_type_and_the_process_time(db_copy):
+    """Two thirds of a log entry had nowhere to go before this."""
+    with _readonly(db_copy) as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(logTab)")}
+    assert {"event_type", "process_time"} <= columns
+
+
+def test_adding_the_log_columns_twice_keeps_what_was_written(tmp_path):
+    """ALTER TABLE ADD COLUMN has no IF NOT EXISTS, and a rebuild would drop
+    the columns again on the next run — with everything written since."""
+    target = tmp_path / "twice.db"
+    shutil.copy(TEMPLATE_DB, target)
+    apply_migration(target, backup=False)
+
+    with sqlite3.connect(target) as conn:
+        conn.execute(
+            "UPDATE logTab SET event_type = 'Phase Event', process_time = 1.25 "
+            "WHERE logID = (SELECT MIN(logID) FROM logTab)"
+        )
+
+    apply_migration(target, backup=False)
+    with sqlite3.connect(target) as conn:
+        row = conn.execute(
+            "SELECT event_type, process_time FROM logTab ORDER BY logID LIMIT 1"
+        ).fetchone()
+    assert row == ("Phase Event", 1.25)
+
+
+def test_a_log_round_trips(db_copy):
+    entries = [
+        {
+            "datetime": "10.09.2026 12:00:00.000",
+            "event_type": "Process",
+            "message": "Process started",
+            "process_time": 0.0,
+        },
+        {
+            "datetime": "10.09.2026 12:00:02.000",
+            "event_type": "Phase Event",
+            "message": "Batch Phase [Phase 1] started",
+            "process_time": 0.002,
+        },
+    ]
+    result = save_project(db_copy, PROJECT_WITH_PHASES, log=entries)
+    assert result["log"] == 2
+    assert all(entry["logID"] is not None for entry in entries)
+
+    loaded = load_project_log(db_copy, PROJECT_WITH_PHASES)
+    assert [entry["event_type"] for entry in loaded[-2:]] == ["Process", "Phase Event"]
+    assert loaded[-1]["message"] == "Batch Phase [Phase 1] started"
+    assert loaded[-1]["process_time"] == pytest.approx(0.002)
+
+
+def test_saving_the_same_log_twice_writes_it_once(db_copy):
+    """Counting the rows already there broke as soon as a log was reloaded."""
+    entries = [
+        {
+            "datetime": "10.09.2026 12:00:00.000",
+            "event_type": "Process",
+            "message": "Process started",
+            "process_time": 0.0,
+        }
+    ]
+    before = len(load_project_log(db_copy, PROJECT_WITH_PHASES))
+
+    assert save_project(db_copy, PROJECT_WITH_PHASES, log=entries)["log"] == 1
+    assert save_project(db_copy, PROJECT_WITH_PHASES, log=entries)["log"] == 0
+
+    entries.append(
+        {
+            "datetime": "10.09.2026 12:00:04.000",
+            "event_type": "Process",
+            "message": "Process paused",
+            "process_time": 0.004,
+        }
+    )
+    assert save_project(db_copy, PROJECT_WITH_PHASES, log=entries)["log"] == 1
+    assert len(load_project_log(db_copy, PROJECT_WITH_PHASES)) == before + 2
+
+
+def test_an_old_entry_gives_up_its_event_type_prefix(db_copy):
+    """Rows written before the column existed carry it as "[...]" in the text.
+
+    They are read, not rewritten — a schema migration must not touch stored
+    data.
+    """
+    with sqlite3.connect(db_copy) as conn:
+        conn.execute(
+            "INSERT INTO logTab (projectID, datetime, message) VALUES (?, ?, ?)",
+            (PROJECT_WITH_PHASES, "01.01.2025 08:00:00.000", "[Phase Event] Batch ended"),
+        )
+        conn.execute(
+            "INSERT INTO logTab (projectID, datetime, message) VALUES (?, ?, ?)",
+            (PROJECT_WITH_PHASES, "01.01.2025 08:00:01.000", "no prefix at all"),
+        )
+
+    loaded = load_project_log(db_copy, PROJECT_WITH_PHASES)
+    prefixed, plain = loaded[-2], loaded[-1]
+    assert (prefixed["event_type"], prefixed["message"]) == ("Phase Event", "Batch ended")
+    assert (plain["event_type"], plain["message"]) == ("Log", "no prefix at all")
+
+    with sqlite3.connect(db_copy) as conn:
+        stored = conn.execute(
+            "SELECT message FROM logTab WHERE logID = ?", (prefixed["logID"],)
+        ).fetchone()[0]
+    assert stored == "[Phase Event] Batch ended", "the stored text was rewritten"

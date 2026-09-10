@@ -632,3 +632,69 @@ def test_saving_reports_back(window):
     assert "Saved" in window.statusBar().currentMessage()
     window._reset_save_button()
     assert window.save_button.text() == "Save"
+
+
+# ------------------------------------------------------ log persistence --
+
+
+def test_a_reopened_project_shows_the_log_of_the_run_so_far(window, db):
+    """Point 8: the transitions and parameter changes are what one comes back
+    for, and they used to be gone."""
+    from biofermentation.control import PhaseAutomaton
+    from biofermentation.core.simulation_runner import SimulationRunner
+
+    window.note("Process started", "Process")
+    window.note("Batch Phase [Phase 1] started at t = 0.000 h.", "Phase Event")
+    window.save(announce=False)
+    window.close()
+
+    setup = load_phases(db, PROJECT)
+    state, organism = load_project_state(db, PROJECT, dt=DEFAULT_DT)
+    runner = SimulationRunner(organism, state, phases=PhaseAutomaton.from_setup(setup))
+    reopened = ControlWindow(setup, runner, db)
+    try:
+        messages = [entry.message for entry in reopened.log_view.entries]
+        assert "Process started" in messages
+        assert "Batch Phase [Phase 1] started at t = 0.000 h." in messages
+
+        restored = [entry for entry in reopened.log_view.entries if entry.restored]
+        assert restored, "nothing was marked as coming from an earlier session"
+        assert all(entry.logID is not None for entry in restored)
+
+        # Nothing of this session yet, so no rule either.
+        assert "this session" not in reopened.log_view.view.toPlainText()
+
+        reopened.note("Process resumed", "Process")
+        text = reopened.log_view.view.toPlainText()
+        assert "Process started" in text
+        assert text.index("this session") < text.index("Process resumed")
+    finally:
+        reopened.close()
+
+
+def test_saving_twice_does_not_double_the_log(window, db):
+    from biofermentation.db import load_project_log
+
+    window.note("Only once", "Process")
+    window.save(announce=False)
+    first = load_project_log(db, PROJECT)
+    window.save(announce=False)
+    second = load_project_log(db, PROJECT)
+
+    assert [entry["message"] for entry in second].count("Only once") == 1
+    # The second save still writes the entry the first one made about itself.
+    assert len(second) >= len(first)
+
+
+def test_a_restored_entry_keeps_its_event_type_and_process_time(window, db):
+    from biofermentation.db import load_project_log
+
+    window.runner._on_tick()
+    window.note("Something happened", "Phase Information")
+    window.save(announce=False)
+
+    stored = next(
+        entry for entry in load_project_log(db, PROJECT) if entry["message"] == "Something happened"
+    )
+    assert stored["event_type"] == "Phase Information"
+    assert stored["process_time"] == pytest.approx(float(window.runner.state.v.t[1]))
