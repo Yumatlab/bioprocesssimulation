@@ -175,9 +175,7 @@ class PhaseAutomaton:
             case EndCondition.TIMER:
                 # bool(): the comparison of a numpy scalar yields np.bool_,
                 # which is not `is True`. Callers should not have to know.
-                return phase.end.time is not None and bool(
-                    state.v.t[state.idx] >= phase.end.time
-                )
+                return phase.end.time is not None and bool(state.v.t[state.idx] >= phase.end.time)
             case _:
                 self._note(f"unknown end condition type {phase.end.typeID}")
                 return False

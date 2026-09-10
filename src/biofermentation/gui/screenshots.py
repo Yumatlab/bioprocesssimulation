@@ -57,16 +57,18 @@ def render(out_dir: Path, db_path: Path | None = None) -> list[Path]:
     control = _control_window(db_path)
     if control is not None:
         shoot(control, "04_control_app.png", (1290, 690))
+        control.tabs.setCurrentIndex(1)
+        control.refresh()
+        shoot(control, "05_variable_pool.png", (1290, 690))
         control.tabs.setCurrentIndex(2)
-        shoot(control, "05_process_manager.png", (1290, 690))
+        shoot(control, "06_process_manager.png", (1290, 690))
 
-        control.open_plot()
-        figure = control.figure_window
+        figure = control.open_plot()
         figure.resize(1500, 815)
         figure.show()
         app.processEvents()
         figure.refresh()
-        shoot(figure, "06_figure_app.png", (1500, 815))
+        shoot(figure, "07_figure_app.png", (1500, 815))
 
     return written
 

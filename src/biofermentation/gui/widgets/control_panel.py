@@ -44,6 +44,19 @@ class SwitchSpec:
 
 
 @dataclass
+class ParameterGroup:
+    """One captioned block inside a controller's parameter dialog.
+
+    The original spreads these over DialogBox2 to DialogBox6, one .mlapp per
+    controller. They differ only in caption and parameter list, so here they
+    are data and one dialog draws all of them.
+    """
+
+    title: str
+    parameters: list[tuple[str, str]] = field(default_factory=list)
+
+
+@dataclass
 class PanelSpec:
     """A controller panel, as the Control Options tab shows it."""
 
@@ -53,6 +66,10 @@ class PanelSpec:
     fields: list[FieldSpec] = field(default_factory=list)
     switches: list[SwitchSpec] = field(default_factory=list)
     has_parameters_button: bool = True
+    #: Contents of the "Parameters" dialog. Empty means the button is dead.
+    parameter_groups: list[ParameterGroup] = field(default_factory=list)
+    #: Per reservoir instead of once, as the feed gains are.
+    parameter_groups_per_reservoir: list[ParameterGroup] = field(default_factory=list)
 
 
 class ControlPanel(QGroupBox):

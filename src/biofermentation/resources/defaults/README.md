@@ -17,8 +17,8 @@ Anwenderdaten, keine Defaults.
 ```python
 from biofermentation.db.seed import export_defaults, load_defaults
 
-load_defaults("SimulationAppDB.db")          # CSV -> DB, Reihenfolge FK-sicher
-export_defaults("SimulationAppDB.db")        # DB -> CSV, nach Pflege der Werte
+load_defaults("SimulationAppDB.db")  # CSV -> DB, Reihenfolge FK-sicher
+export_defaults("SimulationAppDB.db")  # DB -> CSV, nach Pflege der Werte
 ```
 
 `load_defaults` verweigert den Dienst, solange Projekte in der Datenbank

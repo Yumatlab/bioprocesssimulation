@@ -114,6 +114,18 @@ def load_phases(db_path: Path | str, project_id: int) -> ProjectSetup:
                   JOIN variableTab v ON v.variableID = pv.variableID
                 """,
             ),
+            variable=_rows(
+                conn,
+                """
+                SELECT v.variableID, v.name, v.shorttex, v.longtex, v.unit,
+                       v.tex_unit, v.description, h.upload_rate
+                  FROM variableTab v
+                  JOIN variable_handlingTab h ON h.variableID = v.variableID
+                 WHERE h.organismID = ? AND h.visible = 1
+                 ORDER BY v.variableID
+                """,
+                (info.organismID,),
+            ),
             process_operator=_rows(conn, "SELECT * FROM process_operatorTab"),
             start_conditiontype=_rows(
                 conn, "SELECT * FROM process_conditiontypeTab WHERE start_end = 1"
@@ -209,6 +221,30 @@ def load_phases(db_path: Path | str, project_id: int) -> ProjectSetup:
         lookups=lookups,
         next_process_id=next_process_id,
     )
+
+
+def load_model_defaults(db_path: Path | str, organism_id: int | None) -> dict[str, float]:
+    """default_modelTab of one organism, keyed by parameter name.
+
+    Used to put a parameter back where it started. Where the table has more
+    than one row for a name — it does for three Pichia parameters, see
+    CLAUDE.md — the last one wins, as MATLAB's loadPhases loop does.
+    """
+    if organism_id is None:
+        return {}
+    with get_connection(db_path, readonly=True) as conn:
+        rows = _rows(
+            conn,
+            """
+            SELECT p.name, d.value
+              FROM default_modelTab d
+              JOIN parameterTab p ON p.parameterID = d.parameterID
+             WHERE d.organismID = ?
+             ORDER BY d.default_modelparameterID
+            """,
+            (organism_id,),
+        )
+    return {row["name"]: _number(row["value"]) for row in rows if _number(row["value"]) is not None}
 
 
 def load_project_variables(db_path: Path | str, project_id: int) -> VariableSeries:

@@ -60,7 +60,14 @@ def tex_to_html(text: str | None) -> str:
         tag = "sub" if match.group(1) == "_" else "sup"
         return f"<{tag}>{match.group(2)}</{tag}>"
 
-    rendered = _GROUP.sub(script, rendered)
+    # Repeatedly, because _GROUP only matches a group with no braces inside
+    # it. \tau_{pO_{2}} resolves from the inside out; one pass would leave
+    # the outer braces standing in the label.
+    for _ in range(8):
+        replaced = _GROUP.sub(script, rendered)
+        if replaced == rendered:
+            break
+        rendered = replaced
     return _SINGLE.sub(script, rendered)
 
 

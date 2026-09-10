@@ -87,7 +87,11 @@ biofermentation_sim/
 │   │   ├── escherichia_coli/
 │   │   └── pichia_pastoris/
 │   ├── control/                  Phasenautomat, Regler (Phase 3)
-│   ├── gui/{windows,widgets,dialogs}/   (Phasen 4-6)
+│   ├── gui/
+│   │   ├── windows/   StartingScreen, SelectProject, CreateProject,
+│   │   │              ControlApp, FigureApp, DataTable
+│   │   ├── widgets/   Regler-Panels, Phasenraster, Plot, Variable Pool, Log
+│   │   └── dialogs/   Phasen-, Parameter-, Plot- und Exporteditoren
 │   └── resources/SimulationAppDB_template.db
 ├── tests/
 │   ├── reference_data/           MATLAB-Referenzläufe + Exportanleitung
@@ -198,6 +202,33 @@ MATLAB-Projektordner.
 | 6 | Plot-Engine | **abgeschlossen** |
 | 7 | Verteilung Windows/macOS | **abgeschlossen** |
 | 8 | Dokumentation | offen |
+| — | UX-Durchgang nach dem ersten Anwendertest | **abgeschlossen**, 18 Punkte |
+
+### UX-Durchgang — was daraus als Regel bleibt
+
+Aus dem ersten Anwendertest kamen 18 Punkte, alle umgesetzt. Drei Erkenntnisse
+gelten über den Anlass hinaus:
+
+1. **`categoryTab.reading_rate` entscheidet, was während eines Laufs
+   editierbar ist** — `cyclic` (97 Parameter: Sollwerte, Modi, Flags,
+   Reglerverstärkungen, Feed Control), `once` (219: Anfangswerte wie `cS1L0`,
+   Kesselgeometrie, Wachstumskinetik) und `invisible` (4, gar nicht
+   angezeigt). Vor dem ersten Schritt ist alles Sichtbare editierbar, danach
+   nur noch `cyclic`. **Dafür braucht die Datenbank keine neue Spalte.**
+2. **Eine gestylte `QComboBox` verliert unter macOS das native Rendering**,
+   und damit auch die Markierung der ausgewählten Zeile im Popup. Wer
+   `QComboBox` in der QSS anfasst, muss `QComboBox QAbstractItemView` und
+   dessen `selection-background-color` mitliefern.
+3. **`isVisible()` ist keine Zustandsabfrage.** Ein Widget in einem nicht
+   angezeigten Dialog meldet `False`, egal wie es gesetzt wurde. Für "ist
+   dieses Feld gerade gemeint?" gilt `isVisibleTo(parent)` — oder besser die
+   Bedingung selbst, so wie `PhaseEditor.accept()` den Phasentyp liest statt
+   den Reservoir-Dropdown zu fragen.
+
+**Abweichung vom Original, bewusst:** Der Variable Pool zeigt `FT1` als
+Säurepumpe und `FT2` als Laugenpumpe (so steht es in
+`variableTab.description`). Die MATLAB-Version vertauscht die beiden in
+diesem Panel — das Feld mit der Beschriftung `F_T1` liest `v.FT2`.
 
 ### Offen aus Phase 2
 
@@ -254,17 +285,13 @@ MATLAB-Projektordner.
 
 ### Offen aus Phase 6
 
-- **Feinschliff am Plot steht aus.** Die grobe Darstellung stimmt seit
-  `0109fd9` (bündige Achsen, gleiche Teilung, kein Gitter); Kleinigkeiten
-  wurden zurückgestellt und sind noch nicht im Einzelnen benannt.
 - **Kein `TemplateManager`.** Templates lassen sich laden, ändern und
-  speichern, aber nicht anlegen, kopieren oder löschen. Farbe und Linienstil
-  sind über die Oberfläche nicht wählbar — `QColorDialog` und ein Dropdown
-  für `plot_linestyleTab` fehlen.
-- **Kein Export.** Das Menü `Export` der FigureApp ist nicht übersetzt.
+  speichern, aber nicht anlegen, kopieren oder löschen
+  (`FigureAppTemplateManager.mlapp`).
 - **Keine vertikalen Phasenmarkierungen.** Die MATLAB-Version zeichnet die
   Phasengrenzen als senkrechte Linien (`graphvlinewidth`); dafür gibt es in
-  pyqtgraph `InfiniteLine`.
+  pyqtgraph `InfiniteLine`. `graphvlinewidth` ist im Settings-Dialog
+  einstellbar, wird aber noch von nichts gelesen.
 
 ### Offen aus Phase 5
 
@@ -273,13 +300,10 @@ MATLAB-Projektordner.
   sich derzeit nicht über die Oberfläche setzen, nur über die Datenbank.
 - **Der Reservoir-Wähler des Feed-Panels fehlt.** Das Panel zeigt fest R1;
   bei Pichia mit zwei Reservoirs braucht es die Auswahl aus dem Screenshot.
-- **Kein `Variable Pool`-Filter.** Die Tabelle listet alle 78 Variablen;
-  `variable_handlingTab.visible` wird noch nicht ausgewertet.
+  Der Parameterdialog des Panels kennt beide Reservoirs bereits.
 
 ### Offen aus Phase 4
 
-- **`Quick Start` verhält sich wie `Start New Project`.** In MATLAB legt es
-  ein Projekt mit Standardwerten ohne Rückfrage an.
 - **Kein Anwendungssymbol und kein Logo.** Das Logo des Originals ist ein
   Bildmittel der Hochschule und gehört nicht in diese Portierung.
 

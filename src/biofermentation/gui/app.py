@@ -137,6 +137,9 @@ class SimulationApp(QApplication):
 
         self.control_window = ControlWindow(setup, self.runner, self.db_path)
         self.control_window.closed.connect(self._control_closed)
+        # The Project menu asks; only this class knows what opens.
+        self.control_window.requested_new_project.connect(self.show_create_project)
+        self.control_window.requested_open_project.connect(self.show_select_project)
         for window in (self.starting_screen, self.select_window, self.create_window):
             if window is not None:
                 window.hide()

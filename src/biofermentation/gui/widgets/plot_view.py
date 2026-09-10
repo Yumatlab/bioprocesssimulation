@@ -93,8 +93,16 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         self.bottom_axis.linkToView(self.main_view)
         self.bottom_axis.enableAutoSIPrefix(False)
         self.bottom_axis.setStyle(tickLength=TICK_LENGTH)
+        bottom_pen = QPen(QColor("k"))
+        bottom_pen.setWidthF(template.axislinewidth)
+        bottom_pen.setCosmetic(True)
+        self.bottom_axis.setPen(bottom_pen)
+        bottom_font = QFont()
+        bottom_font.setPointSizeF(template.graphfontsize)
+        self.bottom_axis.setTickFont(bottom_font)
         self.bottom_axis.setLabel(
-            f"{template.axisxlabel} [{unit}]" if unit else template.axisxlabel
+            f"{template.axisxlabel} [{unit}]" if unit else template.axisxlabel,
+            **{"font-size": f"{template.axislabelfontsize:.0f}pt"},
         )
         self.addItem(self.bottom_axis, row=2, col=count)
 
@@ -131,8 +139,14 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
 
         axis = pg.AxisItem("left")
         axis.linkToView(view)
-        axis.setPen(QPen(color))
+        axis_pen = QPen(color)
+        axis_pen.setWidthF(self.template.axislinewidth if self.template else 1.75)
+        axis_pen.setCosmetic(True)
+        axis.setPen(axis_pen)
         axis.setTextPen(QPen(color))
+        tick_font = QFont()
+        tick_font.setPointSizeF(self.template.graphfontsize if self.template else 12.0)
+        axis.setTickFont(tick_font)
         # No "(x0.001)" over the axis; the original prints the numbers as
         # they are, and the unit is already in the caption.
         axis.enableAutoSIPrefix(False)
@@ -141,7 +155,11 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         axis.setStyle(tickLength=TICK_LENGTH)
         caption = tex_to_html(variable.label())
         rendered_unit = tex_to_html(variable.tex_unit) if variable.tex_unit else ""
-        axis.setLabel(f"{caption} [{rendered_unit}]" if rendered_unit else caption)
+        size = f"{self.template.axislabelfontsize:.0f}pt" if self.template else "12pt"
+        axis.setLabel(
+            f"{caption} [{rendered_unit}]" if rendered_unit else caption,
+            **{"font-size": size},
+        )
         self.addItem(axis, row=1, col=column)
 
         curve = pg.PlotDataItem([], [], pen=pen)

@@ -11,21 +11,31 @@ its own — the same rule the control window keeps to.
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QCheckBox,
+    QDialog,
     QDoubleSpinBox,
+    QFileDialog,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
-from ...db.plots import PlotTemplate, load_plot_template, save_plot_template
+from ...db.plots import (
+    PlotTemplate,
+    list_plot_templates,
+    load_plot_styles,
+    load_plot_template,
+    save_plot_template,
+)
 from ..widgets.plot_view import MultiAxisPlot
 from ..widgets.tex import tex_to_html
 
@@ -41,27 +51,77 @@ class FigureWindow(QMainWindow):
         runner,
         db_path: Path | str,
         parent: QWidget | None = None,
+        control=None,
     ):
         super().__init__(parent)
         self.template = template
         self.runner = runner
         self.db_path = Path(db_path)
+        self.control = control
         self.auto_update = True
 
-        self.setWindowTitle("Figure")
+        self.setWindowTitle(f"Figure - {template.name}")
         self.resize(1500, 815)
 
         central = QWidget()
         self.setCentralWidget(central)
         layout = QHBoxLayout(central)
-        layout.addWidget(self._build_limits(), 0)
+        self.limits_panel = self._build_limits()
+        self.configuration_panel = self._build_configuration()
+        layout.addWidget(self.limits_panel, 0)
         layout.addWidget(self._build_plot(), 1)
-        layout.addWidget(self._build_configuration(), 0)
+        layout.addWidget(self.configuration_panel, 0)
+
+        self._build_menus()
 
         if runner is not None:
             runner.block_completed.connect(self._on_block)
 
         self.apply_template()
+
+    # ------------------------------------------------------------ menus --
+
+    def _build_menus(self) -> None:
+        """Export, Template and Options, as the original's menu bar has them."""
+        bar = self.menuBar()
+        bar.setNativeMenuBar(False)
+
+        def add(menu, text, slot, shortcut: str = "") -> QAction:
+            action = QAction(text, self)
+            if shortcut:
+                action.setShortcut(shortcut)
+            action.triggered.connect(slot)
+            menu.addAction(action)
+            return action
+
+        export = bar.addMenu("Export")
+        add(export, "Save figure as image…", self.export_image, "Ctrl+Shift+S")
+        add(export, "Open data table", self.open_data_table, "Ctrl+T")
+
+        template_menu = bar.addMenu("Template")
+        add(template_menu, "Save template", self.save_template, "Ctrl+S")
+        self.load_menu = template_menu.addMenu("Load template")
+        self.load_menu.aboutToShow.connect(self._fill_load_menu)
+
+        options = bar.addMenu("Options")
+        add(options, "Variable editor…", self.open_variable_editor, "Ctrl+Shift+V")
+        add(options, "Plot settings…", self.open_settings, "Ctrl+,")
+        options.addSeparator()
+
+        self.limits_action = QAction("Show variable limits", self, checkable=True)
+        self.limits_action.setChecked(True)
+        self.limits_action.toggled.connect(self.limits_panel.setVisible)
+        options.addAction(self.limits_action)
+
+        self.configuration_action = QAction("Show plot configuration", self, checkable=True)
+        self.configuration_action.setChecked(True)
+        self.configuration_action.toggled.connect(self.configuration_panel.setVisible)
+        options.addAction(self.configuration_action)
+
+        self.fullscreen_action = QAction("Plot only", self, checkable=True)
+        self.fullscreen_action.setShortcut(QKeySequence("F11"))
+        self.fullscreen_action.toggled.connect(self.set_plot_only)
+        options.addAction(self.fullscreen_action)
 
     # ------------------------------------------------------------ build --
 
@@ -110,6 +170,28 @@ class FigureWindow(QMainWindow):
         layout.addWidget(area)
 
         self.checkboxes: dict[str, QCheckBox] = {}
+        self._rebuild_checkboxes()
+
+        self.auto_button = QPushButton("Auto Update")
+        self.auto_button.setCheckable(True)
+        self.auto_button.setChecked(True)
+        self.auto_button.toggled.connect(self._auto_update_changed)
+        layout.addWidget(self.auto_button)
+
+        self.save_button = QPushButton("Save Template")
+        self.save_button.clicked.connect(self.save_template)
+        layout.addWidget(self.save_button)
+        return box
+
+    def _rebuild_checkboxes(self) -> None:
+        """One row per variable. Rebuilt when the template changes underneath."""
+        while self.checkbox_layout.count():
+            item = self.checkbox_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+        self.checkboxes.clear()
+
         for variable in sorted(self.template.variables, key=lambda item: item.variableID):
             checkbox = QCheckBox()
             checkbox.setText("")
@@ -132,17 +214,6 @@ class FigureWindow(QMainWindow):
             self.checkbox_layout.addWidget(row)
         self.checkbox_layout.addStretch()
 
-        self.auto_button = QPushButton("Auto Update")
-        self.auto_button.setCheckable(True)
-        self.auto_button.setChecked(True)
-        self.auto_button.toggled.connect(self._auto_update_changed)
-        layout.addWidget(self.auto_button)
-
-        self.save_button = QPushButton("Save Template")
-        self.save_button.clicked.connect(self.save_template)
-        layout.addWidget(self.save_button)
-        return box
-
     def _spin(self, value: float) -> QDoubleSpinBox:
         box = QDoubleSpinBox()
         box.setDecimals(3)
@@ -156,6 +227,13 @@ class FigureWindow(QMainWindow):
     def apply_template(self) -> None:
         """Rebuild plot and limit rows from the template."""
         self.plot.set_template(self.template)
+        for box, value in (
+            (self.tstart_box, self.template.tstart),
+            (self.tend_box, self.template.tend),
+        ):
+            box.blockSignals(True)
+            box.setValue(float(value))
+            box.blockSignals(False)
         self._rebuild_axis_rows()
         self.refresh()
 
@@ -266,6 +344,65 @@ class FigureWindow(QMainWindow):
         self.template.tend = self.tend_box.value()
         self.plot.set_x_range(self.template.tstart, self.template.tend)
 
+    def set_plot_only(self, on: bool) -> None:
+        """Hide both side panels so the plot has the window (point 15)."""
+        self.limits_action.setChecked(not on)
+        self.configuration_action.setChecked(not on)
+        self.limits_panel.setVisible(not on)
+        self.configuration_panel.setVisible(not on)
+
+    def open_variable_editor(self) -> None:
+        """Colour, line style, decimals and limits of every variable (point 16)."""
+        from ..dialogs.plot_settings import VariableEditor
+
+        dialog = VariableEditor(self.template, load_plot_styles(self.db_path), parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._rebuild_checkboxes()
+            self.apply_template()
+
+    def open_settings(self) -> None:
+        """Title, graph, axes and flag settings of the template (point 17)."""
+        from ..dialogs.plot_settings import PlotSettingsDialog
+
+        dialog = PlotSettingsDialog(self.template, parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.setWindowTitle(f"Figure - {self.template.name}")
+            self.apply_template()
+
+    def open_data_table(self) -> None:
+        if self.control is not None:
+            self.control.open_data_table()
+
+    def export_image(self) -> None:
+        """The plot as it stands, as a picture."""
+        target, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save figure",
+            str(Path.home() / f"{self.template.name or 'figure'}.png"),
+            "PNG (*.png);;JPEG (*.jpg)",
+        )
+        if not target:
+            return
+        if not self.plot.grab().save(target):
+            QMessageBox.warning(self, "Export failed", f"Could not write {target}")
+            return
+        QMessageBox.information(self, "Export", f"Written to {target}")
+
+    def _fill_load_menu(self) -> None:
+        self.load_menu.clear()
+        for entry in list_plot_templates(self.db_path):
+            action = self.load_menu.addAction(entry["name"] or "unnamed")
+            action.setEnabled(entry["templateID"] != self.template.templateID)
+            action.triggered.connect(
+                lambda _=False, tid=entry["templateID"]: self.load_template(tid)
+            )
+
+    def load_template(self, template_id: int) -> None:
+        self.template = load_plot_template(self.db_path, template_id)
+        self.setWindowTitle(f"Figure - {self.template.name}")
+        self._rebuild_checkboxes()
+        self.apply_template()
+
     def save_template(self) -> None:
         save_plot_template(self.db_path, self.template)
 
@@ -274,6 +411,6 @@ class FigureWindow(QMainWindow):
         super().closeEvent(event)
 
 
-def open_figure(db_path: Path | str, runner, template_id: int = 1) -> FigureWindow:
+def open_figure(db_path: Path | str, runner, template_id: int = 1, control=None) -> FigureWindow:
     """The Open Plot button of the control window."""
-    return FigureWindow(load_plot_template(db_path, template_id), runner, db_path)
+    return FigureWindow(load_plot_template(db_path, template_id), runner, db_path, control=control)

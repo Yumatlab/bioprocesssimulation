@@ -81,6 +81,10 @@ class Lookups:
     process_status: list[dict]
     process_type: list[dict]
     process_variable: list[dict]
+    #: Every variable the organism displays — variable_handlingTab, visible = 1.
+    #: MATLAB calls this v_prop and builds the variable pool and the data
+    #: table from it.
+    variable: list[dict]
     process_operator: list[dict]
     start_conditiontype: list[dict]
     end_conditiontype: list[dict]

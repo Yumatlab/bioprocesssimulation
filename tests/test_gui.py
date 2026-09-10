@@ -334,7 +334,7 @@ def test_the_windows_render_to_png(tmp_path, qapp):
     from biofermentation.gui.screenshots import render
 
     written = render(tmp_path)
-    assert len(written) == 6
+    assert len(written) == 7
     for path in written:
         assert path.is_file() and path.stat().st_size > 2000
 

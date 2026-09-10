@@ -38,6 +38,7 @@ class PlotVariable:
     limit_type: int = 1
     ymin: float = 0.0
     ymax: float = 10.0
+    decimalID: int = 3
     decimal: str = "%.2f"
     colorID: int = 1
     color: tuple[int, int, int] = (0, 0, 0)
@@ -120,6 +121,30 @@ def list_plot_templates(db_path: Path | str) -> list[dict]:
         ]
 
 
+def load_plot_styles(db_path: Path | str) -> dict[str, list[dict]]:
+    """The three style lookup tables the variable editor offers.
+
+    colors carry an extra "rgb" key in Qt's 0..255, because plot_colorTab
+    stores 0..1 floats and every caller would otherwise convert them again.
+    """
+    with get_connection(db_path, readonly=True) as conn:
+        colors = [
+            {**dict(row), "rgb": _rgb(row["R"], row["G"], row["B"])}
+            for row in conn.execute("SELECT * FROM plot_colorTab ORDER BY colorID")
+        ]
+        return {
+            "colors": colors,
+            "linestyles": [
+                dict(row)
+                for row in conn.execute("SELECT * FROM plot_linestyleTab ORDER BY linestyleID")
+            ],
+            "decimals": [
+                dict(row)
+                for row in conn.execute("SELECT * FROM plot_decimalTab ORDER BY decimalID")
+            ],
+        }
+
+
 def load_plot_template(db_path: Path | str, template_id: int) -> PlotTemplate:
     """One template and every variable it knows about, selected or not."""
     with get_connection(db_path, readonly=True) as conn:
@@ -146,6 +171,7 @@ def load_plot_template(db_path: Path | str, template_id: int) -> PlotTemplate:
                 limit_type=item["limit_type"],
                 ymin=item["ymin"],
                 ymax=item["ymax"],
+                decimalID=item["decimalID"] or 3,
                 decimal=item["decimal_symbol"] or "%.2f",
                 colorID=item["colorID"],
                 color=_rgb(item["R"], item["G"], item["B"]),
@@ -156,7 +182,7 @@ def load_plot_template(db_path: Path | str, template_id: int) -> PlotTemplate:
             for item in conn.execute(
                 """
                 SELECT pv.plot_variableID, pv.variableID, pv.selected_axis, pv.limit_type,
-                       pv.ymin, pv.ymax, pv.colorID, pv.linestyleID,
+                       pv.ymin, pv.ymax, pv.colorID, pv.linestyleID, pv.decimalID,
                        v.name, v.shorttex, v.longtex, v.tex_unit,
                        d.decimal_symbol, c.R, c.G, c.B, l.linestyle_symbol
                   FROM plot_variableTab pv
@@ -182,9 +208,11 @@ def save_plot_template(db_path: Path | str, template: PlotTemplate) -> int:
             """
             UPDATE plot_templateTab
                SET name = ?, description = ?, plottitle = ?, titlebool = ?,
-                   graphlinewidth = ?, graphfontsize = ?, axisxlabel = ?, axisxunit = ?,
-                   axisxtick = ?, axisytick = ?, axislabelfontsize = ?,
-                   flaglength = ?, flagangle = ?, flagfontsize = ?,
+                   graphlinewidth = ?, graphvlinewidth = ?, graphfontsize = ?,
+                   graphtitlefontsize = ?, axisxlabel = ?, axisxunit = ?,
+                   axisxtick = ?, axisytick = ?, axisyoffset = ?,
+                   axislabelfontsize = ?, axislinewidth = ?,
+                   flaglength = ?, flagangle = ?, flaglinewidth = ?, flagfontsize = ?,
                    refreshrate = ?, tstart = ?, tend = ?, last_changed = ?
              WHERE templateID = ?
             """,
@@ -194,14 +222,19 @@ def save_plot_template(db_path: Path | str, template: PlotTemplate) -> int:
                 template.plottitle,
                 template.titlebool,
                 template.graphlinewidth,
+                template.graphvlinewidth,
                 template.graphfontsize,
+                template.graphtitlefontsize,
                 template.axisxlabel,
                 template.axisxunit,
                 template.axisxtick,
                 template.axisytick,
+                template.axisyoffset,
                 template.axislabelfontsize,
+                template.axislinewidth,
                 template.flaglength,
                 template.flagangle,
+                template.flaglinewidth,
                 template.flagfontsize,
                 template.refreshrate,
                 template.tstart,
@@ -214,7 +247,7 @@ def save_plot_template(db_path: Path | str, template: PlotTemplate) -> int:
             """
             UPDATE plot_variableTab
                SET selected_axis = ?, limit_type = ?, ymin = ?, ymax = ?,
-                   colorID = ?, linestyleID = ?
+                   colorID = ?, linestyleID = ?, decimalID = ?
              WHERE plot_variableID = ?
             """,
             [
@@ -225,6 +258,7 @@ def save_plot_template(db_path: Path | str, template: PlotTemplate) -> int:
                     variable.ymax,
                     variable.colorID,
                     variable.linestyleID,
+                    variable.decimalID,
                     variable.plot_variableID,
                 )
                 for variable in template.variables
@@ -236,9 +270,7 @@ def save_plot_template(db_path: Path | str, template: PlotTemplate) -> int:
 
 def _rgb(r, g, b) -> tuple[int, int, int]:
     """plot_colorTab stores 0..1 floats; Qt wants 0..255."""
-    return tuple(
-        max(0, min(255, round((component or 0.0) * 255))) for component in (r, g, b)
-    )
+    return tuple(max(0, min(255, round((component or 0.0) * 255))) for component in (r, g, b))
 
 
 def auto_limits(values, ymin: float, ymax: float) -> tuple[float, float]:
@@ -260,11 +292,7 @@ def auto_limits(values, ymin: float, ymax: float) -> tuple[float, float]:
 
     # Only stretch by half once the data has dropped below a tenth of the
     # current maximum, so the axis does not twitch on every step.
-    upper = (
-        _round_to_nearest(highest * 1.5)
-        if highest < 0.1 * ymax
-        else _round_to_nearest(highest)
-    )
+    upper = _round_to_nearest(highest * 1.5) if highest < 0.1 * ymax else _round_to_nearest(highest)
 
     if lowest >= 0:
         lower = 0.0

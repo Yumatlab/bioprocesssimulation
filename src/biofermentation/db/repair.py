@@ -145,8 +145,7 @@ def repair(db_path: Path | str, *, dry_run: bool = True) -> dict:
             [(row["default_modelparameterID"],) for row in strays],
         )
         conn.executemany(
-            "UPDATE project_parameterTab SET value = ? "
-            " WHERE projectID = ? AND parameterID = ?",
+            "UPDATE project_parameterTab SET value = ?  WHERE projectID = ? AND parameterID = ?",
             [(row["correct"], row["projectID"], row["parameterID"]) for row in corrupted],
         )
         violations = conn.execute("PRAGMA foreign_key_check").fetchall()

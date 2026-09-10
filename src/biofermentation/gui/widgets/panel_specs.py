@@ -7,7 +7,20 @@ data rather than as five constructors makes that check possible at all.
 The mode numbers are the ones parameter_controlmodesTab stores.
 """
 
-from .control_panel import FieldSpec, PanelSpec, SwitchSpec
+from .control_panel import FieldSpec, PanelSpec, ParameterGroup, SwitchSpec
+
+
+def _pid(prefix: str, suffix: str) -> ParameterGroup:
+    """The K_P / K_I / K_D triple of one PID loop."""
+    return ParameterGroup(
+        prefix,
+        [
+            (f"KP_{suffix}", "K_{P}"),
+            (f"KI_{suffix}", "K_{I}"),
+            (f"KD_{suffix}", "K_{D}"),
+        ],
+    )
+
 
 PH_PANEL = PanelSpec(
     title="pH-Control",
@@ -19,6 +32,14 @@ PH_PANEL = PanelSpec(
     switches=[
         SwitchSpec("f_alkali", "Alkali", modes=(0,)),
         SwitchSpec("f_acid", "Acid", modes=(0,)),
+    ],
+    parameter_groups=[
+        ParameterGroup("Master Controller", [("KP_pH", "K_{P,Master}")]),
+        ParameterGroup(
+            "Slave Controller",
+            [("KP_pH2a", "K_{P,Slave acid}"), ("KP_pH2b", "K_{P,Slave base}")],
+        ),
+        ParameterGroup("Sensor", [("taupHL", "\\tau_{pH_{L}} [s]")]),
     ],
 )
 
@@ -37,6 +58,20 @@ TEMPERATURE_PANEL = PanelSpec(
     switches=[
         SwitchSpec("f_cooling", "Cooling", modes=(0,)),
         SwitchSpec("f_heating", "Heating", modes=(0,)),
+    ],
+    parameter_groups=[
+        ParameterGroup(
+            "Master Controller",
+            [("KP_temp1", "K_{P,Master}"), ("KI_temp1", "K_{I,Master}")],
+        ),
+        ParameterGroup(
+            "Slave Controller",
+            [
+                ("KP_temp2h", "K_{P,Slave heating}"),
+                ("KP_temp2c", "K_{P,Slave cooling}"),
+            ],
+        ),
+        ParameterGroup("Sensor", [("tauthetaL", "\\tau_{\\vartheta_{L}} [s]")]),
     ],
 )
 
@@ -58,6 +93,13 @@ PO2_PANEL = PanelSpec(
         FieldSpec("FnAIRw", "F_{nAIRw} [l/min]", decimals=1, modes=(0, 1, 4)),
         FieldSpec("FnO2w", "F_{nO2w} [l/min]", decimals=1, modes=(0, 1, 4)),
     ],
+    parameter_groups=[
+        _pid("Agitation", "agi"),
+        _pid("Gasmix", "gasmix"),
+        _pid("Aeration", "aeration"),
+        _pid("Feed", "feedpO2"),
+        ParameterGroup("Sensor", [("taupO2", "\\tau_{pO_{2}} [s]")]),
+    ],
 )
 
 LIQUID_WEIGHT_PANEL = PanelSpec(
@@ -69,6 +111,7 @@ LIQUID_WEIGHT_PANEL = PanelSpec(
         FieldSpec("FHrelw", "F_{Hw} [%]", decimals=1, modes=(0,)),
     ],
     switches=[SwitchSpec("f_harvest", "Harvest", modes=(0,))],
+    parameter_groups=[_pid("Liquid Weight Controller", "LW")],
 )
 
 FEED_PANEL = PanelSpec(
@@ -80,6 +123,8 @@ FEED_PANEL = PanelSpec(
         FieldSpec("FR1max", "F_{R1max} [l/h]", decimals=4),
     ],
     switches=[SwitchSpec("f_feed", "Feed", lamp=True)],
+    # One block per reservoir; the project says how many there are.
+    parameter_groups_per_reservoir=[_pid("Reservoir {n}", "feedR{n}")],
 )
 
 CONTROL_PANELS = (

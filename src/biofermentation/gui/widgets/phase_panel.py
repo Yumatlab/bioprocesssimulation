@@ -159,9 +159,7 @@ class PhasePanel(QGroupBox):
         finished = phase.statusID in (PhaseStatus.ACTIVE, PhaseStatus.COMPLETED)
         self.delete_button.setEnabled(not finished)
         self.delete_button.setToolTip(
-            "A running or completed phase cannot be deleted"
-            if finished
-            else "Delete this phase"
+            "A running or completed phase cannot be deleted" if finished else "Delete this phase"
         )
 
         if phase.statusID == PhaseStatus.PENDING and phase.start.time is not None:

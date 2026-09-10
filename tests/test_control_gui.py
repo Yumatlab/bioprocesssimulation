@@ -6,9 +6,11 @@ through the runner's guard, and that the phase grid says what the phases
 actually are.
 """
 
+import re
 import shutil
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 pytest.importorskip("PySide6")
@@ -296,19 +298,61 @@ def test_saving_resumes_a_running_simulation(window):
 def test_the_log_tab_collects_what_happened(window):
     window.run_button.click()
     window.run_button.click()
-    assert "Process started" in window.log_view.toPlainText()
-    assert "Process paused" in window.log_view.toPlainText()
+    text = window.log_view.view.toPlainText()
+    assert "Process started" in text
+    assert "Process paused" in text
+
+
+def test_a_log_entry_carries_a_title_a_clock_and_the_process_time(window):
+    """Point 8: the log reads like a terminal, not like a list of sentences."""
+    window.note("Something happened", "Phase Event")
+    entry = window.log_view.entries[-1]
+    assert entry.event_type == "Phase Event"
+    assert entry.message == "Something happened"
+    assert entry.process_time == pytest.approx(float(window.runner.state.v.t[0]))
+    # dd.mm.yyyy hh:mm:ss.mmm
+    assert re.fullmatch(r"\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}:\d{2}\.\d{3}", entry.datetime)
+
+    line = window.log_view.view.toPlainText().splitlines()[-1]
+    assert "Phase Event" in line
+    assert "Something happened" in line
+    assert entry.datetime in line
+
+
+def test_the_log_can_hide_parameter_updates(window):
+    window.note("Parameter KP_pH has been changed", "Parameter Value Change")
+    window.note("Process paused", "Process")
+    assert "KP_pH" in window.log_view.view.toPlainText()
+
+    window.log_view.parameter_checkbox.setChecked(False)
+    text = window.log_view.view.toPlainText()
+    assert "KP_pH" not in text
+    assert "Process paused" in text
 
 
 def test_the_variable_pool_lists_the_current_values(window):
     window.runner._on_tick()
     window.tabs.setCurrentIndex(1)
     window.refresh()
-    assert window.variable_table.rowCount() > 50
-    names = {
-        window.variable_table.item(row, 0).text() for row in range(window.variable_table.rowCount())
-    }
-    assert {"cXL", "pO2", "thetaL"} <= names
+
+    pool = window.variable_pool
+    names = {pool.table.item(row, 0).text() for row in range(pool.table.rowCount())}
+    assert names == set(pool.checked())
+    assert pool.table.rowCount() == 10, "ten variables are ticked by default"
+
+    # The pump rates and volumes read straight out of v.
+    assert pool.readouts["VL"].text() != "—"
+    assert "FR3" not in pool.readouts, "project 519 has fewer reservoirs than that"
+
+
+def test_the_variable_pool_shows_a_trend_arrow(window):
+    from biofermentation.gui.widgets.variable_pool import FALLING, FLAT, RISING, trend_arrow
+
+    time = np.arange(10, dtype=float)
+    assert trend_arrow(time, time * 2) == RISING
+    assert trend_arrow(time, -time * 2) == FALLING
+    assert trend_arrow(time, np.full(10, 3.0)) == FLAT
+    assert trend_arrow(time, np.full(10, np.nan)) == FLAT
 
 
 # ------------------------------------------------------ the editor --

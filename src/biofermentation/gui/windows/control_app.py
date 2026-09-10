@@ -16,20 +16,17 @@ Two rules the window keeps to:
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QMainWindow,
-    QPlainTextEdit,
     QPushButton,
     QScrollArea,
     QSpinBox,
-    QTableWidget,
-    QTableWidgetItem,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -40,12 +37,16 @@ from ...core.simulation_runner import SimulationRunner
 from ...db import save_project_with_backup
 from ...db.models import ProjectSetup
 from ..widgets import CONTROL_PANELS, ControlPanel, PhaseGrid, StatusLamp
+from ..widgets.log_view import LogView
+from ..widgets.variable_pool import VariablePool
 
 
 class ControlWindow(QMainWindow):
     """The running process: setpoints on the left, the run controls on the right."""
 
     closed = Signal()
+    requested_new_project = Signal()
+    requested_open_project = Signal()
 
     def __init__(
         self,
@@ -58,8 +59,8 @@ class ControlWindow(QMainWindow):
         self.setup = setup
         self.runner = runner
         self.db_path = Path(db_path)
-        self.log_lines: list[str] = []
-        self.figure_window = None
+        self.figure_windows: list = []
+        self.data_tables: list = []
 
         info = setup.info
         self.setWindowTitle(
@@ -71,6 +72,8 @@ class ControlWindow(QMainWindow):
         self.setCentralWidget(central)
         outer = QHBoxLayout(central)
 
+        self._build_menus()
+
         self.tabs = QTabWidget()
         outer.addWidget(self.tabs, 1)
         outer.addWidget(self._build_run_column())
@@ -80,17 +83,85 @@ class ControlWindow(QMainWindow):
         self.tabs.addTab(self._build_variable_pool(), "Variable Pool")
         self.tabs.addTab(self._build_process_manager(), "Process Manager")
         self.tabs.addTab(self._build_log(), "Log")
-        self.tabs.addTab(self._build_information(), "Information")
+        self.information_tab = self._build_information()
+        self.tabs.addTab(self.information_tab, "Information")
+        # Connected only now: adding a tab fires currentChanged, and refresh
+        # reads widgets the later tabs have not built yet.
+        self.tabs.currentChanged.connect(lambda _: self.refresh())
 
         runner.block_completed.connect(self.refresh)
-        runner.phase_started.connect(lambda _: self.refresh_phases())
-        runner.phase_ended.connect(lambda _: self.refresh_phases())
+        runner.phase_started.connect(self._phase_started)
+        runner.phase_ended.connect(self._phase_ended)
         runner.stopped.connect(self._on_stopped)
         runner.failed.connect(self._on_failed)
 
         self.load_from_state()
 
     # ------------------------------------------------------------ build --
+
+    def _build_menus(self) -> None:
+        """The menu bar of the original: Project, Export, Settings.
+
+        Quick start is gone — it did the same as Start new project (point 2),
+        so the submenu it lived in collapsed into one entry.
+        """
+        bar = self.menuBar()
+        # macOS lifts the menu bar out of the window by default, which puts
+        # it a screen away from the app it belongs to.
+        bar.setNativeMenuBar(False)
+        self.actions_by_name: dict[str, QAction] = {}
+
+        def add(menu, text, slot, shortcut: str = "", tip: str = "") -> QAction:
+            action = QAction(text, self)
+            if shortcut:
+                action.setShortcut(shortcut)
+            if tip:
+                action.setStatusTip(tip)
+            action.triggered.connect(slot)
+            menu.addAction(action)
+            self.actions_by_name[text] = action
+            return action
+
+        project = bar.addMenu("Project")
+        add(project, "Start new project", self.start_new_project)
+        add(project, "Open project", self.open_project)
+        project.addSeparator()
+        add(project, "Parameters…", self.open_parameters, "Ctrl+P")
+        add(project, "Project information", self.show_information)
+        project.addSeparator()
+        add(project, "Save", self.save, "Ctrl+S")
+        add(project, "Save and exit", self.save_and_exit)
+        add(project, "Exit", self.close, "Ctrl+W")
+
+        export = bar.addMenu("Export")
+        add(export, "Open data table", self.open_data_table, "Ctrl+T")
+        add(export, "Export project…", self.export_project, "Ctrl+E")
+
+        plots = bar.addMenu("Plots")
+        add(plots, "Open plot", self.open_plot, "Ctrl+G")
+        self.template_menu = plots.addMenu("Open plot from template")
+        self.template_menu.aboutToShow.connect(self._fill_template_menu)
+
+        settings = bar.addMenu("Settings")
+        self.disconnect_action = add(settings, "Disconnect", self.toggle_connection)
+        add(settings, "Reset controller parameters", self.reset_controller_gains)
+
+    def _fill_template_menu(self) -> None:
+        """Filled on opening, as the original's context menu is."""
+        from ...db.plots import list_plot_templates
+
+        self.template_menu.clear()
+        try:
+            templates = list_plot_templates(self.db_path)
+        except Exception as error:  # a template table that will not read
+            self.template_menu.addAction(f"unavailable: {error}").setEnabled(False)
+            return
+        for template in templates:
+            action = self.template_menu.addAction(template["name"] or "unnamed")
+            action.setToolTip(template.get("description") or "")
+            action.triggered.connect(
+                lambda _=False, tid=template["templateID"]: self.open_plot(tid)
+            )
 
     def _build_control_options(self) -> QWidget:
         page = QWidget()
@@ -100,6 +171,7 @@ class ControlWindow(QMainWindow):
             panel = ControlPanel(spec)
             panel.setObjectName("controlPanel")
             panel.parameter_changed.connect(self._set_parameter)
+            panel.parameters_requested.connect(self.open_controller_parameters)
             self.panels[spec.title] = panel
             layout.addWidget(panel)
         return page
@@ -142,6 +214,14 @@ class ControlWindow(QMainWindow):
         self.inoculate_button.setCheckable(True)
         self.inoculate_button.clicked.connect(self.inoculate)
         layout.addWidget(self.inoculate_button)
+
+        self.parameters_button = QPushButton("Parameters…")
+        self.parameters_button.setToolTip(
+            "All parameters of the project. Before the first step everything "
+            "is editable, afterwards only what the model re-reads each cycle."
+        )
+        self.parameters_button.clicked.connect(self.open_parameters)
+        layout.addWidget(self.parameters_button)
         layout.addSpacing(20)
 
         form = QFormLayout()
@@ -172,13 +252,10 @@ class ControlWindow(QMainWindow):
         return column
 
     def _build_variable_pool(self) -> QWidget:
-        self.variable_table = QTableWidget(0, 3)
-        self.variable_table.setHorizontalHeaderLabels(["Variable", "Value", "Unit"])
-        self.variable_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.Stretch
+        self.variable_pool = VariablePool(
+            self.setup.lookups.variable, self.setup.info.reservoirs or 1
         )
-        self.variable_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        return self.variable_table
+        return self.variable_pool
 
     def _build_process_manager(self) -> QWidget:
         area = QScrollArea()
@@ -192,8 +269,7 @@ class ControlWindow(QMainWindow):
         return area
 
     def _build_log(self) -> QWidget:
-        self.log_view = QPlainTextEdit()
-        self.log_view.setReadOnly(True)
+        self.log_view = LogView()
         return self.log_view
 
     def _build_information(self) -> QWidget:
@@ -241,19 +317,12 @@ class ControlWindow(QMainWindow):
         for panel in self.panels.values():
             panel.update_actuals(state.v, index)
 
-        if self.tabs.currentIndex() == 1:
-            self._refresh_variables()
+        # Only the visible tab is redrawn, as the original's timerFcn does.
+        if self.tabs.currentWidget() is self.variable_pool:
+            self.variable_pool.refresh(state)
 
-    def _refresh_variables(self) -> None:
-        state = self.runner.state
-        units = {row["name"]: row.get("unit", "") for row in self.setup.lookups.process_variable}
-        names = sorted(name for name, series in state.v.items() if hasattr(series, "size"))
-        self.variable_table.setRowCount(len(names))
-        for row, name in enumerate(names):
-            value = float(state.v[name][state.idx])
-            self.variable_table.setItem(row, 0, QTableWidgetItem(name))
-            self.variable_table.setItem(row, 1, QTableWidgetItem(f"{value:.6g}"))
-            self.variable_table.setItem(row, 2, QTableWidgetItem(units.get(name, "")))
+        for table in list(self.data_tables):
+            table.refresh()
 
     def refresh_phases(self) -> None:
         self.phase_grid.rebuild(
@@ -328,6 +397,77 @@ class ControlWindow(QMainWindow):
             self.note("Inoculation requested")
         self.refresh()
 
+    def open_controller_parameters(self, title: str) -> None:
+        """The "Parameters" button of one controller panel (point 3)."""
+        from ..dialogs import ControllerParametersDialog
+
+        panel = self.panels[title]
+        dialog = ControllerParametersDialog(
+            panel.spec,
+            self.runner.state.p,
+            reservoirs=self.setup.info.reservoirs or 1,
+            editable=True,  # controller gains are cyclic, so always editable
+            parent=self,
+        )
+        with self.runner.editing():
+            accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        if accepted:
+            self._apply_changes(dialog.changes, f"{title} parameters")
+
+    def open_parameters(self) -> None:
+        """The whole parameter set (point 4).
+
+        What stays editable during a run is decided by categoryTab.reading_rate,
+        not by this window.
+        """
+        from ..dialogs import ParameterDialog
+
+        dialog = ParameterDialog(
+            self.setup.p_meta,
+            self.runner.state.p,
+            started=self.runner.state.idx > 0,
+            parent=self,
+        )
+        with self.runner.editing():
+            accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        if accepted:
+            self._apply_changes(dialog.changes, "Parameters")
+
+    def _apply_changes(self, changes: dict[str, float], what: str) -> None:
+        """One guarded write for a whole dialog, not one per field."""
+        if not changes:
+            self.note(f"{what}: nothing changed", "Parameter Value Change")
+            return
+        with self.runner.editing() as state:
+            for name, value in changes.items():
+                old = state.p.get(name)
+                state.p[name] = value
+                self.note(
+                    f"Parameter {name} has been changed from {old} to {value}",
+                    "Parameter Value Change",
+                )
+        for panel in self.panels.values():
+            panel.load(self.runner.state.p)
+        self.refresh()
+
+    def _phase_started(self, index: int) -> None:
+        self._log_phase(index, "started")
+
+    def _phase_ended(self, index: int) -> None:
+        self._log_phase(index, "ended")
+
+    def _log_phase(self, index: int, what: str) -> None:
+        state = self.runner.state
+        try:
+            name = self.setup.phases[index].name
+        except IndexError:  # a phase deleted between signal and slot
+            name = f"Phase {index + 1}"
+        self.note(
+            f"{name} [Phase {index + 1}] {what} at t = {float(state.v.t[state.idx]):.3f} h.",
+            "Phase Event",
+        )
+        self.refresh_phases()
+
     def force_start(self, index: int) -> None:
         """The arrow between two panels: end the current phase, start the next."""
         with self.runner.editing():
@@ -385,6 +525,49 @@ class ControlWindow(QMainWindow):
         self.note(f"Phase {phase.name!r} deleted")
         self.refresh_phases()
 
+    def start_new_project(self) -> None:
+        """Back to the launcher, which is the only place that creates one."""
+        self.requested_new_project.emit()
+
+    def open_project(self) -> None:
+        self.requested_open_project.emit()
+
+    def save_and_exit(self) -> None:
+        self.save()
+        self.close()
+
+    def show_information(self) -> None:
+        self.tabs.setCurrentWidget(self.information_tab)
+
+    def toggle_connection(self) -> None:
+        """Stop the timer without ending the session, as Disconnect does."""
+        if self.runner.running:
+            self.runner.pause()
+            self.disconnect_action.setText("Reconnect")
+            self.note("Disconnected", "Process")
+        else:
+            self.runner.start()
+            self.disconnect_action.setText("Disconnect")
+            self.note("Reconnected", "Process")
+        self.refresh()
+
+    def reset_controller_gains(self) -> None:
+        """Put every controller gain back to the model default."""
+        from ...db import load_model_defaults
+
+        defaults = load_model_defaults(self.db_path, self.setup.info.organismID)
+        gains = {
+            meta["parametername"]
+            for meta in self.setup.p_meta
+            if meta.get("categoryname") == "Controller gain"
+        }
+        changes = {
+            name: value
+            for name, value in defaults.items()
+            if name in gains and abs(value - self.runner.state.p.get(name, value)) > 1e-15
+        }
+        self._apply_changes(changes, "Controller gains reset")
+
     def save(self) -> None:
         """The one write at session end, with the backup of plan 1.3."""
         was_running = self.runner.running
@@ -400,42 +583,88 @@ class ControlWindow(QMainWindow):
             p=dict(state.p),
             series=series,
             phases=self.setup.phases,
+            log=[
+                {
+                    "datetime": entry.datetime,
+                    "message": f"[{entry.event_type}] {entry.message}",
+                }
+                for entry in self.log_view.entries
+            ],
         )
-        self.note(f"Saved: {result['times']} time points, backup at {backup.name}")
+        self.note(f"Saved: {result['times']} time points, backup at {backup.name}", "Project")
         if was_running:
             self.runner.start()
 
     # ------------------------------------------------------------- log --
 
-    def open_plot(self) -> None:
-        """The Figure App, on the same runner. One window at a time."""
+    def open_plot(self, template_id: int = 1) -> None:
+        """A Figure App on the same runner. As many as wanted (point 13).
+
+        MATLAB keeps its figure windows in a cell array and refreshes all of
+        them each tick; the same here, except that each window listens to the
+        runner itself instead of being polled.
+        """
         from .figure_app import open_figure
 
-        if self.figure_window is None:
-            self.figure_window = open_figure(self.db_path, self.runner)
-            self.figure_window.closed.connect(self._figure_closed)
-        self.figure_window.show()
-        self.figure_window.raise_()
-        self.note("Plot opened")
+        window = open_figure(self.db_path, self.runner, template_id, control=self)
+        window.closed.connect(lambda w=window: self._figure_closed(w))
+        self.figure_windows.append(window)
+        window.show()
+        window.raise_()
+        self.note(f"Plot opened ({window.template.name})")
+        return window
 
-    def _figure_closed(self) -> None:
-        self.figure_window = None
+    def _figure_closed(self, window) -> None:
+        if window in self.figure_windows:
+            self.figure_windows.remove(window)
 
-    def note(self, message: str) -> None:
-        self.log_lines.append(message)
-        self.log_view.appendPlainText(message)
+    def open_data_table(self) -> None:
+        """The Data Table window of point 18."""
+        from .data_table import DataTableWindow
+
+        window = DataTableWindow(self.setup, self.runner, parent=self)
+        window.closed.connect(lambda w=window: self._table_closed(w))
+        self.data_tables.append(window)
+        window.show()
+        window.raise_()
+        self.note("Data table opened")
+        return window
+
+    def _table_closed(self, window) -> None:
+        if window in self.data_tables:
+            self.data_tables.remove(window)
+
+    def export_project(self) -> None:
+        """Variables, parameters, phases and log to a folder (point 18)."""
+        from ..dialogs.export import ExportDialog
+
+        dialog = ExportDialog(self.setup, self.runner.state, self.log_lines, parent=self)
+        with self.runner.editing():
+            accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        if accepted and dialog.written:
+            self.note(f"Exported {len(dialog.written)} file(s) to {dialog.target}", "Project")
+
+    def note(self, message: str, event_type: str = "Process") -> None:
+        """One log entry: wall-clock time, process time, event title, message."""
+        state = self.runner.state
+        self.log_view.append(message, event_type, float(state.v.t[state.idx]))
+
+    @property
+    def log_lines(self) -> list[str]:
+        """The log as plain text, for the export and for logTab."""
+        return [entry.as_line() for entry in self.log_view.entries]
 
     def _on_stopped(self, reason: str) -> None:
-        self.note(f"Process stopped: {reason}")
+        self.note(f"Process stopped: {reason}", "Process")
         self.refresh()
 
     def _on_failed(self, message: str) -> None:
-        self.note(f"Simulation failed: {message}")
+        self.note(f"Simulation failed: {message}", "Error")
         self.refresh()
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
-        if self.figure_window is not None:
-            self.figure_window.close()
+        for window in list(self.figure_windows) + list(self.data_tables):
+            window.close()
         self.runner.pause()
         self.closed.emit()
         super().closeEvent(event)
