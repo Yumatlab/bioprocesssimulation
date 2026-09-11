@@ -19,6 +19,7 @@ from specs import (  # noqa: E402
     data_files,
     excludes,
     hidden_imports,
+    icon_file,
 )
 
 analysis = Analysis(
@@ -50,4 +51,5 @@ executable = EXE(
     # No console window behind the application.
     console=False,
     disable_windowed_traceback=False,
+    icon=icon_file(),
 )

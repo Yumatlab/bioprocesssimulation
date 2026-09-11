@@ -6,7 +6,7 @@ reproduced — it is the university's image asset, not part of this port.
 """
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QPixmap
 from PySide6.QtWidgets import (
     QLabel,
     QMenu,
@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from ...resources import app_icon_path
 
 VERSION = "3.0"  # the Python port; the MATLAB application stopped at 2.2
 
@@ -40,6 +42,13 @@ class StartingScreen(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 30, 40, 24)
         layout.setSpacing(12)
+
+        logo = QLabel()
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon = app_icon_path(128)
+        if icon.is_file():
+            logo.setPixmap(QPixmap(str(icon)))
+        layout.addWidget(logo)
 
         title = QLabel("Biofermentation\nSimulation")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)

@@ -16,7 +16,7 @@ Two rules the window keeps to:
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QPalette
+from PySide6.QtGui import QAction, QPalette, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QFormLayout,
@@ -37,6 +37,7 @@ from ...control import PhaseStatus
 from ...core.simulation_runner import SimulationRunner
 from ...db import load_project_log, save_project_with_backup
 from ...db.models import ProjectSetup
+from ...resources import app_icon_path
 from ..widgets import CONTROL_PANELS, ControlPanel, PhaseGrid, StatusLamp
 from ..widgets.log_view import LogView
 from ..widgets.variable_pool import VariablePool
@@ -367,7 +368,17 @@ class ControlWindow(QMainWindow):
         from .starting_screen import VERSION
 
         box = QGroupBox("About")
-        layout = QVBoxLayout(box)
+        outer = QHBoxLayout(box)
+
+        mark = QLabel()
+        mark.setAlignment(Qt.AlignmentFlag.AlignTop)
+        icon = app_icon_path(128)
+        if icon.is_file():
+            mark.setPixmap(QPixmap(str(icon)))
+        outer.addWidget(mark, 0)
+
+        layout = QVBoxLayout()
+        outer.addLayout(layout, 1)
 
         heading = QLabel(
             f"<b>Biofermentation Simulation</b><br>Version {VERSION} "

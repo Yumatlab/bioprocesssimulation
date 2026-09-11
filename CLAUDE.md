@@ -330,7 +330,6 @@ diesem Panel — das Feld mit der Beschriftung `F_T1` liest `v.FT2`.
   PyInstaller nicht; `build/windows.spec` ist geschrieben und geprüft, aber
   nur die CI kann ihn tatsächlich bauen. Das macOS-Bündel ist lokal gebaut
   und gestartet.
-- **Kein Anwendungssymbol.** `icon=None` in beiden Spezifikationen.
 - **Nicht signiert**, bewusst — siehe `docs/installation.md`.
 
 ### Offen aus Phase 6
@@ -339,23 +338,14 @@ diesem Panel — das Feld mit der Beschriftung `F_T1` liest `v.FT2`.
   der gestapelten Y-Achsen ergibt sich aus der Breite ihrer Beschriftungen)
   und `axisylabeloffsetabove`/`-below`. Alles andere im Settings-Dialog
   erreicht die Zeichnung.
-- **Kein `TemplateManager`.** Templates lassen sich laden, ändern und
-  speichern, aber nicht anlegen, kopieren oder löschen
-  (`FigureAppTemplateManager.mlapp`).
 
 ### Offen aus Phase 5
 
-- **Nur `PhaseEditor`.** `PhaseParameterEditor` und `PhaseFeedEditor` des
-  Originals sind noch nicht übersetzt — phasenspezifische Parameter lassen
-  sich derzeit nicht über die Oberfläche setzen, nur über die Datenbank.
+- **`PhaseFeedEditor` fehlt noch.** `PhaseEditor` und `PhaseParameterEditor`
+  sind übersetzt; der Feed-Editor des Originals nicht.
 - **Der Reservoir-Wähler des Feed-Panels fehlt.** Das Panel zeigt fest R1;
   bei Pichia mit zwei Reservoirs braucht es die Auswahl aus dem Screenshot.
   Der Parameterdialog des Panels kennt beide Reservoirs bereits.
-
-### Offen aus Phase 4
-
-- **Kein Anwendungssymbol und kein Logo.** Das Logo des Originals ist ein
-  Bildmittel der Hochschule und gehört nicht in diese Portierung.
 
 ### Reglereinstellung
 
@@ -604,6 +594,13 @@ Kopieren der `.db` ohne WAL sind sie verloren.
 - **Die Optik ist eine Textdatei.** `resources/styles/default.qss`; eine
   `style.qss` neben der Datenbank ersetzt sie. Farben, Abstände und Schriften
   ohne Python und ohne Neuübersetzung.
+- **Die Anwendung hat ein eigenes Zeichen.** Das Logo des Originals ist ein
+  Bildmittel der Hochschule und bleibt draußen; `resources/icons/` trägt
+  stattdessen ein eigenes. Quelle ist `logo.png` (1024², transparent),
+  daneben die Kantenlängen 32–512, `icon.ico` und `icon.icns`. Zu erreichen
+  über `resources.app_icon_path(size)` und `platform_icon_path()`; gesetzt
+  wird es einmal auf der `QApplication`, alle Fenster erben es. Beide
+  PyInstaller-Spezifikationen stempeln es über `specs.icon_file()`.
 - **Plugins brauchen einen Eintrag in `build/specs.py`.** Die Registry
   findet sie über `pkgutil.iter_modules`, also importiert sie niemand beim
   Namen und PyInstallers Analyse sieht sie nicht. Fehlt einer, startet die

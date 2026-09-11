@@ -12,6 +12,7 @@ project currently starts a headless run and reports its progress.
 import sys
 from pathlib import Path
 
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from ..control import PhaseAutomaton
@@ -19,7 +20,7 @@ from ..core.runner import DEFAULT_DT, load_project_state
 from ..core.simulation_runner import SimulationRunner
 from ..db import ensure_columns, load_phases
 from ..organisms import discover_organisms
-from ..resources import default_database
+from ..resources import app_icon_path, default_database
 from .style import apply_theme
 from .windows import (
     ControlWindow,
@@ -35,6 +36,10 @@ class SimulationApp(QApplication):
     def __init__(self, argv: list[str] | None = None, *, db_path: Path | str | None = None):
         super().__init__(argv if argv is not None else sys.argv)
         self.setApplicationName("Biofermentation Simulation")
+        # Set on the application, so every window and the dock entry inherit it.
+        icon = app_icon_path()
+        if icon.is_file():
+            self.setWindowIcon(QIcon(str(icon)))
         # Style, palette and stylesheet. The palette is ours, not the
         # system's — see gui/style.py.
         apply_theme(self)

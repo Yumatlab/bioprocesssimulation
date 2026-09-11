@@ -48,12 +48,26 @@ def data_files() -> list[tuple[str, str]]:
         (str(resources / "SimulationAppDB_template.db"), "biofermentation/resources"),
         (str(resources / "defaults"), "biofermentation/resources/defaults"),
         (str(resources / "styles"), "biofermentation/resources/styles"),
+        (str(resources / "icons"), "biofermentation/resources/icons"),
         # Organism plugins ship their parameter definitions as YAML.
         (
             str(PACKAGE / "organisms" / "escherichia_coli" / "definition.yaml"),
             "biofermentation/organisms/escherichia_coli",
         ),
     ]
+
+
+def icon_file() -> str | None:
+    """The application icon PyInstaller stamps on the executable.
+
+    .icns on macOS, .ico on Windows — PyInstaller takes only the native
+    format, and a missing one is a build failure rather than a warning, so it
+    is reported as None when it is not there.
+    """
+    from biofermentation.resources import platform_icon_path
+
+    path = platform_icon_path()
+    return str(path) if path.is_file() else None
 
 
 def hidden_imports() -> list[str]:

@@ -22,6 +22,7 @@ from specs import (  # noqa: E402
     data_files,
     excludes,
     hidden_imports,
+    icon_file,
     target_arch,
 )
 
@@ -68,7 +69,7 @@ collection = COLLECT(
 bundle = BUNDLE(
     collection,
     name=f"{APP_NAME}.app",
-    icon=None,
+    icon=icon_file(),
     bundle_identifier=BUNDLE_ID,
     info_plist={
         "CFBundleShortVersionString": "3.0",

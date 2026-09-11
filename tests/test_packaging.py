@@ -150,3 +150,56 @@ def test_the_target_architecture_defaults_to_the_build_machine(specs, monkeypatc
 
     monkeypatch.setenv("BIOFERMENTATION_TARGET_ARCH", "universal2")
     assert specs.target_arch() == "universal2"
+
+
+# ------------------------------------------------------ application mark --
+
+
+def test_the_icons_ship_with_the_bundle():
+    """A resource that is missing in a frozen build is found after release."""
+    from specs import data_files
+
+    destinations = {destination for _, destination in data_files()}
+    assert "biofermentation/resources/icons" in destinations
+
+
+def test_the_icon_files_are_there():
+    from biofermentation.resources import ICONS_DIR, app_icon_path, platform_icon_path
+
+    assert app_icon_path().is_file()
+    for size in (32, 64, 128, 256, 512):
+        assert app_icon_path(size).is_file(), size
+    assert (ICONS_DIR / "icon.ico").is_file()
+    assert (ICONS_DIR / "icon.icns").is_file()
+    assert platform_icon_path().is_file()
+
+
+def test_the_spec_stamps_an_icon():
+    """PyInstaller takes only the native format, and a missing one fails the
+    build rather than warning."""
+    from specs import icon_file
+
+    path = icon_file()
+    assert path is not None
+    assert Path(path).suffix in (".icns", ".ico")
+
+
+def test_the_logo_has_a_transparent_ground():
+    """It sits on the starting screen and in the About box, both of which have
+    a background of their own."""
+    from PIL import Image
+
+    from biofermentation.resources import app_icon_path
+
+    image = Image.open(app_icon_path()).convert("RGBA")
+    assert image.size == (1024, 1024)
+    corners = [
+        image.getpixel(point)
+        for point in (
+            (0, 0),
+            (image.width - 1, 0),
+            (0, image.height - 1),
+            (image.width - 1, image.height - 1),
+        )
+    ]
+    assert all(pixel[3] == 0 for pixel in corners), corners

@@ -30,6 +30,24 @@ HERE = resource_root()
 TEMPLATE_DB = HERE / "SimulationAppDB_template.db"
 DEFAULTS_DIR = HERE / "defaults"
 STYLES_DIR = HERE / "styles"
+ICONS_DIR = HERE / "icons"
+
+
+def app_icon_path(size: int | None = None) -> Path:
+    """The application mark. `size` picks one of the rendered PNGs.
+
+    Not the university's logo of the original — that is its image asset and
+    stays out of this port. This one was made for the Python version.
+    """
+    if size is None:
+        return ICONS_DIR / "logo.png"
+    return ICONS_DIR / f"logo_{size}.png"
+
+
+def platform_icon_path() -> Path:
+    """The file PyInstaller wants: .icns on macOS, .ico everywhere else."""
+    return ICONS_DIR / ("icon.icns" if sys.platform == "darwin" else "icon.ico")
+
 
 APPLICATION_NAME = "Biofermentation Simulation"
 DATABASE_NAME = "SimulationAppDB.db"
