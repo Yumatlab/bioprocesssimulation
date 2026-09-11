@@ -322,12 +322,18 @@ Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
   pO2-Control wiederholt nur den Titel und kostete 170 px auf einer Zeile, die
   alle fünf gleichzeitig zeigen muss. Die gespeicherten Modusnummern sind
   unverändert.
-- **Die Anordnung steht in `PANEL_PLACES`**, nicht im Aufbaucode: sechs gleich
-  breite Abschnitte, pO2 über die beiden oben links, daneben Liquid Weight,
-  darunter pH, Temperatur und Feed. Die Panels sind **oben ausgerichtet** und
-  behalten die Höhe ihres Inhalts; was übrig bleibt, bekommt eine leere Zeile
-  darunter. Auf die beiden Zeilen verteilt ergäbe es ein Loch in jedem Panel
-  statt eines Feldes unter allen.
+- **Die Anordnung steht in `PANEL_ORDER`**, nicht im Aufbaucode: eine Reihe,
+  fünf Panels nebeneinander, in der Reihenfolge des Originals. Alle gleich
+  breit — eine Reihe von fünf liest sich nur dann als Satz. Die Panels sind
+  **oben ausgerichtet** und behalten die Höhe ihres Inhalts; was übrig bleibt,
+  bekommt eine leere Zeile darunter statt ein Loch in jedem Panel.
+- **Die Modusbeschriftung steht über den Tasten, nicht daneben.** Neben ihr
+  hätten die Tasten rund 60 px weniger, und pO2 fiel von zwei Tastenreihen auf
+  vier — ein Tastenfeld höher als die Felder darunter. Die Lampe sitzt rechts
+  neben der Beschriftung.
+- **Die Reihe kostet Breite.** Fünf Panels nebeneinander brauchen 1425 px, ein
+  Raster aus sechs Abschnitten brauchte 1340. Die Grenze im Test ist deshalb
+  1440 — das schmalste Bildschirmformat, für das die Anwendung gedacht ist.
 - **Felder und Schalter teilen sich ein Raster gleich breiter Plätze**
   (`PanelSpec.field_columns`: zwei für ein Panel über einen Abschnitt, drei für
   pO2 über zwei). Ein Sollwert mit Messwert daneben nimmt zwei Plätze, alles

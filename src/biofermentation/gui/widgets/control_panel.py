@@ -116,8 +116,15 @@ class ControlPanel(QGroupBox):
         self.mode_selector: SegmentedControl | None = None
         self.lamp: StatusLamp | None = None
         if spec.mode_parameter:
-            row = QHBoxLayout()
-            row.addWidget(QLabel("Mode:"))
+            # Caption above, keys below across the whole panel. Beside the
+            # caption they would have some 60 px less, and pO2 fell from two
+            # rows of keys to four — a keypad taller than the fields under it.
+            head = QHBoxLayout()
+            head.addWidget(QLabel("Mode:"))
+            head.addStretch()
+            self.lamp = StatusLamp()
+            head.addWidget(self.lamp)
+            layout.addLayout(head)
             # Keys instead of a dropdown: the operator sees what there is to
             # choose without opening anything, and the choice is one click
             # rather than two.
@@ -125,23 +132,18 @@ class ControlPanel(QGroupBox):
             for value, text in spec.modes.items():
                 self.mode_selector.addItem(text, value)
             self.mode_selector.currentIndexChanged.connect(self._mode_changed)
-            row.addWidget(self.mode_selector, 1)
-            self.lamp = StatusLamp()
-            row.addWidget(self.lamp)
-            layout.addLayout(row)
+            layout.addWidget(self.mode_selector)
 
         self.reservoir_selector: SegmentedControl | None = None
         if spec.reservoir_parameter and self.reservoirs > 1:
             # Only worth the row when there is a choice. With one reservoir
             # the panel simply works on R1, as the original does.
-            row = QHBoxLayout()
-            row.addWidget(QLabel("Reservoir:"))
+            layout.addWidget(QLabel("Reservoir:"))
             self.reservoir_selector = SegmentedControl()
             for number in range(1, self.reservoirs + 1):
                 self.reservoir_selector.addItem(f"R{number}", number)
             self.reservoir_selector.currentIndexChanged.connect(self._reservoir_changed)
-            row.addWidget(self.reservoir_selector, 1)
-            layout.addLayout(row)
+            layout.addWidget(self.reservoir_selector)
 
         # Fields and switches share one grid of equally wide slots. A setpoint
         # with a measured value beside it takes two, everything else takes
@@ -248,8 +250,10 @@ class ControlPanel(QGroupBox):
         """
         width = self.minimumSizeHint().width()
         if self.mode_selector is not None:
-            # One key, plus the "Mode:" caption, the lamp and the margins.
-            width = max(width, self.mode_selector.minimumSizeHint().width() + 90)
+            # Two keys side by side, plus the layout margins. One key would be
+            # readable but would put every mode on a row of its own.
+            keys = sorted(self.mode_selector._natural(), reverse=True)[:2]
+            width = max(width, int(sum(keys)) + 26)
         return width
 
     def current_mode(self) -> int | None:

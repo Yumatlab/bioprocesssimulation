@@ -40,7 +40,7 @@ from biofermentation.gui.widgets import (
 )
 from biofermentation.gui.widgets.tex import tex_label, tex_to_html
 from biofermentation.gui.windows import ControlWindow
-from biofermentation.gui.windows.control_app import PANEL_PLACES, PANEL_SPACING
+from biofermentation.gui.windows.control_app import PANEL_ORDER
 from biofermentation.organisms import discover_organisms
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -644,32 +644,21 @@ def test_clicking_a_mode_key_reports_the_mode_behind_it(qapp):
     assert panel.current_mode() == 3
 
 
-def test_the_panels_sit_where_the_layout_table_says(window):
-    """pO2 across the top left, the small ones underneath, feed bottom right."""
+def test_the_panels_sit_in_one_row_in_order(window):
+    """Side by side, in the order of the original's Control Options tab."""
     page = window.tabs.widget(0)
     layout = page.layout()
-    for title, (row, column, span) in PANEL_PLACES.items():
+    for column, title in enumerate(PANEL_ORDER):
         index = layout.indexOf(window.panels[title])
         assert index >= 0, title
-        assert layout.getItemPosition(index) == (row, column, 1, span), title
+        assert layout.getItemPosition(index) == (0, column, 1, 1), title
 
 
-def test_the_tab_is_six_equal_sections(window):
-    """Six sections of the same width; pO2 covers the two on the top left."""
-    page = window.tabs.widget(0)
-    layout = page.layout()
-    assert layout.columnCount() == 3
-    assert sum(span for _, _, span in PANEL_PLACES.values()) == 6
-
-    single = [
-        window.panels[title]
-        for title, (_, _, span) in PANEL_PLACES.items()
-        if span == 1
-    ]
-    widths = [panel.width() for panel in single]
+def test_the_panels_are_all_the_same_width(window):
+    """A row of five reads as a set only if they are cut to one width."""
+    widths = [panel.width() for panel in window.panels.values()]
     assert max(widths) - min(widths) <= 1
-    wide = window.panels["pO2-Control"]
-    assert abs(wide.width() - (2 * max(widths) + PANEL_SPACING)) <= 2
+    assert window.tabs.widget(0).layout().columnCount() == len(PANEL_ORDER)
 
 
 def test_a_switch_is_as_wide_as_one_field(window):
@@ -697,9 +686,14 @@ def test_every_setpoint_field_of_a_panel_is_the_same_width(window):
 
 def test_the_control_window_fits_a_normal_screen(window):
     """It asked for 1600 px: a QDoubleSpinBox sizes itself to the widest text
-    its range allows, and these accept plus or minus a billion."""
-    assert window.minimumSizeHint().width() <= 1400
-    assert window.width() <= 1400
+    its range allows, and these accept plus or minus a billion.
+
+    1440 is the narrowest screen this is meant for. Five panels side by side
+    cost more width than a grid of six does — that is the price of the row,
+    and it has to stay under that number.
+    """
+    assert window.minimumSizeHint().width() <= 1440
+    assert window.width() <= 1440
 
 
 def test_pressing_inoculate_during_a_run_disables_it_at_once(window):

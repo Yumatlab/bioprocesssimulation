@@ -65,16 +65,15 @@ port.</p>
 """
 
 
-#: Where each panel of Control Options sits: row, column, how many columns it
-#: spans. Six equal sections; pO2 covers the two on the top left, the other
-#: four take one each.
-PANEL_PLACES = {
-    "pO2-Control": (0, 0, 2),
-    "Liquid Weight": (0, 2, 1),
-    "pH-Control": (1, 0, 1),
-    "Temperature-Control": (1, 1, 1),
-    "Feed Control": (1, 2, 1),
-}
+#: The order of the panels of Control Options, left to right — one row, as the
+#: original has them and as the thesis screenshot on page 54 shows them.
+PANEL_ORDER = (
+    "pH-Control",
+    "Temperature-Control",
+    "pO2-Control",
+    "Liquid Weight",
+    "Feed Control",
+)
 PANEL_SPACING = 6
 
 
@@ -108,8 +107,8 @@ class ControlWindow(QMainWindow):
         )
         # The five controller panels and the run column need this much; see
         # ControlPanel.content_width and indicators.FIELD_MIN_WIDTH. The
-        # height carries the two rows of panels and the run column.
-        self.resize(1340, 720)
+        # height carries the tallest panel and the run column.
+        self.resize(1420, 680)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -241,34 +240,27 @@ class ControlWindow(QMainWindow):
         layout = QGridLayout(page)
         layout.setSpacing(PANEL_SPACING)
         reservoirs = int(self.setup.info.reservoirs or 1)
-        for spec in CONTROL_PANELS:
-            panel = ControlPanel(spec, reservoirs=reservoirs)
+        specs = {spec.title: spec for spec in CONTROL_PANELS}
+        for column, title in enumerate(PANEL_ORDER):
+            panel = ControlPanel(specs[title], reservoirs=reservoirs)
             panel.setObjectName("controlPanel")
             panel.parameter_changed.connect(self._set_parameter)
             panel.parameters_requested.connect(self.open_controller_parameters)
-            self.panels[spec.title] = panel
-            row, column, span = PANEL_PLACES[spec.title]
+            self.panels[title] = panel
             # Top-aligned: a panel keeps the height its contents need instead
-            # of being stretched to the tallest one in its row. Liquid Weight
-            # next to pO2 would otherwise carry 130 px of nothing between its
-            # last field and its switch.
-            layout.addWidget(panel, row, column, 1, span, Qt.AlignmentFlag.AlignTop)
+            # of being stretched to the tallest one in the row. pO2 has twice
+            # the fields of the others and would leave them full of nothing.
+            layout.addWidget(panel, 0, column, Qt.AlignmentFlag.AlignTop)
 
-        # One width for all three columns, so the four single-column panels
-        # are equally wide and pO2 is exactly two of them. A panel that spans
-        # two columns needs half of what it asks for out of each.
-        width = max(
-            panel.content_width() // span if span > 1 else panel.content_width()
-            for title, panel in self.panels.items()
-            for _, _, span in [PANEL_PLACES[title]]
-        )
-        for column in range(3):
+        # One width for all five, so the row reads as a set of equal panels.
+        width = max(panel.content_width() for panel in self.panels.values())
+        for column in range(len(PANEL_ORDER)):
             layout.setColumnMinimumWidth(column, width)
             layout.setColumnStretch(column, 1)
-        # Both rows keep the height their panels need; whatever is left over
-        # goes to an empty row underneath. Sharing it out between the two
-        # would put a hole inside every panel instead of one below them all.
-        layout.setRowStretch(2, 1)
+        # Whatever is left over in the height goes below the panels, not into
+        # them: stretched panels carry a hole between their last field and
+        # their button.
+        layout.setRowStretch(1, 1)
         return page
 
     def _build_run_column(self) -> QWidget:

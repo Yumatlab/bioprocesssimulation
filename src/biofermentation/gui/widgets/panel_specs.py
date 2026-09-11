@@ -88,9 +88,6 @@ PO2_PANEL = PanelSpec(
         3: "Gasmix",
         4: "Feed",
     },
-    # Two sections wide, so three field slots across: setpoint, measurement
-    # and the stirrer on the first row, the three gas flows on the second.
-    field_columns=3,
     fields=[
         FieldSpec("pO2w", "pO_{2w} [%]", actual="pO2", actual_label="pO_{2} [%]", decimals=1),
         # Live only where the mode does not drive them itself.
