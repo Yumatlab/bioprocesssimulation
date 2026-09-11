@@ -89,7 +89,8 @@ def test_an_unknown_template_is_refused(db_copy):
 
 
 def test_a_template_survives_a_save_and_reload(db_copy):
-    template = load_plot_template(db_copy, 1)
+    # Template 2: the default is read only, see ProtectedTemplateError.
+    template = load_plot_template(db_copy, 2)
     target = next(v for v in template.variables if v.name == "cS2L")
     target.selected = True
     target.ymax = 42.0
@@ -97,7 +98,7 @@ def test_a_template_survives_a_save_and_reload(db_copy):
     template.tend = 12.0
 
     save_plot_template(db_copy, template)
-    again = load_plot_template(db_copy, 1)
+    again = load_plot_template(db_copy, 2)
 
     reloaded = next(v for v in again.variables if v.name == "cS2L")
     assert reloaded.selected is True
@@ -336,6 +337,7 @@ def test_auto_update_can_be_switched_off(figure):
 
 
 def test_saving_the_template_writes_the_selection(figure, db_copy):
+    figure.load_template(2)  # the default is read only
     figure.checkboxes["cS2L"].setChecked(True)
     figure.save_template()
     again = load_plot_template(db_copy, figure.template.templateID)
@@ -777,3 +779,119 @@ def test_rebuilding_the_plot_forgets_the_old_markers(qapp):
     plot.set_phase_markers([_phase("Batch", 1.0)])
     plot.set_template(plot.template)
     assert plot._markers == []
+
+
+# -------------------------------------------------- template management --
+
+
+def test_the_default_template_cannot_be_overwritten(db_copy):
+    """It is the only way back to a known state. default_plot_variableTab
+    holds its variable rows; nothing holds a copy of an edited one."""
+    from biofermentation.db.plots import DEFAULT_TEMPLATE_ID, ProtectedTemplateError
+
+    template = load_plot_template(db_copy, DEFAULT_TEMPLATE_ID)
+    template.name = "Something else"
+    with pytest.raises(ProtectedTemplateError):
+        save_plot_template(db_copy, template)
+
+    assert load_plot_template(db_copy, DEFAULT_TEMPLATE_ID).name == "Default"
+
+
+def test_the_default_template_cannot_be_deleted(db_copy):
+    from biofermentation.db.plots import (
+        DEFAULT_TEMPLATE_ID,
+        ProtectedTemplateError,
+        delete_template,
+    )
+
+    with pytest.raises(ProtectedTemplateError):
+        delete_template(db_copy, DEFAULT_TEMPLATE_ID)
+    assert any(row["templateID"] == DEFAULT_TEMPLATE_ID for row in list_plot_templates(db_copy))
+
+
+def test_a_new_template_takes_the_arrangement_it_was_made_from(db_copy):
+    from biofermentation.db.plots import create_template
+
+    source = load_plot_template(db_copy, 1)
+    target = next(v for v in source.variables if v.name == "cS2L")
+    target.selected = True
+    target.colorID = 4
+    target.ymax = 42.0
+
+    template_id = create_template(db_copy, "My view", variables=source.variables)
+    assert template_id != 1
+
+    made = load_plot_template(db_copy, template_id)
+    copied = next(v for v in made.variables if v.name == "cS2L")
+    assert copied.selected is True
+    assert copied.colorID == 4
+    assert copied.ymax == 42.0
+    # And the template it was made from is untouched.
+    assert (
+        next(v for v in load_plot_template(db_copy, 1).variables if v.name == "cS2L").selected
+        is False
+    )
+
+
+def test_a_second_template_of_the_same_name_gets_a_number(db_copy):
+    from biofermentation.db.plots import create_template
+
+    first = create_template(db_copy, "Mine")
+    second = create_template(db_copy, "Mine")
+    names = {row["templateID"]: row["name"] for row in list_plot_templates(db_copy)}
+    assert names[first] == "Mine"
+    assert names[second] == "Mine 2"
+
+
+def test_resetting_puts_the_default_settings_back(db_copy):
+    """The whole reason the default is worth protecting."""
+    from biofermentation.db.plots import reset_template_variables
+
+    template = load_plot_template(db_copy, 2)
+    for variable in template.variables:
+        variable.selected = False
+        variable.colorID = 3
+    save_plot_template(db_copy, template)
+    assert load_plot_template(db_copy, 2).selected() == []
+
+    changed = reset_template_variables(db_copy, 2)
+    assert changed > 0
+
+    back = load_plot_template(db_copy, 2)
+    assert {v.name for v in back.selected()} == {
+        "cXL",
+        "cS1L",
+        "qXpX",
+        "pO2",
+        "NSt",
+        "thetaL",
+    }
+    assert next(v for v in back.variables if v.name == "cXL").colorID == 8
+
+
+def test_the_default_can_be_reset_even_though_it_cannot_be_saved(db_copy):
+    """The user overwrote theirs; this is the way back."""
+    import sqlite3
+
+    from biofermentation.db.plots import reset_template_variables
+
+    with sqlite3.connect(db_copy) as conn:
+        conn.execute("UPDATE plot_variableTab SET selected_axis = 0 WHERE templateID = 1")
+    assert load_plot_template(db_copy, 1).selected() == []
+
+    reset_template_variables(db_copy, 1)
+    assert len(load_plot_template(db_copy, 1).selected()) == 6
+
+
+def test_saving_the_default_offers_a_copy_instead(figure, monkeypatch):
+    from PySide6.QtWidgets import QInputDialog, QMessageBox
+
+    assert figure.template.templateID == 1
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *args, **kw: QMessageBox.StandardButton.Save
+    )
+    monkeypatch.setattr(QInputDialog, "getText", lambda *args, **kw: ("Copy of default", True))
+
+    figure.save_template()
+    assert figure.template.templateID != 1
+    assert figure.template.name == "Copy of default"

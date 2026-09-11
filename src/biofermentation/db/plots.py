@@ -12,9 +12,21 @@ checkbox in the window is labelled "Auto" and is ticked for 1.
 
 import math
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 from .connection import get_connection
+
+#: The template every other one can be reset to. It is never written: the
+#: application would otherwise have no way back to a known state, and losing
+#: it is a one-way door — default_plot_variableTab holds its variable rows,
+#: nothing holds a copy of an edited one.
+DEFAULT_TEMPLATE_ID = 1
+
+
+class ProtectedTemplateError(PermissionError):
+    """Raised on any attempt to change or remove the default template."""
+
 
 # plot_linestyleTab stores MATLAB's symbols; Qt wants a dash pattern.
 LINE_STYLES = {
@@ -200,8 +212,17 @@ def load_plot_template(db_path: Path | str, template_id: int) -> PlotTemplate:
 
 
 def save_plot_template(db_path: Path | str, template: PlotTemplate) -> int:
-    """Write the template and its variables back. One transaction."""
-    from datetime import datetime
+    """Write the template and its variables back. One transaction.
+
+    The default template is refused: it is the only way back to a known
+    state, and an application that can overwrite its own reference has none.
+    Save a copy instead — see create_template.
+    """
+    if template.templateID == DEFAULT_TEMPLATE_ID:
+        raise ProtectedTemplateError(
+            "the default template cannot be overwritten. Template → Save as new "
+            "template keeps your changes and leaves the default intact."
+        )
 
     with get_connection(db_path) as conn:
         conn.execute(
@@ -266,6 +287,132 @@ def save_plot_template(db_path: Path | str, template: PlotTemplate) -> int:
             ],
         )
     return template.templateID
+
+
+def create_template(
+    db_path: Path | str,
+    name: str,
+    *,
+    based_on: int = DEFAULT_TEMPLATE_ID,
+    description: str = "",
+    variables: list[PlotVariable] | None = None,
+) -> int:
+    """A new template, copied from an existing one. Returns its templateID.
+
+    With `variables` the copy takes its selection, limits, colours and line
+    styles from those objects instead of from the database — that is what
+    "save the plot I am looking at as a template" needs.
+    """
+    with get_connection(db_path) as conn:
+        source = conn.execute(
+            "SELECT * FROM plot_templateTab WHERE templateID = ?", (based_on,)
+        ).fetchone()
+        if source is None:
+            raise LookupError(f"no plot template with templateID {based_on}")
+
+        # sqlite3.Row has no membership test of its own.
+        names = list(source.keys())
+        columns = [key for key in names if key != "templateID"]
+        values = {key: source[key] for key in columns}
+        values["name"] = _free_template_name(conn, name)
+        values["description"] = description
+        values["last_changed"] = datetime.now().strftime("%Y.%m.%d %H:%M:%S")
+
+        template_id = conn.execute(
+            f"INSERT INTO plot_templateTab ({', '.join(columns)}) "
+            f"VALUES ({', '.join('?' * len(columns))})",
+            tuple(values[key] for key in columns),
+        ).lastrowid
+
+        by_variable = {item.variableID: item for item in (variables or [])}
+        rows = conn.execute(
+            "SELECT variableID, selected_axis, limit_type, ymin, ymax, decimalID, "
+            "colorID, linestyleID FROM plot_variableTab WHERE templateID = ? "
+            "ORDER BY variableID",
+            (based_on,),
+        ).fetchall()
+        payload = []
+        for row in rows:
+            wanted = by_variable.get(row["variableID"])
+            payload.append(
+                (
+                    template_id,
+                    row["variableID"],
+                    int(wanted.selected) if wanted else row["selected_axis"],
+                    wanted.limit_type if wanted else row["limit_type"],
+                    wanted.ymin if wanted else row["ymin"],
+                    wanted.ymax if wanted else row["ymax"],
+                    wanted.decimalID if wanted else row["decimalID"],
+                    wanted.colorID if wanted else row["colorID"],
+                    wanted.linestyleID if wanted else row["linestyleID"],
+                )
+            )
+        conn.executemany(
+            "INSERT INTO plot_variableTab (templateID, variableID, selected_axis, "
+            "limit_type, ymin, ymax, decimalID, colorID, linestyleID) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            payload,
+        )
+    return template_id
+
+
+def delete_template(db_path: Path | str, template_id: int) -> None:
+    """Remove a template and its variable rows. Refuses the default."""
+    if template_id == DEFAULT_TEMPLATE_ID:
+        raise ProtectedTemplateError("the default template cannot be deleted")
+    with get_connection(db_path) as conn:
+        conn.execute("DELETE FROM plot_variableTab WHERE templateID = ?", (template_id,))
+        conn.execute("DELETE FROM plot_templateTab WHERE templateID = ?", (template_id,))
+
+
+def reset_template_variables(db_path: Path | str, template_id: int) -> int:
+    """Put a template's variables back to default_plot_variableTab.
+
+    That table is what the default template was built from, and the only
+    reason the default is worth protecting: with it, any template — the
+    default included — can be returned to a known state.
+    """
+    with get_connection(db_path) as conn:
+        defaults = conn.execute(
+            "SELECT variableID, selected_variable, limit_type, ymin, ymax, "
+            "decimalID, colorID, linestyleID FROM default_plot_variableTab "
+            "ORDER BY default_plot_variableID"
+        ).fetchall()
+        if not defaults:
+            raise LookupError("default_plot_variableTab is empty; there is nothing to reset to")
+
+        changed = 0
+        for row in defaults:
+            changed += conn.execute(
+                """
+                UPDATE plot_variableTab
+                   SET selected_axis = ?, limit_type = ?, ymin = ?, ymax = ?,
+                       decimalID = ?, colorID = ?, linestyleID = ?
+                 WHERE templateID = ? AND variableID = ?
+                """,
+                (
+                    row["selected_variable"],
+                    row["limit_type"],
+                    row["ymin"],
+                    row["ymax"],
+                    row["decimalID"],
+                    row["colorID"],
+                    row["linestyleID"],
+                    template_id,
+                    row["variableID"],
+                ),
+            ).rowcount
+    return changed
+
+
+def _free_template_name(conn, name: str) -> str:
+    taken = {row[0] for row in conn.execute("SELECT name FROM plot_templateTab")}
+    if name not in taken:
+        return name
+    suffix = 2
+    while f"{name} {suffix}" in taken:
+        suffix += 1
+    return f"{name} {suffix}"
 
 
 def _rgb(r, g, b) -> tuple[int, int, int]:

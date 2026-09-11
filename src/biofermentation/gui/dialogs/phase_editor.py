@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QLabel,
     QLineEdit,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -138,12 +139,23 @@ class ConditionEditor(QGroupBox):
 class PhaseEditor(QDialog):
     """Name, type, reservoir and both conditions of one phase."""
 
-    def __init__(self, phase: Phase, lookups, reservoirs: int = 1, parent: QWidget | None = None):
+    def __init__(
+        self,
+        phase: Phase,
+        lookups,
+        reservoirs: int = 1,
+        parent: QWidget | None = None,
+        p_meta=None,
+        p=None,
+    ):
         super().__init__(parent)
         self.setWindowTitle(f"Edit {phase.name or 'Phase'}")
         self.setModal(True)
         self._phase = phase
         self._draft = deepcopy(phase)
+        #: What the parameter dialog needs; without them its button stays off.
+        self._p_meta = p_meta
+        self._p = p
 
         layout = QVBoxLayout(self)
 
@@ -180,6 +192,11 @@ class PhaseEditor(QDialog):
         layout.addWidget(self.start_editor)
         layout.addWidget(self.end_editor)
 
+        self.parameters_button = QPushButton("Parameters…")
+        self.parameters_button.setToolTip("The values this phase applies when it starts")
+        self.parameters_button.clicked.connect(self._edit_parameters)
+        form.addRow("", self.parameters_button)
+
         self.type_box.currentIndexChanged.connect(self._update_for_type)
 
         buttons = QDialogButtonBox(
@@ -213,8 +230,29 @@ class PhaseEditor(QDialog):
         is_stop = phase_type == PhaseType.STOP
         self.end_editor.setVisible(not is_stop)
 
+        # Every phase type but Stop can carry a parameter set; an update phase
+        # is the one whose whole purpose it is.
+        self.parameters_button.setEnabled(not is_stop and self._p_meta is not None)
+        count = len(self._draft.parameters)
+        self.parameters_button.setText(f"Parameters… ({count})" if count else "Parameters…")
+
+    def _edit_parameters(self) -> None:
+        """The values this phase applies when it starts.
+
+        Edited on the draft, like everything else here: cancelling the phase
+        editor has to drop them too.
+        """
+        from .parameters import PhaseParameterDialog
+
+        if self._p_meta is None or self._p is None:
+            return
+        dialog = PhaseParameterDialog(self._draft, self._p_meta, self._p, parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._update_for_type()
+
     def accept(self) -> None:
         """Write the draft back. Only here, and only on Ok."""
+        self._phase.parameters = dict(self._draft.parameters)
         self._phase.name = self.name_edit.text().strip() or self._phase.name
         self._phase.typeID = self.type_box.currentData()
         # Asking the widget would be wrong: a hidden parent makes every child

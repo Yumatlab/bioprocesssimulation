@@ -361,14 +361,25 @@ QTabBar::tab:selected {
     padding-bottom: 8px;
 }
 
-/* The log tab reads like a terminal: dark ground, fixed pitch, no frame
-   competing with the tab pane around it. */
+/* The log tab reads like a terminal. The border is what separates it from
+   the white tab page: without a visible edge the dark field looks like a
+   hole in the window rather than a surface of its own. */
 QTextEdit#logTerminal {
     background: #1e1f22;
     color: #d6d6d6;
-    border: 1px solid #3a3a3a;
-    border-radius: 3px;
-    padding: 6px;
+    border: 1px solid #4a4f57;
+    border-radius: 6px;
+    padding: 4px;
     selection-background-color: #2f7fd1;
     selection-color: white;
+}
+
+QTextEdit#logTerminal QScrollBar:vertical {
+    background: #1e1f22;
+    width: 12px;
+}
+
+QTextEdit#logTerminal QScrollBar::handle:vertical {
+    background: #4a4f57;
+    border-radius: 5px;
 }

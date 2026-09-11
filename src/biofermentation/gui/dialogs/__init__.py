@@ -1,6 +1,10 @@
 """Modal editors — phase 5.3. Opened with exec(), the waitfor() equivalent."""
 
-from .parameters import ControllerParametersDialog, ParameterDialog
+from .parameters import (
+    ControllerParametersDialog,
+    ParameterDialog,
+    PhaseParameterDialog,
+)
 from .phase_editor import ConditionEditor, PhaseEditor
 
 __all__ = [
@@ -8,4 +12,5 @@ __all__ = [
     "ControllerParametersDialog",
     "ParameterDialog",
     "PhaseEditor",
+    "PhaseParameterDialog",
 ]

@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QLabel,
-    QMenuBar,
+    QMenu,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -40,7 +40,6 @@ class StartingScreen(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 30, 40, 24)
         layout.setSpacing(12)
-        layout.setMenuBar(self._build_menu())
 
         title = QLabel("Biofermentation\nSimulation")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -69,6 +68,14 @@ class StartingScreen(QWidget):
             layout.addWidget(button)
 
         layout.addSpacing(16)
+        # Organisms, vessels and whole projects — what an installation is made
+        # of, rather than what one session does. It used to hang in a menu bar
+        # over a window that has no other menus.
+        self.library_button = self._button("Library…", None)
+        self.library_button.setToolTip("Import and export organisms, bioreactors and projects")
+        self.library_button.clicked.connect(self._show_library)
+        layout.addWidget(self.library_button)
+
         self.model_configurator_button = self._button(
             "Model Configurator", self.model_configurator_requested
         )
@@ -78,35 +85,34 @@ class StartingScreen(QWidget):
         self.exit_button = self._button("Exit", self.exit_requested)
         layout.addWidget(self.exit_button)
 
-    def _build_menu(self) -> QMenuBar:
-        """Organisms and vessels, which outlive any one project.
+    #: What the Library button offers, in order. None is a separator.
+    LIBRARY_ENTRIES = (
+        "Import organism…",
+        "Export organism…",
+        None,
+        "Import bioreactor…",
+        "Export bioreactor…",
+        None,
+        "Import project…",
+    )
 
-        They are what an installation is made of: a project can only be moved
-        between two of them if both know its organism and its bioreactor.
-        """
-        bar = QMenuBar(self)
-        bar.setNativeMenuBar(False)
-        library = bar.addMenu("Library")
+    def _show_library(self) -> None:
+        """A menu under the button, so the entries stay one click away."""
+        menu = QMenu(self)
         self.library_actions: dict[str, QAction] = {}
-        for text in (
-            "Import organism…",
-            "Export organism…",
-            None,
-            "Import bioreactor…",
-            "Export bioreactor…",
-            None,
-            "Import project…",
-        ):
+        for text in self.LIBRARY_ENTRIES:
             if text is None:
-                library.addSeparator()
+                menu.addSeparator()
                 continue
             action = QAction(text, self)
             action.triggered.connect(lambda _=False, name=text: self.library_requested.emit(name))
-            library.addAction(action)
+            menu.addAction(action)
             self.library_actions[text] = action
-        return bar
+        button = self.library_button
+        menu.exec(button.mapToGlobal(button.rect().bottomLeft()))
 
-    def _button(self, text: str, signal: Signal) -> QPushButton:
+    def _button(self, text: str, signal: Signal | None) -> QPushButton:
         button = QPushButton(text, self)
-        button.clicked.connect(signal.emit)
+        if signal is not None:
+            button.clicked.connect(signal.emit)
         return button

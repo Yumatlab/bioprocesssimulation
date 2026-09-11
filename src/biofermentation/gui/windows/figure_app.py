@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -31,6 +32,8 @@ from PySide6.QtWidgets import (
 
 from ...db.plots import (
     PlotTemplate,
+    ProtectedTemplateError,
+    create_template,
     list_plot_templates,
     load_plot_styles,
     load_plot_template,
@@ -104,6 +107,8 @@ class FigureWindow(QMainWindow):
 
         template_menu = bar.addMenu("Template")
         add(template_menu, "Save template", self.save_template, "Ctrl+S")
+        add(template_menu, "Save as new template…", self.save_as_new_template, "Ctrl+Shift+N")
+        add(template_menu, "Manage templates…", self.manage_templates, "Ctrl+Shift+T")
         self.load_menu = template_menu.addMenu("Load template")
         self.load_menu.aboutToShow.connect(self._fill_load_menu)
 
@@ -416,7 +421,55 @@ class FigureWindow(QMainWindow):
         self.apply_template()
 
     def save_template(self) -> None:
-        save_plot_template(self.db_path, self.template)
+        """Write the arrangement back — unless this is the default template.
+
+        The default is the way back to a known state; overwriting it would
+        leave the application without one. Saving it offers a copy instead.
+        """
+        try:
+            save_plot_template(self.db_path, self.template)
+        except ProtectedTemplateError as error:
+            answer = QMessageBox.question(
+                self,
+                "Save template",
+                f"{error}\n\nSave this arrangement as a new template?",
+                QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Cancel,
+            )
+            if answer == QMessageBox.StandardButton.Save:
+                self.save_as_new_template()
+            return
+        self.statusBar().showMessage(f"Template {self.template.name!r} saved", 6000)
+
+    def save_as_new_template(self) -> None:
+        """The figure as it stands, kept under a name of its own."""
+        name, chosen = QInputDialog.getText(
+            self, "Save as new template", "Name:", text=f"{self.template.name} (copy)"
+        )
+        if not chosen or not name.strip():
+            return
+        template_id = create_template(
+            self.db_path,
+            name.strip(),
+            based_on=self.template.templateID,
+            description=self.template.description or "",
+            variables=self.template.variables,
+        )
+        self.load_template(template_id)
+        self.statusBar().showMessage(f"Saved as {self.template.name!r}", 6000)
+
+    def manage_templates(self) -> None:
+        """The list, what is in each one, and the four things one does."""
+        from ..dialogs.template_manager import TemplateManager
+
+        dialog = TemplateManager(
+            self.db_path, self.template, load_plot_styles(self.db_path), parent=self
+        )
+        dialog.exec()
+        if dialog.selected_id is not None:
+            self.load_template(dialog.selected_id)
+        else:
+            # A reset or a rename may have touched the one on screen.
+            self.load_template(self.template.templateID)
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
         self.closed.emit()

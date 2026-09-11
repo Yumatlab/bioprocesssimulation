@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSpinBox,
@@ -39,6 +40,27 @@ from ...db.models import ProjectSetup
 from ..widgets import CONTROL_PANELS, ControlPanel, PhaseGrid, StatusLamp
 from ..widgets.log_view import LogView
 from ..widgets.variable_pool import VariablePool
+
+#: Provenance and licence. Taken from the Information tab of the original,
+#: which is the only place either is recorded.
+ABOUT_TEXT = """
+<p><b>Author of the MATLAB application:</b> Philipp Yuma Iff, 18.07.2025</p>
+
+<p>This work is licensed under the
+<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons
+Attribution 4.0 International License</a>. To view a copy of this license,
+visit http://creativecommons.org/licenses/by/4.0/ or send a letter to
+Creative Commons, PO Box 1866, Mountain View, CA 94042, USA.</p>
+
+<p>This application is based on Version 1.3 of the Biofermentation Simulation
+App by Lena Sophia Kaletsch (01.03.2024) and the BIOSIM program conceived by
+Prof. Dr.-Ing. R. Luttmann. It was developed for the laboratory of Bioprocess
+Automation at the University of Applied Sciences Hamburg.</p>
+
+<p style="color:#6a6a6a">The two institutional logos of the original are not
+reproduced here: they are the university's image assets, not part of this
+port.</p>
+"""
 
 
 class ControlWindow(QMainWindow):
@@ -332,8 +354,35 @@ class ControlWindow(QMainWindow):
         ):
             form.addRow(f"{label}:", QLabel(str(value if value not in (None, "") else "-")))
         layout.addWidget(box)
+        layout.addWidget(self._about_box())
         layout.addStretch()
         return page
+
+    def _about_box(self) -> QGroupBox:
+        """Provenance and licence, as the original's Information tab has them.
+
+        The two logos of the original are not reproduced — they are the
+        university's image assets, not part of this port.
+        """
+        from .starting_screen import VERSION
+
+        box = QGroupBox("About")
+        layout = QVBoxLayout(box)
+
+        heading = QLabel(
+            f"<b>Biofermentation Simulation</b><br>Version {VERSION} "
+            "(Python port of the MATLAB App Designer application 2.x)"
+        )
+        heading.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(heading)
+
+        body = QLabel(ABOUT_TEXT)
+        body.setTextFormat(Qt.TextFormat.RichText)
+        body.setWordWrap(True)
+        body.setOpenExternalLinks(True)
+        body.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
+        layout.addWidget(body)
+        return box
 
     # ------------------------------------------------------------ state --
 
@@ -571,7 +620,12 @@ class ControlWindow(QMainWindow):
 
         phase = self.setup.phases[index]
         dialog = PhaseEditor(
-            phase, self.setup.lookups, reservoirs=self.setup.info.reservoirs or 1, parent=self
+            phase,
+            self.setup.lookups,
+            reservoirs=self.setup.info.reservoirs or 1,
+            parent=self,
+            p_meta=self.setup.p_meta,
+            p=self.runner.state.p,
         )
         with self.runner.editing():
             accepted = dialog.exec() == QDialog.DialogCode.Accepted
@@ -672,12 +726,19 @@ class ControlWindow(QMainWindow):
             f"parameters — backup {backup.name}"
         )
         self.note(message, "Project")
-        # Feedback that does not have to be clicked away: the status bar keeps
-        # it, and the button says so for a moment. A modal box on every save
-        # would be in the way of the one thing the operator does most often.
         self.statusBar().showMessage(message, 10_000)
         if announce:
+            # A box, because the status line and the button flash were missed.
+            # It is modal, so a save cannot be confused with one that failed.
             self._flash_saved()
+            QMessageBox.information(
+                self,
+                "Project saved",
+                f"{self.setup.info.name} saved.\n\n"
+                f"{result['times']} time points, {result['parameters']} parameters, "
+                f"{result['phases']} phases, {result['log']} new log entries.\n"
+                f"Backup: {backup.name}",
+            )
         if was_running:
             self.runner.start()
         return result

@@ -33,6 +33,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QPlainTextEdit,
+    QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -241,6 +243,159 @@ class ParameterDialog(_EditorBase):
                     if widget.parent() is group
                 )
             )
+
+
+class PhaseParameterDialog(_EditorBase):
+    """The parameters an "Update Parameter Set" phase applies when it starts.
+
+    PhaseParameterEditor.mlapp: the project's parameters with a field each, a
+    reset button next to every one that has been changed, and a running list
+    of what the phase will do. Only `cyclic` parameters are offered — the
+    phase applies them mid-run, and one that is read at the first step could
+    not take effect.
+
+    What the phase stores is the *difference* from the project value. An
+    untouched field means "leave it as it is", which is not the same as
+    writing the current value back: the operator may have moved it since.
+    """
+
+    def __init__(self, phase, p_meta, p, *, parent=None):
+        super().__init__(f"Parameters of {phase.name or 'the phase'}", parent)
+        self.resize(620, 720)
+        self._phase = phase
+        layout = QVBoxLayout(self)
+
+        heading = QLabel(
+            "These values are applied when the phase starts. Everything not "
+            "touched here keeps whatever the process has at that moment."
+        )
+        heading.setWordWrap(True)
+        layout.addWidget(heading)
+
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Filter by name or category…")
+        self.search.setClearButtonEnabled(True)
+        self.search.textChanged.connect(self._filter)
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Search:"))
+        row.addWidget(self.search, 1)
+        layout.addLayout(row)
+
+        area = QScrollArea()
+        area.setWidgetResizable(True)
+        inner = QWidget()
+        self._inner_layout = QVBoxLayout(inner)
+        area.setWidget(inner)
+        layout.addWidget(area, 1)
+
+        self._rows: list[tuple[QWidget, str]] = []
+        self._groups: list[QGroupBox] = []
+        self._resets: dict[str, QPushButton] = {}
+
+        cyclic = [meta for meta in p_meta if meta.get("reading_rate") == CYCLIC]
+        for (section, category), entries in _by_category(cyclic).items():
+            group = QGroupBox(f"{section} — {category}")
+            form = QFormLayout(group)
+            form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.FieldsStayAtSizeHint)
+            for meta in entries:
+                name = meta["parametername"]
+                if name not in p:
+                    continue
+                self._add_row(form, meta, name, float(p[name]))
+            if form.rowCount():
+                self._inner_layout.addWidget(group)
+                self._groups.append(group)
+        self._inner_layout.addStretch()
+
+        self.summary = QPlainTextEdit()
+        self.summary.setReadOnly(True)
+        self.summary.setFixedHeight(96)
+        layout.addWidget(QLabel("Changes made:"))
+        layout.addWidget(self.summary)
+        layout.addWidget(self._button_box())
+        self._update_summary()
+
+    def _add_row(self, form: QFormLayout, meta: dict, name: str, project_value: float) -> None:
+        stored = self._phase.parameters.get(name)
+        widget = _spin(stored if stored is not None else project_value)
+        widget.valueChanged.connect(lambda _=0.0, key=name: self._changed(key))
+        self._boxes[name] = widget
+        #: The value to fall back to — the project's, not the phase's.
+        self._original[name] = project_value
+
+        reset = QPushButton("↺")
+        reset.setFixedWidth(28)
+        reset.setToolTip("Drop this parameter from the phase")
+        reset.clicked.connect(lambda _=False, key=name: self._reset(key))
+        self._resets[name] = reset
+
+        field = QWidget()
+        row = QHBoxLayout(field)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(widget)
+        row.addWidget(reset)
+
+        label = _rich(tex_label(meta.get("tex") or name, meta.get("unit")) + ":")
+        label.setToolTip(f"{name}\n{meta.get('description') or ''}".strip())
+        form.addRow(label, field)
+
+        haystack = f"{name} {meta.get('categoryname') or ''} {meta.get('categorysection') or ''}"
+        self._rows.append((label, haystack.lower()))
+        self._rows.append((field, haystack.lower()))
+        self._mark(name)
+
+    # ---------------------------------------------------------- changes --
+
+    def _changed(self, name: str) -> None:
+        self._mark(name)
+        self._update_summary()
+
+    def _reset(self, name: str) -> None:
+        box = self._boxes[name]
+        box.blockSignals(True)
+        box.setValue(self._original[name])
+        box.blockSignals(False)
+        self._mark(name)
+        self._update_summary()
+
+    def _differs(self, name: str) -> bool:
+        return abs(self._boxes[name].value() - self._original[name]) > 1e-15
+
+    def _mark(self, name: str) -> None:
+        """A changed field looks changed, and only then can be reset."""
+        changed = self._differs(name)
+        self._resets[name].setVisible(changed)
+        self._boxes[name].setStyleSheet(
+            "background: #e3f5e3; border-color: #4a9a4a;" if changed else ""
+        )
+
+    def _update_summary(self) -> None:
+        lines = [
+            f"{name}: {self._original[name]:g} → {self._boxes[name].value():g}"
+            for name in sorted(self._boxes)
+            if self._differs(name)
+        ]
+        self.summary.setPlainText(
+            "\n".join(lines) if lines else "Nothing — the phase leaves every parameter alone."
+        )
+
+    def _filter(self, text: str) -> None:
+        needle = text.strip().lower()
+        for widget, haystack in self._rows:
+            widget.setVisible(not needle or needle in haystack)
+        for group in self._groups:
+            group.setVisible(
+                any(
+                    widget.isVisibleTo(group)
+                    for widget, _ in self._rows
+                    if widget.parent() is group
+                )
+            )
+
+    def accept(self) -> None:
+        """Write the differences into the phase. Nothing else is stored."""
+        super().accept()
+        self._phase.parameters = dict(self.changes)
 
 
 def _locked_hint(*, partial: bool = False) -> QLabel:

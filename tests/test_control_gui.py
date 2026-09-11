@@ -283,7 +283,7 @@ def test_the_arrow_forces_the_next_phase(window):
 
 def test_saving_writes_and_leaves_a_backup(window, db_copy):
     window.runner._on_tick()
-    window.save()
+    window.save(announce=False)
     backup = db_copy.with_suffix(".backup.db")
     assert backup.is_file()
     assert any("Saved" in line for line in window.log_lines)
@@ -291,7 +291,7 @@ def test_saving_writes_and_leaves_a_backup(window, db_copy):
 
 def test_saving_resumes_a_running_simulation(window):
     window.runner.start()
-    window.save()
+    window.save(announce=False)
     assert window.runner.running is True
 
 
@@ -608,3 +608,30 @@ def test_a_feed_summary_is_information_not_an_event(window):
     automaton._note("Open loop feed R1\n  qXpX1w = 0.1 1/h")
     window._drain_phase_log()
     assert window.log_view.entries[-1].event_type == "Phase Information"
+
+
+def test_saving_says_so_in_a_box(window, monkeypatch):
+    """The status line and the button flash were both missed."""
+    from PySide6.QtWidgets import QMessageBox
+
+    shown = []
+    monkeypatch.setattr(
+        QMessageBox, "information", lambda parent, title, text: shown.append((title, text))
+    )
+    window.save()
+
+    assert len(shown) == 1
+    title, text = shown[0]
+    assert title == "Project saved"
+    assert window.setup.info.name in text
+    assert "time points" in text
+    assert "Backup:" in text
+
+
+def test_an_automatic_save_does_not_stop_to_be_acknowledged(window, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    shown = []
+    monkeypatch.setattr(QMessageBox, "information", lambda *args: shown.append(args))
+    window.save(announce=False)
+    assert shown == []

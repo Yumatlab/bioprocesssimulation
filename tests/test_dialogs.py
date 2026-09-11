@@ -312,14 +312,16 @@ def test_the_variable_editor_writes_colour_and_style(db, qapp):
 def test_the_variable_editor_survives_a_save(db, qapp):
     from biofermentation.db.plots import save_plot_template
 
-    template = load_plot_template(db, 1)
+    # Not the default: that one is protected, so the round trip uses the copy
+    # the application would make.
+    template = load_plot_template(db, 2)
     editor = VariableEditor(template, load_plot_styles(db))
     name = template.variables[0].name
     select_data(editor.rows[name]["color"], 7)
     editor.accept()
     save_plot_template(db, template)
 
-    assert load_plot_template(db, 1).variables[0].colorID == 7
+    assert load_plot_template(db, 2).variables[0].colorID == 7
 
 
 def test_the_settings_dialog_applies_and_resets(db, qapp):
@@ -618,7 +620,10 @@ def test_the_open_plot_button_does_not_pass_its_checked_state(window):
             figure.close()
 
 
-def test_saving_reports_back(window):
+def test_saving_reports_back(window, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(QMessageBox, "information", lambda *args: None)
     window.save()
     assert window.save_button.text() == "Saved ✓"
     assert "Saved" in window.statusBar().currentMessage()
@@ -690,3 +695,112 @@ def test_a_restored_entry_keeps_its_event_type_and_process_time(window, db):
     )
     assert stored["event_type"] == "Phase Information"
     assert stored["process_time"] == pytest.approx(float(window.runner.state.v.t[1]))
+
+
+# ------------------------------------------- phase parameters, point 7 --
+
+
+def test_a_phase_stores_only_what_was_changed(window):
+    """An untouched field means "leave it alone", which is not the same as
+    writing the current value back — the operator may move it in between."""
+    from biofermentation.gui.dialogs import PhaseParameterDialog
+
+    phase = window.setup.phases[-1]
+    phase.parameters = {}
+    p = window.runner.state.p
+    dialog = PhaseParameterDialog(phase, window.setup.p_meta, p)
+
+    assert dialog._boxes, "no cyclic parameters offered"
+    assert "cS1L0" not in dialog._boxes, "an initial value cannot be applied mid-run"
+
+    dialog._boxes["pO2w"].setValue(p["pO2w"] + 15)
+    dialog.accept()
+
+    assert phase.parameters == {"pO2w": pytest.approx(p["pO2w"] + 15)}
+
+
+def test_the_reset_button_appears_only_on_a_changed_parameter(window):
+    from biofermentation.gui.dialogs import PhaseParameterDialog
+
+    phase = window.setup.phases[-1]
+    phase.parameters = {}
+    dialog = PhaseParameterDialog(phase, window.setup.p_meta, window.runner.state.p)
+
+    assert dialog._resets["pO2w"].isVisibleTo(dialog) is False
+    dialog._boxes["pO2w"].setValue(dialog._original["pO2w"] + 5)
+    assert dialog._resets["pO2w"].isVisibleTo(dialog) is True
+
+    dialog._resets["pO2w"].click()
+    assert dialog._boxes["pO2w"].value() == pytest.approx(dialog._original["pO2w"])
+    assert dialog._resets["pO2w"].isVisibleTo(dialog) is False
+
+
+def test_the_dialog_lists_what_the_phase_will_do(window):
+    from biofermentation.gui.dialogs import PhaseParameterDialog
+
+    phase = window.setup.phases[-1]
+    phase.parameters = {}
+    dialog = PhaseParameterDialog(phase, window.setup.p_meta, window.runner.state.p)
+    assert "Nothing" in dialog.summary.toPlainText()
+
+    dialog._boxes["pO2w"].setValue(dialog._original["pO2w"] + 5)
+    assert "pO2w" in dialog.summary.toPlainText()
+    assert "→" in dialog.summary.toPlainText()
+
+
+def test_an_existing_phase_parameter_comes_back_into_the_dialog(window):
+    from biofermentation.gui.dialogs import PhaseParameterDialog
+
+    phase = window.setup.phases[-1]
+    phase.parameters = {"pO2w": 42.0}
+    dialog = PhaseParameterDialog(phase, window.setup.p_meta, window.runner.state.p)
+    assert dialog._boxes["pO2w"].value() == pytest.approx(42.0)
+    assert dialog._resets["pO2w"].isVisibleTo(dialog) is True
+
+
+def test_cancelling_the_phase_editor_drops_the_parameters(window):
+    """They are edited on the draft, like everything else in that dialog."""
+    from biofermentation.gui.dialogs import PhaseEditor
+
+    phase = window.setup.phases[-1]
+    phase.parameters = {}
+    dialog = PhaseEditor(
+        phase,
+        window.setup.lookups,
+        reservoirs=2,
+        p_meta=window.setup.p_meta,
+        p=window.runner.state.p,
+    )
+    dialog._draft.parameters["pO2w"] = 55.0
+    dialog.reject()
+    assert phase.parameters == {}
+
+    dialog = PhaseEditor(
+        phase,
+        window.setup.lookups,
+        reservoirs=2,
+        p_meta=window.setup.p_meta,
+        p=window.runner.state.p,
+    )
+    dialog._draft.parameters["pO2w"] = 55.0
+    dialog.accept()
+    assert phase.parameters == {"pO2w": 55.0}
+
+
+def test_a_stop_phase_has_no_parameters_to_apply(window):
+    from biofermentation.control import PhaseType
+    from biofermentation.gui.dialogs import PhaseEditor
+    from biofermentation.gui.widgets.indicators import select_data
+
+    dialog = PhaseEditor(
+        window.setup.phases[-1],
+        window.setup.lookups,
+        reservoirs=2,
+        p_meta=window.setup.p_meta,
+        p=window.runner.state.p,
+    )
+    assert select_data(dialog.type_box, PhaseType.PARAMETER_UPDATE)
+    assert dialog.parameters_button.isEnabled() is True
+
+    assert select_data(dialog.type_box, PhaseType.STOP)
+    assert dialog.parameters_button.isEnabled() is False

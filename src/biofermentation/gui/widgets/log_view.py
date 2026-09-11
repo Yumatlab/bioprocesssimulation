@@ -13,7 +13,7 @@ whenever the filter changes, and `entries` is what gets written to logTab.
 from dataclasses import dataclass
 from datetime import datetime
 
-from PySide6.QtGui import QFont, QTextCursor
+from PySide6.QtGui import QFont, QTextBlockFormat, QTextCursor
 from PySide6.QtWidgets import (
     QCheckBox,
     QHBoxLayout,
@@ -85,9 +85,13 @@ class LogView(QWidget):
         self._rule_printed = False
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        # Room to breathe, and a margin that separates the terminal from the
+        # tab surface it sits on instead of butting it against the frame.
+        layout.setContentsMargins(10, 8, 10, 10)
+        layout.setSpacing(8)
 
         controls = QHBoxLayout()
+        controls.setSpacing(10)
         self.filter_edit = QLineEdit()
         self.filter_edit.setPlaceholderText("Filter…")
         self.filter_edit.setClearButtonEnabled(True)
@@ -106,6 +110,11 @@ class LogView(QWidget):
         self.view.setReadOnly(True)
         self.view.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         self.view.setFont(QFont(_monospace(), 11))
+        # A line height above the font size: the entries were legible but sat
+        # on top of one another.
+        self.view.setStyleSheet("")  # the sheet in default.qss owns the look
+        document = self.view.document()
+        document.setDocumentMargin(10)
         layout.addWidget(self.view, 1)
 
     # ------------------------------------------------------------ write --
@@ -175,7 +184,30 @@ class LogView(QWidget):
         return needle in f"{entry.event_type} {entry.message}".lower()
 
     def _rule(self, text: str) -> None:
-        self.view.append(f'<span style="color:#5a6068;">{_escape(text)}</span>')
+        self._append_html(f'<span style="color:#5a6068;">{_escape(text)}</span>')
+
+    def _append_html(self, html: str) -> None:
+        """One entry, with a little air under it.
+
+        QTextEdit.append() gives every block the default line height, which
+        packs the entries tight enough to read as one wall of text.
+        """
+        cursor = self.view.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        block = QTextBlockFormat()
+        block.setLineHeight(
+            float(self.LINE_SPACING),
+            int(QTextBlockFormat.LineHeightTypes.ProportionalHeight.value),
+        )
+        block.setBottomMargin(4)
+        if not self.view.document().isEmpty():
+            cursor.insertBlock(block)
+        else:
+            cursor.setBlockFormat(block)
+        cursor.insertHtml(html)
+
+    #: Extra space under each entry, as a fraction of the line height.
+    LINE_SPACING = 130
 
     def _print(self, entry: LogEntry) -> None:
         # A rule where the stored log ends and this session begins. Printed
@@ -202,7 +234,7 @@ class LogView(QWidget):
             f"{_escape(entry.event_type)}</span>"
             f'&nbsp;&nbsp;<span style="color:{body};">{_escape(entry.message)}</span>'
         )
-        self.view.append(line)
+        self._append_html(line)
         # Follow the tail, the way a terminal does.
         self.view.moveCursor(QTextCursor.MoveOperation.End)
         bar = self.view.verticalScrollBar()
