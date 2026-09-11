@@ -270,13 +270,14 @@ class SegmentedControl(QWidget):
     #: Between two rows of keys, when they do not fit on one.
     ROW_GAP = 4
 
-    def __init__(self, parent: QWidget | None = None, *, accent: QColor = SWITCH_ON):
+    def __init__(self, parent: QWidget | None = None, *, accent: QColor = ACCENT):
         super().__init__(parent)
         self._items: list[tuple[str, object]] = []
         self._index = -1
         self._hover = -1
-        # Green, like the switches beside it: on this surface green is the
-        # colour of something that is on, and a mode key says the same thing.
+        # Blue, not green: a key says which mode is chosen, and the lamp
+        # beside it says whether that mode is controlling anything. Two
+        # different questions, so not the same colour.
         self.accent = accent
         self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)

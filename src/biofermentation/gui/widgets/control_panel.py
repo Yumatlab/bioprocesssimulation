@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QGridLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QPushButton,
     QVBoxLayout,
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
 from .indicators import (
     RotarySelector,
     SegmentedControl,
+    StatusLamp,
     ToggleSwitch,
     ValueRow,
     select_data,
@@ -129,23 +131,29 @@ class ControlPanel(QGroupBox):
         layout.setSpacing(8)
 
         self.mode_selector: SegmentedControl | RotarySelector | None = None
+        self.lamp: StatusLamp | None = None
         if spec.mode_parameter:
-            # No lamp: the selector says it itself. A key is green when it is
-            # the chosen one, and the knob's dot is green for a control mode
-            # and red for hand control — which is exactly what the lamp said.
-            layout.addWidget(QLabel("Mode:"))
             # Keys or a knob — both instead of a dropdown, which hides the
             # one thing worth seeing: what there is to choose. Which of the
             # two is a line in the layout file, per panel.
-            self.mode_selector = (
-                RotarySelector() if mode_selector == "rotary" else SegmentedControl()
-            )
+            knob = mode_selector == "rotary"
+            self.mode_selector = RotarySelector() if knob else SegmentedControl()
             for value, text in spec.modes.items():
                 self.mode_selector.addItem(text, value)
-            if isinstance(self.mode_selector, RotarySelector):
-                # Mode 0 is hand control for every controller in this
-                # application; parameter_controlmodesTab numbers them so.
+
+            head = QHBoxLayout()
+            head.addWidget(QLabel("Mode:"))
+            if knob:
+                # No lamp beside a knob: its dot is already green for a
+                # control mode and red for hand control. Mode 0 is hand
+                # control everywhere here — parameter_controlmodesTab numbers
+                # every controller of this application that way.
                 self.mode_selector.set_manual_value(MANUAL_MODE)
+            else:
+                head.addStretch()
+                self.lamp = StatusLamp()
+                head.addWidget(self.lamp)
+            layout.addLayout(head)
             self.mode_selector.currentIndexChanged.connect(self._mode_changed)
             if isinstance(self.mode_selector, SegmentedControl):
                 # The one thing in the panel that asks for its full width: a
@@ -320,6 +328,9 @@ class ControlPanel(QGroupBox):
         for switch_spec in self.spec.switches:
             live = not switch_spec.modes or mode in switch_spec.modes
             self.switches[switch_spec.parameter].setEnabled(live)
+        if self.lamp is not None:
+            # Green once the panel is doing something automatic, as in MATLAB.
+            self.lamp.set_on(mode != MANUAL_MODE)
 
     def _mode_changed(self) -> None:
         self.apply_mode()

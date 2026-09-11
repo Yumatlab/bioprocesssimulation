@@ -52,6 +52,7 @@ from biofermentation.gui.widgets import (
     select_data,
 )
 from biofermentation.gui.widgets.control_panel import MANUAL_MODE
+from biofermentation.gui.widgets.indicators import GREEN, RED
 from biofermentation.gui.widgets.tex import tex_label, tex_to_html
 from biofermentation.gui.windows import ControlWindow
 from biofermentation.gui.windows.control_app import PANEL_SPACING
@@ -630,11 +631,23 @@ def test_the_mode_selector_fills_the_panel(window):
         assert panel.mode_selector.width() >= panel.width() - 30, title
 
 
-def test_no_panel_carries_a_mode_lamp(window):
-    """The selector says it itself: a green key, or a green dot on the knob —
-    and a red one where the loop is on hand control."""
-    for panel in window.panels.values():
-        assert not hasattr(panel, "lamp")
+def test_only_the_knob_goes_without_a_lamp(window):
+    """A key says which mode is chosen, the lamp whether it is controlling —
+    two questions. The knob answers both itself: its dot is green for a
+    control mode and red for hand control, so it needs no lamp."""
+    for title, panel in window.panels.items():
+        knob = isinstance(panel.mode_selector, RotarySelector)
+        assert (panel.lamp is None) == knob, title
+
+
+def test_the_lamp_is_green_once_the_loop_is_not_on_hand_control(qapp):
+    panel = ControlPanel(next(s for s in CONTROL_PANELS if s.title == "pH-Control"))
+    select_data(panel.mode_selector, MANUAL_MODE)
+    panel.apply_mode()
+    assert panel.lamp.color() == RED
+    select_data(panel.mode_selector, 1)
+    panel.apply_mode()
+    assert panel.lamp.color() == GREEN
 
 
 def test_the_mode_selector_shows_every_mode_at_once(window):

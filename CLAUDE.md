@@ -308,7 +308,8 @@ Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
   allein hinüberfährt, sieht aus, als hätte ihn jemand umgelegt. `ToggleSwitch`
   ist die Zeile darum: Beschriftung links, Schalter rechts, **keine Lampe**.
   Der Schalter ist grau, wenn er aus ist, und grün, wenn er an ist; eine Lampe
-  daneben sagt dasselbe ein zweites Mal.
+  daneben sagt dasselbe ein zweites Mal. Das gilt für den Schalter — der
+  Modus-Wähler hat seine Lampe, siehe unten.
 - **Zwei Modus-Wähler, dieselben vier Aufrufe.** `SegmentedControl` (Tasten)
   und `RotarySelector` (Drehschalter) beantworten beide
   `addItem`/`findData`/`setCurrentIndex`/`currentData` und heißen ihr Signal
@@ -318,10 +319,12 @@ Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
   Zuordnung mit `default`); es ist Geschmack, keine Verdrahtung. Fünf Modi
   sind ein anderes Problem als zwei: pO2 trägt den Drehschalter, der Breite
   gegen Höhe tauscht (132 px Quadrat, keine Breite), der Rest die Tasten.
-- **Keine Modus-Lampe mehr — der Wähler sagt es selbst.** Die gewählte Taste
-  ist grün wie die Schalter daneben, und der Punkt des Drehschalters ist grün
-  für einen Regelmodus und rot für Handbetrieb. Welcher Wert Handbetrieb ist,
-  weiß das Panel: `MANUAL_MODE = 0`, so nummeriert
+- **Die Lampe hat nur der Tastenwähler.** Eine Taste sagt, *welcher* Modus
+  gewählt ist — blau, nicht grün, denn ob dieser Modus etwas regelt, ist eine
+  zweite Frage, und die beantwortet die Lampe daneben. Der Drehschalter
+  beantwortet beide selbst: sein Punkt ist grün für einen Regelmodus und rot
+  für Handbetrieb, also steht neben ihm keine Lampe. Welcher Wert Handbetrieb
+  ist, weiß das Panel: `MANUAL_MODE = 0`, so nummeriert
   `parameter_controlmodesTab` jeden Regler dieser Anwendung.
 - **Die Tasten stehen auf einer Reihe, weil die Spalte dafür breit genug
   gemacht wird.** Der Rand je Taste ist beweglich (`PADDING` 12 bis
