@@ -30,6 +30,7 @@ HERE = resource_root()
 TEMPLATE_DB = HERE / "SimulationAppDB_template.db"
 DEFAULTS_DIR = HERE / "defaults"
 STYLES_DIR = HERE / "styles"
+LAYOUTS_DIR = HERE / "layouts"
 ICONS_DIR = HERE / "icons"
 
 
@@ -120,6 +121,7 @@ __all__ = [
     "DATABASE_ENV",
     "DEFAULTS_DIR",
     "IS_FROZEN",
+    "LAYOUTS_DIR",
     "STYLES_DIR",
     "TEMPLATE_DB",
     "bundled_files",

@@ -65,16 +65,8 @@ port.</p>
 """
 
 
-#: Where each panel of Control Options sits: column, row, how many rows it
-#: spans. Four columns, all of them filling the tab from top to bottom — the
-#: first three hold one panel each, the fourth is split into two equal halves.
-PANEL_PLACES = {
-    "pH-Control": (0, 0, 2),
-    "Temperature-Control": (1, 0, 2),
-    "pO2-Control": (2, 0, 2),
-    "Liquid Weight": (3, 0, 1),
-    "Feed Control": (3, 1, 1),
-}
+#: The gap between two panels of Control Options. Where the panels sit is not
+#: here — it is a text file the user can edit; see gui/panel_layout.py.
 PANEL_SPACING = 6
 
 
@@ -141,6 +133,10 @@ class ControlWindow(QMainWindow):
 
         self.load_from_state()
         self.load_log()
+        if self._layout_problem:
+            # Said here rather than in a box at startup: the tab is drawn
+            # either way, and the log is where the session keeps its record.
+            self.note(f"Panel layout not used — {self._layout_problem}", "Error")
 
     # ------------------------------------------------------------ build --
 
@@ -218,6 +214,7 @@ class ControlWindow(QMainWindow):
 
         settings = bar.addMenu("Settings")
         add(settings, "Reset controller parameters", self.reset_controller_gains)
+        add(settings, "Panel layout…", self.edit_panel_layout)
 
     def _fill_template_menu(self) -> None:
         """Filled on opening, as the original's context menu is."""
@@ -237,12 +234,17 @@ class ControlWindow(QMainWindow):
             )
 
     def _build_control_options(self) -> QWidget:
+        """The controller panels, arranged the way the layout file says."""
+        from ..panel_layout import load_layout
+
         page = QWidget()
         layout = QGridLayout(page)
         layout.setSpacing(PANEL_SPACING)
         reservoirs = int(self.setup.info.reservoirs or 1)
         specs = {spec.title: spec for spec in CONTROL_PANELS}
-        for title, (column, row, span) in PANEL_PLACES.items():
+        self.placements, self._layout_problem = load_layout(list(specs))
+
+        for title, place in self.placements.items():
             panel = ControlPanel(specs[title], reservoirs=reservoirs)
             panel.setObjectName("controlPanel")
             panel.parameter_changed.connect(self._set_parameter)
@@ -251,26 +253,37 @@ class ControlWindow(QMainWindow):
             # No alignment: every panel fills its cell, and the stretch above
             # its button turns the slack into one gap at the foot of the
             # panel instead of an empty strip under the whole tab.
-            layout.addWidget(panel, row, column, span, 1)
+            layout.addWidget(panel, place.row, place.column, place.row_span, place.column_span)
 
-        # One width for all four columns, so the panels are equally wide.
-        width = max(panel.content_width() for panel in self.panels.values())
-        for column in range(4):
+        self._size_panel_grid(layout)
+        return page
+
+    def _size_panel_grid(self, layout) -> None:
+        """Equal columns, equal rows — whatever the arrangement turns out to be.
+
+        A panel covering two cells needs half of what it asks for out of each,
+        and two panels sharing a column only come out equal if they are given
+        the same minimum: stretch alone shares out the slack, and the taller
+        one would keep its head start at every window size.
+        """
+        columns = max(p.column + p.column_span for p in self.placements.values())
+        rows = max(p.row + p.row_span for p in self.placements.values())
+
+        width = max(
+            self.panels[title].content_width() // place.column_span
+            for title, place in self.placements.items()
+        )
+        for column in range(columns):
             layout.setColumnMinimumWidth(column, width)
             layout.setColumnStretch(column, 1)
-        # Two equal halves in the split column. Equal stretch alone only
-        # shares out what is left over, and the two panels do not need the
-        # same amount to begin with — the taller one would keep its head start
-        # at every window size. A common minimum takes it away.
-        half = max(
-            self.panels[title].minimumSizeHint().height()
-            for title, (_, _, span) in PANEL_PLACES.items()
-            if span == 1
+
+        height = max(
+            self.panels[title].minimumSizeHint().height() // place.row_span
+            for title, place in self.placements.items()
         )
-        for row in range(2):
-            layout.setRowMinimumHeight(row, half)
+        for row in range(rows):
+            layout.setRowMinimumHeight(row, height)
             layout.setRowStretch(row, 1)
-        return page
 
     def _build_run_column(self) -> QWidget:
         column = QWidget()
@@ -775,6 +788,28 @@ class ControlWindow(QMainWindow):
 
     def show_information(self) -> None:
         self.tabs.setCurrentWidget(self.information_tab)
+
+    def edit_panel_layout(self) -> None:
+        """Open the layout file, creating it from the bundled one if need be.
+
+        The arrangement of Control Options is taste, not logic. This is the
+        way to change it without a Python file and without a rebuild — the
+        same deal the stylesheet has.
+        """
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+
+        from ..panel_layout import write_user_layout
+
+        path = write_user_layout()
+        QMessageBox.information(
+            self,
+            "Panel layout",
+            f"The arrangement of this tab is a file:\n\n{path}\n\n"
+            "It opens now in your editor. Save it and reopen the project to "
+            "see the new arrangement.",
+        )
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
     def reset_controller_gains(self) -> None:
         """Put every controller gain back to the model default."""

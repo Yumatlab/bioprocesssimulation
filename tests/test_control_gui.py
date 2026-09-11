@@ -29,6 +29,14 @@ from biofermentation.core.simulation_runner import SimulationRunner
 from biofermentation.db import load_phases
 from biofermentation.db.models import Condition
 from biofermentation.gui.dialogs import PhaseEditor
+from biofermentation.gui.panel_layout import (
+    BUNDLED_LAYOUT,
+    LayoutError,
+    fallback,
+    load_layout,
+    normalise,
+    parse_grid,
+)
 from biofermentation.gui.widgets import (
     CONTROL_PANELS,
     ControlPanel,
@@ -40,7 +48,7 @@ from biofermentation.gui.widgets import (
 )
 from biofermentation.gui.widgets.tex import tex_label, tex_to_html
 from biofermentation.gui.windows import ControlWindow
-from biofermentation.gui.windows.control_app import PANEL_PLACES, PANEL_SPACING
+from biofermentation.gui.windows.control_app import PANEL_SPACING
 from biofermentation.organisms import discover_organisms
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -653,14 +661,15 @@ def _laid_out(window):
     return window
 
 
-def test_the_panels_sit_where_the_layout_table_says(window):
-    """Four columns; Liquid Weight and Feed share the fourth."""
+def test_the_panels_sit_where_the_layout_file_says(window):
+    """The arrangement comes out of a text file, not out of the window."""
     layout = window.tabs.widget(0).layout()
-    assert layout.columnCount() == 4
-    for title, (column, row, span) in PANEL_PLACES.items():
+    for title, place in window.placements.items():
         index = layout.indexOf(window.panels[title])
         assert index >= 0, title
-        assert layout.getItemPosition(index) == (row, column, span, 1), title
+        position = (place.row, place.column, place.row_span, place.column_span)
+        assert layout.getItemPosition(index) == position, title
+    assert window._layout_problem == "", window._layout_problem
 
 
 def test_every_column_is_the_same_width_and_full_height(window):
@@ -675,15 +684,15 @@ def test_every_column_is_the_same_width_and_full_height(window):
 
     full = [
         window.panels[title]
-        for title, (_, _, span) in PANEL_PLACES.items()
-        if span == 2
+        for title, place in window.placements.items()
+        if place.row_span == 2
     ]
     half = [
         window.panels[title]
-        for title, (_, _, span) in PANEL_PLACES.items()
-        if span == 1
+        for title, place in window.placements.items()
+        if place.row_span == 1
     ]
-    assert {panel.height() for panel in half}.__len__() == 1, "the halves differ"
+    assert len({panel.height() for panel in half}) == 1, "the halves differ"
     tallest = max(panel.height() for panel in full)
     assert abs(sum(panel.height() for panel in half) + PANEL_SPACING - tallest) <= 2
 
@@ -842,3 +851,83 @@ def test_an_automatic_save_does_not_stop_to_be_acknowledged(window, monkeypatch)
     monkeypatch.setattr(QMessageBox, "information", lambda *args: shown.append(args))
     window.save(announce=False)
     assert shown == []
+
+
+# ------------------------------------------------------- the layout file --
+
+TITLES = ["pH-Control", "Temperature-Control", "pO2-Control", "Liquid Weight", "Feed Control"]
+
+
+def test_the_bundled_layout_is_the_one_the_window_draws():
+    """The file is the arrangement — not a copy of something in the code."""
+    places, problem = load_layout(TITLES, BUNDLED_LAYOUT)
+    assert problem == ""
+    assert set(places) == set(TITLES)
+    assert places["pO2-Control"].column == 2
+    assert places["Liquid Weight"].row == 0
+    assert places["Feed Control"].row == 1
+    assert places["Feed Control"].column == places["Liquid Weight"].column
+
+
+def test_a_name_repeated_across_cells_covers_them():
+    """That is the whole notation: the file looks like the arrangement."""
+    places = parse_grid(
+        [
+            ["pO2", "pO2", "Liquid Weight"],
+            ["pH", "Temperature", "Feed"],
+        ],
+        TITLES,
+    )
+    assert places["pO2-Control"] == places["pO2-Control"].__class__(0, 0, 1, 2)
+    assert places["Feed Control"] == places["Feed Control"].__class__(1, 2, 1, 1)
+
+
+def test_the_names_are_forgiving():
+    """A layout that breaks over a capital letter is one nobody edits twice."""
+    assert normalise("pH-Control") == normalise("PH control") == normalise("ph")
+    assert normalise("Liquid Weight") == normalise("liquid_weight")
+
+
+def test_an_empty_cell_stays_empty():
+    places = parse_grid(
+        [
+            ["pH", "Temperature", "pO2"],
+            ["Liquid Weight", "Feed", "~"],
+        ],
+        TITLES,
+    )
+    assert len(places) == len(TITLES)
+    assert max(p.column for p in places.values()) == 2
+
+
+@pytest.mark.parametrize(
+    ("grid", "complaint"),
+    [
+        ([["pH", "Temperature"]], "not placed anywhere"),
+        ([["pH", "Nonsense", "pO2", "Liquid Weight", "Feed"]], "unknown panel"),
+        ([["pH", "pO2", "pH", "Temperature", "Liquid Weight", "Feed"]], "rectangle"),
+        ([["pH", "Temperature"], ["pO2"]], "same number of cells"),
+        ("not a grid", "list of rows"),
+    ],
+)
+def test_a_layout_that_cannot_be_drawn_is_refused(grid, complaint):
+    with pytest.raises(LayoutError, match=complaint):
+        parse_grid(grid, TITLES)
+
+
+def test_a_broken_file_falls_back_and_says_why(tmp_path):
+    """Half a tab because of a typo is not a trade anybody would take."""
+    broken = tmp_path / "control_options.yaml"
+    broken.write_text("grid:\n  - [pH, Nonsense]\n", encoding="utf-8")
+
+    places, problem = load_layout(TITLES, broken)
+    assert set(places) == set(TITLES)
+    assert "unknown panel" in problem
+    assert places == fallback(TITLES)
+
+
+def test_the_fallback_needs_no_file_at_all():
+    """It runs when even the bundled file could not be read."""
+    places = fallback(TITLES)
+    assert [p.column for p in places.values()] == list(range(len(TITLES)))
+    assert {p.row for p in places.values()} == {0}

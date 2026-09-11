@@ -65,6 +65,19 @@ def test_the_stylesheet_ships():
     assert (STYLES_DIR / "default.qss").is_file()
 
 
+def test_the_panel_layout_ships_with_the_bundle(specs):
+    """The arrangement of Control Options is a file the user may replace.
+
+    A frozen build without it would fall back to five panels in a row and
+    nobody would know why.
+    """
+    from biofermentation.gui.panel_layout import BUNDLED_LAYOUT
+
+    assert BUNDLED_LAYOUT.is_file()
+    destinations = {destination for _, destination in specs.data_files()}
+    assert "biofermentation/resources/layouts" in destinations
+
+
 # ------------------------------------------------------------- the specs --
 
 

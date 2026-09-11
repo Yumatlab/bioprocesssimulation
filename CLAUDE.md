@@ -322,14 +322,29 @@ Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
   pO2-Control wiederholt nur den Titel und kostete 170 px auf einer Zeile, die
   alle fünf gleichzeitig zeigen muss. Die gespeicherten Modusnummern sind
   unverändert.
-- **Die Anordnung steht in `PANEL_PLACES`**, nicht im Aufbaucode: vier
-  Spalten, jede über die ganze Höhe des Tabs. pH, Temperatur und pO2 nehmen je
-  eine ganz, Liquid Weight und Feed teilen sich die vierte in zwei gleich
-  großen Hälften. Alle vier Spalten haben dieselbe Mindestbreite.
-- **Gleiche Hälften brauchen eine gemeinsame Mindesthöhe, nicht nur gleiche
-  Streckung.** `setRowStretch` verteilt nur, was übrig bleibt; die beiden
-  Panels brauchen von sich aus unterschiedlich viel, und das höhere behielte
-  seinen Vorsprung bei jeder Fenstergröße.
+- **Die Anordnung ist eine Textdatei, kein Python.** Sie ging an einem
+  Nachmittag durch fünf Runden, und jede Runde war eine Codeänderung — das
+  gehört nicht in den Code: es ist Geschmack, es beeinflusst nichts, was die
+  Anwendung rechnet, und wer den Geschmack hat, soll dafür kein Python
+  anfassen müssen. Mitgeliefert ist
+  `resources/layouts/control_options.yaml`, eine `control_options.yaml` neben
+  der Datenbank ersetzt sie; **Settings → Panel layout…** legt sie an und
+  öffnet sie. Dieselbe Abmachung wie beim Stylesheet.
+- **Die Datei *ist* die Anordnung.** Ein Raster aus Namen, eine Zeile je
+  Tabzeile; ein wiederholter Name deckt die Nachbarzellen ab. Namen werden
+  nachsichtig verglichen (`normalise`): `pH`, `pH-Control` und `PH control`
+  sind dasselbe Panel. Geprüft wird, dass jedes Panel vorkommt, dass seine
+  Zellen ein Rechteck bilden und dass alle Zeilen gleich lang sind.
+- **Eine kaputte Datei wirft nie das Tab weg.** `load_layout` fängt alles und
+  liefert die Ersatzanordnung (`fallback`: jedes Panel eine Spalte, ohne jede
+  Datei) plus den Grund, den das Fenster in den Log schreibt. Ein halbes Tab
+  wegen eines Tippfehlers wäre kein Tausch, den jemand eingeht.
+- **Gleiche Zellen brauchen eine gemeinsame Mindestgröße, nicht nur gleiche
+  Streckung.** `setRowStretch`/`setColumnStretch` verteilen nur, was übrig
+  bleibt; zwei Panels brauchen von sich aus unterschiedlich viel, und das
+  größere behielte seinen Vorsprung bei jeder Fenstergröße. `_size_panel_grid`
+  rechnet beides aus den Platzierungen aus — ein Panel über zwei Zellen
+  braucht aus jeder die Hälfte.
 - **Die Panels füllen ihre Zelle**, ohne Ausrichtung. Der Zwischenraum vor dem
   Knopf sammelt die Luft ein, also steht der Knopf am Fuß jedes Panels und
   alle vier stehen auf einer Linie.

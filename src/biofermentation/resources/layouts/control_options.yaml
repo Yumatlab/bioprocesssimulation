@@ -1,0 +1,25 @@
+# How the five controller panels are arranged in the Control Options tab.
+#
+# Copy this file next to your database as control_options.yaml and change it
+# there; the application reads yours instead of this one and never writes to
+# this file. In the running application: Settings → Panel layout…
+#
+# The file is the arrangement. One list entry per row of the tab, one name per
+# cell, left to right. Repeat a name to make its panel cover more than one
+# cell — sideways, downwards, or both. A tilde (~) leaves a cell empty.
+#
+#   grid:
+#     - [pO2, pO2, Liquid Weight]     pO2 over the two cells on the left
+#     - [pH, Temperature, Feed]
+#
+# Every cell of a panel has to form a rectangle, no name may appear twice in
+# places that do not touch, and every panel has to appear once. If anything is
+# wrong the application keeps the arrangement below and says so in the log —
+# it will not start with half a tab.
+#
+# The names are the panel titles. "-Control" may be left off, and case and
+# spaces do not matter: pH, pH-Control and "PH control" are the same panel.
+
+grid:
+  - [pH, Temperature, pO2, Liquid Weight]
+  - [pH, Temperature, pO2, Feed]

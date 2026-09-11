@@ -48,6 +48,7 @@ def data_files() -> list[tuple[str, str]]:
         (str(resources / "SimulationAppDB_template.db"), "biofermentation/resources"),
         (str(resources / "defaults"), "biofermentation/resources/defaults"),
         (str(resources / "styles"), "biofermentation/resources/styles"),
+        (str(resources / "layouts"), "biofermentation/resources/layouts"),
         (str(resources / "icons"), "biofermentation/resources/icons"),
         # Organism plugins ship their parameter definitions as YAML.
         (
