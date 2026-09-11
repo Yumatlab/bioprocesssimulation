@@ -175,6 +175,9 @@ def load_phases(db_path: Path | str, project_id: int) -> ProjectSetup:
             "SELECT * FROM processTab WHERE projectID = ? ORDER BY processID",
             (project_id,),
         )
+        highest_process_id = (
+            conn.execute("SELECT MAX(processID) FROM processTab").fetchone()[0] or 0
+        )
         phase_params = _rows(
             conn,
             """
@@ -217,7 +220,13 @@ def load_phases(db_path: Path | str, project_id: int) -> ProjectSetup:
         for row in phase_rows
     ]
 
-    next_process_id = max((ph.processID for ph in phases), default=0) + 1
+    # processID is the primary key of the whole table, not of the project.
+    # Numbering per project gave every new project a phase 1, and the second
+    # project to be saved collided with the first — UNIQUE constraint failed:
+    # processTab.processID, with the phases of a whole session in it.
+    next_process_id = (
+        max(highest_process_id, max((ph.processID for ph in phases), default=0)) + 1
+    )
 
     return ProjectSetup(
         info=info,
@@ -378,8 +387,13 @@ def save_project(
     series: VariableSeries | None = None,
     phases: list[Phase] | None = None,
     log: list[dict] | None = None,
+    info: dict[str, str] | None = None,
 ) -> dict[str, int | list[str]]:
     """The single write at session end. One connection, one transaction.
+
+    `info` takes name, author and description — the three fields the closing
+    dialog offers. Every save also stamps recent_use, as the original does;
+    without it the project list sorts by a timestamp that never moves.
 
     Returns what was written, plus 'unknown_parameters' for names in p that
     parameterTab does not know — those are skipped rather than raised over, so
@@ -390,8 +404,12 @@ def save_project(
         "times": 0,
         "values": 0,
         "phases": 0,
+        # Phases that had to take a new processID because another project was
+        # already using theirs; see _claim_free_process_ids.
+        "renumbered_phases": 0,
         "phase_parameters": 0,
         "log": 0,
+        "info": 0,
         "unknown_parameters": [],
         "skipped_parameters": [],
     }
@@ -405,8 +423,29 @@ def save_project(
             _save_phases(conn, project_id, phases, result)
         if log:
             _save_log(conn, project_id, log, result)
+        _save_info(conn, project_id, info, result)
 
     return result
+
+
+#: What the closing dialog may write back into projectTab. A fixed list, so
+#: the column names in the UPDATE below cannot come from anywhere else.
+INFO_FIELDS = ("name", "author", "description")
+
+
+def _save_info(
+    conn: sqlite3.Connection, project_id: int, info: dict[str, str] | None, result: dict
+) -> None:
+    """Name, author, description — and the time of this save."""
+    fields = {key: info[key] for key in INFO_FIELDS if info and key in info}
+    stamp = datetime.now().strftime("%d.%m.%Y %H:%M:%S.%f")[:-3]
+    assignments = [f'"{key}" = ?' for key in fields]
+    assignments.append("recent_use = ?")
+    conn.execute(
+        f"UPDATE projectTab SET {', '.join(assignments)} WHERE projectID = ?",
+        (*fields.values(), stamp, project_id),
+    )
+    result["info"] = len(fields)
 
 
 def _save_parameters(
@@ -498,6 +537,43 @@ def _save_series(
     result["values"] = len(values)
 
 
+def _claim_free_process_ids(
+    conn: sqlite3.Connection, phases: list[Phase], result: dict
+) -> None:
+    """Give every phase an id no other project is using.
+
+    processID is the primary key of the whole table. A phase numbered inside
+    its own project collides with the phase of the same number in another one,
+    and the insert takes the whole save down with it — parameters, series and
+    log included, because all of it is one transaction. The project's own rows
+    are already deleted when this runs, so what is left to avoid belongs to
+    somebody else.
+
+    Two phases of *this* list carrying the same id is a different matter: that
+    is a fault in the caller, not a clash between projects, and it still fails
+    loudly.
+    """
+    foreign = {row[0] for row in conn.execute("SELECT processID FROM processTab")}
+    used: set[int] = set()
+    highest = max(foreign, default=0)
+    for phase in phases:
+        if phase.processID and phase.processID not in foreign:
+            # Kept even if the list already holds it: that is the caller's
+            # fault, and the insert says so.
+            used.add(phase.processID)
+            continue
+        # Past everything the table holds and past every id handed out here —
+        # a phase further up the list may already sit on highest + 1.
+        highest += 1
+        while highest in foreign or highest in used:
+            highest += 1
+        result["renumbered_phases"] += 1
+        # Written back: process_parameterTab points at the new id, and so do
+        # the phase panels and the plot markers still holding the object.
+        phase.processID = highest
+        used.add(highest)
+
+
 def _save_phases(
     conn: sqlite3.Connection, project_id: int, phases: list[Phase], result: dict
 ) -> None:
@@ -507,6 +583,7 @@ def _save_phases(
     only does because get_connection() switches foreign keys on.
     """
     conn.execute("DELETE FROM processTab WHERE projectID = ?", (project_id,))
+    _claim_free_process_ids(conn, phases, result)
 
     known = {
         row["name"]: row["parameterID"]

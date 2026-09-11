@@ -380,7 +380,9 @@ def test_load_phases_reads_everything_in_one_go(db_copy: Path):
     assert len(setup.p) == 280
     assert setup.p["NStw"] == 1000.0
     assert len(setup.phases) == 5
-    assert setup.next_process_id == max(ph.processID for ph in setup.phases) + 1
+    # Free table-wide, not only inside the project — processID is the
+    # primary key of processTab.
+    assert setup.next_process_id == _count(db_copy, "SELECT MAX(processID) FROM processTab") + 1
     # Lookups are split by start_end so the editors get the right dropdown.
     assert {row["start_end"] for row in setup.lookups.start_conditiontype} == {1}
     assert {row["start_end"] for row in setup.lookups.end_conditiontype} == {2}
@@ -526,6 +528,37 @@ def test_replacing_phases_cascades_into_phase_parameters(db_copy: Path):
     assert setup.phases, "fixture must actually have had phases"
 
 
+def test_two_projects_do_not_fight_over_a_phase_number(db_copy: Path):
+    """processID is the key of the whole table, not of one project.
+
+    Both projects numbered their phases from 1, and the second one to be saved
+    took the whole session down with it: UNIQUE constraint failed, and with it
+    the parameters, the series and the log of that save.
+    """
+    other = 733  # a project of the template without phases of its own
+    setup = load_phases(db_copy, other)
+    phase = Phase(processID=setup.next_process_id, projectID=other, name="Batch")
+
+    result = save_project(db_copy, other, phases=[phase])
+    assert result["phases"] == 1
+    assert result["renumbered_phases"] == 0
+    assert load_phases(db_copy, other).phases[0].name == "Batch"
+
+
+def test_a_phase_that_lands_on_a_foreign_number_takes_a_free_one(db_copy: Path):
+    """The cure for a session that was numbered before the rule was known."""
+    other = 733
+    foreign = _count(db_copy, "SELECT MIN(processID) FROM processTab")
+    phase = Phase(processID=foreign, projectID=other, name="Batch")
+
+    result = save_project(db_copy, other, phases=[phase])
+    assert result["renumbered_phases"] == 1
+    assert phase.processID != foreign, "the new id must reach the caller"
+    assert load_phases(db_copy, other).phases[0].processID == phase.processID
+    # And the project that owned the number keeps its phase.
+    assert _count(db_copy, f"SELECT COUNT(*) FROM processTab WHERE processID = {foreign}") == 1
+
+
 def test_a_failing_save_leaves_the_database_untouched(db_copy: Path):
     """One transaction for parameters, series, phases and log together.
 
@@ -578,7 +611,9 @@ def test_empty_project_loads_without_data(db_copy: Path):
     setup = load_phases(db_copy, 733)
     assert setup.phases == []
     assert setup.p == {}
-    assert setup.next_process_id == 1
+    # Not 1: the phases of other projects hold the low numbers, and a new
+    # project that starts counting at 1 collides with them on the first save.
+    assert setup.next_process_id > _count(db_copy, "SELECT MAX(processID) FROM processTab")
     series = load_project_variables(db_copy, 733)
     assert series.n == 0
 

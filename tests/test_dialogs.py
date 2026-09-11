@@ -804,3 +804,96 @@ def test_a_stop_phase_has_no_parameters_to_apply(window):
 
     assert select_data(dialog.type_box, PhaseType.STOP)
     assert dialog.parameters_button.isEnabled() is False
+
+
+# ------------------------------------------------------- closing a project --
+
+
+def _answer(monkeypatch, choice):
+    """Make the closing dialog answer without being shown."""
+    from biofermentation.gui.dialogs.closing import ClosingDialog
+
+    def exec_(self):
+        self.choice = choice
+        return int(ClosingDialog.DialogCode.Accepted)
+
+    monkeypatch.setattr(ClosingDialog, "exec", exec_)
+
+
+def test_closing_asks_and_a_cancel_keeps_the_window(window, monkeypatch):
+    """Point 4: leaving a project is a decision, not a click on the close box."""
+    from biofermentation.gui.dialogs.closing import Choice
+
+    _answer(monkeypatch, Choice.CANCEL)
+    window.close()
+    assert window._leave_confirmed is False, "cancel must not count as an answer"
+
+
+def test_closing_with_save_writes_the_three_fields(window, db, monkeypatch):
+    from biofermentation.db import load_project_info
+    from biofermentation.gui.dialogs.closing import Choice, ClosingDialog
+
+    def exec_(self):
+        self.name_field.setText("Renamed")
+        self.author_field.setText("Yuma")
+        self.description_field.setPlainText("A run to keep")
+        self.choice = Choice.SAVE
+        return int(ClosingDialog.DialogCode.Accepted)
+
+    monkeypatch.setattr(ClosingDialog, "exec", exec_)
+    window.close()
+
+    info = load_project_info(db, PROJECT)
+    assert (info.name, info.author, info.description) == ("Renamed", "Yuma", "A run to keep")
+    assert window._leave_confirmed is True
+
+
+def test_closing_with_delete_asks_a_second_time(window, db, monkeypatch):
+    """Deleting a project cannot be taken back, so one click is not enough."""
+    from PySide6.QtWidgets import QMessageBox
+
+    from biofermentation.db import list_projects
+    from biofermentation.gui.dialogs.closing import Choice
+
+    _answer(monkeypatch, Choice.DELETE)
+    monkeypatch.setattr(
+        QMessageBox, "warning", lambda *args, **kwargs: QMessageBox.StandardButton.Cancel
+    )
+    window.close()
+    assert PROJECT in [row["projectID"] for row in list_projects(db)]
+    assert window._leave_confirmed is False
+
+    monkeypatch.setattr(
+        QMessageBox, "warning", lambda *args, **kwargs: QMessageBox.StandardButton.Yes
+    )
+    window.close()
+    assert PROJECT not in [row["projectID"] for row in list_projects(db)]
+
+
+def test_the_export_button_leaves_the_dialog_open(qapp):
+    """Exporting is not a decision about the project; one is still due."""
+    from biofermentation.db.models import ProjectInfo
+    from biofermentation.gui.dialogs.closing import Choice, ClosingDialog
+
+    info = ProjectInfo(
+        projectID=1,
+        name="Demo",
+        description="",
+        author="",
+        created_on=None,
+        recent_use=None,
+        organismID=1,
+        organism_name="E. coli",
+        function_file="Escherichia_coli",
+        initialization_file=None,
+        reservoirs=1,
+        bioreactorID=1,
+        bioreactor_name="BIOSTAT ED",
+        modelID=1,
+    )
+    dialog = ClosingDialog(info)
+    seen = []
+    dialog.export_requested.connect(lambda: seen.append(True))
+    dialog.export_button.click()
+    assert seen == [True]
+    assert dialog.choice is Choice.CANCEL, "no decision has been made yet"

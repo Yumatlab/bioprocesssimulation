@@ -340,6 +340,26 @@ def test_the_windows_render_to_png(tmp_path, qapp):
         assert path.is_file() and path.stat().st_size > 2000
 
 
+def test_every_way_into_a_project_releases_the_one_that_is_open():
+    """Point 4: two control windows at once cost the first one its data.
+
+    Closing the second and then the starting screen took the first down with
+    it — unsaved and unasked. Every entry point has to let go of the current
+    project first, and that is a decision the operator makes in the closing
+    dialog.
+    """
+    import inspect
+
+    from biofermentation.gui import app as app_module
+
+    for name in ("show_create_project", "show_select_project", "open_project"):
+        source = inspect.getsource(getattr(app_module.SimulationApp, name))
+        assert "release_current_project()" in source, name
+        assert "return" in source.split("release_current_project()")[1][:40], (
+            f"{name} does not stop when the operator cancels"
+        )
+
+
 def test_every_starting_screen_button_leads_somewhere(qapp):
     """A button that emits into nothing is worse than one that says so.
 

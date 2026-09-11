@@ -98,6 +98,9 @@ class ControlWindow(QMainWindow):
         self.db_path = Path(db_path)
         self.figure_windows: list = []
         self.data_tables: list = []
+        # Set once the closing question has been answered, so the answer is
+        # not asked for twice on the way out.
+        self._leave_confirmed = False
 
         info = setup.info
         self.setWindowTitle(
@@ -270,8 +273,11 @@ class ControlWindow(QMainWindow):
         column.setFixedWidth(210)
         layout = QVBoxLayout(column)
 
+        # No "Connected" lamp: there is no standing connection to report. The
+        # database is read once at the start and written once at the end, and
+        # a lamp that is green for the life of the window says nothing.
         self.lamps: dict[str, StatusLamp] = {}
-        for name in ("Connected", "Process Running", "Inoculated"):
+        for name in ("Process Running", "Inoculated"):
             row = QHBoxLayout()
             row.addStretch()
             row.addWidget(QLabel(name))
@@ -279,7 +285,6 @@ class ControlWindow(QMainWindow):
             self.lamps[name] = lamp
             row.addWidget(lamp)
             layout.addLayout(row)
-        self.lamps["Connected"].set_on(True)
         layout.addSpacing(20)
 
         time_row = QHBoxLayout()
@@ -713,7 +718,56 @@ class ControlWindow(QMainWindow):
 
     def save_and_exit(self) -> None:
         self.save(announce=False)
+        self._leave_confirmed = True
         self.close()
+
+    def confirm_leave(self) -> bool:
+        """Ask what is to become of the project. False means: stay.
+
+        Every way out of a project goes through here — the window's close box,
+        Exit, and the two menu entries that open another one. Only one project
+        is open at a time, so leaving one is always a decision about it and
+        never just a navigation step.
+        """
+        from ...db import delete_project
+        from ..dialogs.closing import Choice, ClosingDialog
+
+        if self._leave_confirmed:
+            return True
+
+        was_running = self.runner.running
+        self.runner.pause()
+        dialog = ClosingDialog(self.setup.info, running=was_running, parent=self)
+        dialog.export_requested.connect(lambda: self.export_project(parent=dialog))
+        dialog.exec()
+
+        if dialog.choice is Choice.SAVE:
+            self.save(announce=False, info=dialog.info_fields())
+        elif dialog.choice is Choice.DELETE:
+            if not self._confirm_delete():
+                if was_running:
+                    self.runner.start()
+                return False
+            delete_project(self.db_path, self.setup.info.projectID)
+        elif dialog.choice is Choice.CANCEL:
+            if was_running:
+                self.runner.start()
+            return False
+
+        self._leave_confirmed = True
+        return True
+
+    def _confirm_delete(self) -> bool:
+        """A second question, because the first one cannot be taken back."""
+        answer = QMessageBox.warning(
+            self,
+            "Delete Project",
+            f"Delete {self.setup.info.name!r} and everything measured in it?\n\n"
+            "This cannot be undone. A backup of the database is written first.",
+            QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes,
+            QMessageBox.StandardButton.Cancel,
+        )
+        return answer == QMessageBox.StandardButton.Yes
 
     def show_information(self) -> None:
         self.tabs.setCurrentWidget(self.information_tab)
@@ -735,11 +789,12 @@ class ControlWindow(QMainWindow):
         }
         self._apply_changes(changes, "Controller gains reset")
 
-    def save(self, announce: bool = True) -> None:
+    def save(self, announce: bool = True, info: dict[str, str] | None = None) -> None:
         """The one write at session end, with the backup of plan 1.3.
 
         announce = False for the automatic save on exit, which must not stop
-        to be acknowledged.
+        to be acknowledged. `info` carries the three fields of the closing
+        dialog; without it only recent_use is stamped.
         """
         was_running = self.runner.running
         self.runner.pause()
@@ -756,10 +811,15 @@ class ControlWindow(QMainWindow):
             series=series,
             phases=self.setup.phases,
             log=rows,
+            info=info,
         )
         # The ids the write handed out; without them the next save would
         # store the same entries again.
         self.log_view.adopt_ids(rows)
+        if info:
+            self.setup.info.name = info.get("name") or self.setup.info.name
+            self.setup.info.author = info.get("author", self.setup.info.author)
+            self.setup.info.description = info.get("description", self.setup.info.description)
         message = (
             f"Saved {result['times']} time points and {result['parameters']} "
             f"parameters — backup {backup.name}"
@@ -831,11 +891,15 @@ class ControlWindow(QMainWindow):
         if window in self.data_tables:
             self.data_tables.remove(window)
 
-    def export_project(self) -> None:
-        """Variables, parameters, phases and log to a folder (point 18)."""
+    def export_project(self, parent=None) -> None:
+        """Variables, parameters, phases and log to a folder (point 18).
+
+        `parent` is the closing dialog when the export is started from there —
+        a modal dialog only takes input from a window above it.
+        """
         from ..dialogs.export import ExportDialog
 
-        dialog = ExportDialog(self.setup, self.runner.state, self.log_lines, parent=self)
+        dialog = ExportDialog(self.setup, self.runner.state, self.log_lines, parent=parent or self)
         with self.runner.editing():
             accepted = dialog.exec() == QDialog.DialogCode.Accepted
         if accepted and dialog.written:
@@ -860,6 +924,9 @@ class ControlWindow(QMainWindow):
         self.refresh()
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
+        if not self.confirm_leave():
+            event.ignore()
+            return
         for window in list(self.figure_windows) + list(self.data_tables):
             window.close()
         self.runner.pause()

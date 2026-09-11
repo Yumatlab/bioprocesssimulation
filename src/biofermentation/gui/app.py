@@ -77,7 +77,28 @@ class SimulationApp(QApplication):
         self.starting_screen.show()
         self.starting_screen.raise_()
 
+    def release_current_project(self) -> bool:
+        """Close the open project, asking what is to become of it first.
+
+        Only one project at a time. Before this, "Start new project" left the
+        control window standing and opened a second one next to it: closing
+        that one and then the starting screen took the first one down with it,
+        unsaved and unasked.
+
+        Returns False when the operator cancelled — the caller must then do
+        nothing at all.
+        """
+        window = self.control_window
+        if window is None:
+            return True
+        window.close()
+        # close() is refused by the window itself when the question was
+        # cancelled; _control_closed clears the attribute when it went through.
+        return self.control_window is None
+
     def show_select_project(self) -> None:
+        if not self.release_current_project():
+            return
         if self.select_window is None:
             self.select_window = SelectProjectWindow(self.db_path)
             self.select_window.project_selected.connect(self.open_project)
@@ -89,6 +110,8 @@ class SimulationApp(QApplication):
         self.select_window.show()
 
     def show_create_project(self) -> None:
+        if not self.release_current_project():
+            return
         if self.create_window is None:
             self.create_window = CreateProjectWindow(self.db_path)
             self.create_window.project_created.connect(self._project_created)
@@ -165,6 +188,9 @@ class SimulationApp(QApplication):
         of plan section 1.2 means the window that follows never touches the
         database until it saves.
         """
+        if not self.release_current_project():
+            return None
+
         try:
             setup = load_phases(self.db_path, project_id)
             state, organism = load_project_state(self.db_path, project_id, dt=DEFAULT_DT)

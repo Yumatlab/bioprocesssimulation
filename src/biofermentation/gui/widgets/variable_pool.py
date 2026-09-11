@@ -1,8 +1,13 @@
 """The Variable Pool tab (point 6 of the review).
 
-Three things, as the original's VariablePoolTab has them:
+Four things — three as the original's VariablePoolTab has them, and the
+gas side, which it does not show anywhere:
 
   * **Pump Rates** — the six flows the actuators produce, read-only.
+  * **Aeration Rates** — the four gas flows, their sum, and the oxygen
+    fraction they mix to. The sum and the fraction are where the aeration
+    defects showed up (see CLAUDE.md); until now nothing in the running
+    application displayed either.
   * **Liquid Volume** — the working volume and what has been added to it.
   * **Trend** — a checkable list of every displayable variable and a table
     with the current value, the unit and an arrow for the direction it is
@@ -54,6 +59,18 @@ PUMP_RATES = [
     ("FR1", "F_{R1} [lh^{-1}]"),
     ("FR2", "F_{R2} [lh^{-1}]"),
     ("FR3", "F_{R3} [lh^{-1}]"),
+]
+
+#: Aeration panel: the components, their sum, and what they mix to. FnG is
+#: shown next to its parts on purpose — it must always be their sum, and the
+#: two places it was not are the reason the panel exists.
+AERATION_RATES = [
+    ("FnAIR", "F_{nAIR} [l min^{-1}]"),
+    ("FnO2", "F_{nO2} [l min^{-1}]"),
+    ("FnN2", "F_{nN2} [l min^{-1}]"),
+    ("FnCO2", "F_{nCO2} [l min^{-1}]"),
+    ("FnG", "F_{nG} (total) [l min^{-1}]"),
+    ("xOGin", "x_{OGin} (inlet O_{2}) [-]"),
 ]
 
 LIQUID_VOLUME = [
@@ -131,6 +148,7 @@ class VariablePool(QWidget):
         self.readouts: dict[str, QLineEdit] = {}
         for title, entries in (
             ("Pump Rates", PUMP_RATES),
+            ("Aeration Rates", AERATION_RATES),
             ("Liquid Volume", LIQUID_VOLUME),
         ):
             box = QGroupBox(title)
