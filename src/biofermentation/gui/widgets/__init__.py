@@ -2,6 +2,7 @@
 
 from .control_panel import ControlPanel, FieldSpec, PanelSpec, SwitchSpec
 from .indicators import (
+    RotarySelector,
     SegmentedControl,
     SlideSwitch,
     StatusLamp,
@@ -21,6 +22,7 @@ __all__ = [
     "PanelSpec",
     "PhaseGrid",
     "PhasePanel",
+    "RotarySelector",
     "SegmentedControl",
     "SlideSwitch",
     "StatusLamp",

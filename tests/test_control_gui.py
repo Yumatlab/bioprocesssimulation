@@ -6,6 +6,7 @@ through the runner's guard, and that the phase grid says what the phases
 actually are.
 """
 
+import itertools
 import re
 import shutil
 from pathlib import Path
@@ -31,16 +32,20 @@ from biofermentation.db.models import Condition
 from biofermentation.gui.dialogs import PhaseEditor
 from biofermentation.gui.panel_layout import (
     BUNDLED_LAYOUT,
+    DEFAULT_MODE_SELECTOR,
+    MODE_SELECTORS,
     LayoutError,
     fallback,
     load_layout,
     normalise,
     parse_grid,
+    parse_mode_selector,
 )
 from biofermentation.gui.widgets import (
     CONTROL_PANELS,
     ControlPanel,
     PhaseGrid,
+    RotarySelector,
     SegmentedControl,
     ToggleSwitch,
     condition_text,
@@ -628,19 +633,34 @@ def test_the_mode_selector_fills_the_panel(window):
 
 
 def test_the_mode_selector_shows_every_mode_at_once(window):
-    """That is the point of it: no mode hides behind a click.
-
-    Not necessarily on one row — pO2 has five modes and a panel a third of the
-    window wide, so they wrap. Wrapped is still shown; hidden is not.
-    """
+    """That is the point of it: no mode hides behind a click."""
     for title, panel in window.panels.items():
         selector = panel.mode_selector
         assert selector.count() == len(panel.spec.modes), title
+        if not isinstance(selector, SegmentedControl):
+            continue
         cells = selector._cells()
         assert len(cells) == selector.count(), title
         for index, cell in cells.items():
             assert cell.right() <= selector.width() + 1, f"{title}: key {index} runs off"
             assert cell.bottom() <= selector.height() + 1, f"{title}: key {index} is cut off"
+
+
+def test_the_keys_stand_on_one_row_in_the_panel_they_are_given(qapp):
+    """Five modes in a quarter-width panel was what wrapped, four times over.
+
+    content_width() asks for the one-row width at the tightest padding, so the
+    column is wide enough by construction.
+    """
+    spec = next(s for s in CONTROL_PANELS if s.title == "pO2-Control")
+    panel = ControlPanel(spec, mode_selector="keys")
+    panel.resize(panel.content_width(), panel.sizeHint().height())
+    panel.show()
+    QApplication.processEvents()
+
+    selector = panel.mode_selector
+    assert len(selector._rows()) == 1, "the keys wrapped in the width asked for"
+    assert selector.MIN_PADDING <= selector._padding(selector.width()) <= selector.PADDING
 
 
 def test_clicking_a_mode_key_reports_the_mode_behind_it(qapp):
@@ -860,13 +880,69 @@ TITLES = ["pH-Control", "Temperature-Control", "pO2-Control", "Liquid Weight", "
 
 def test_the_bundled_layout_is_the_one_the_window_draws():
     """The file is the arrangement — not a copy of something in the code."""
-    places, problem = load_layout(TITLES, BUNDLED_LAYOUT)
+    layout, problem = load_layout(TITLES, BUNDLED_LAYOUT)
+    places = layout.places
     assert problem == ""
     assert set(places) == set(TITLES)
     assert places["pO2-Control"].column == 2
     assert places["Liquid Weight"].row == 0
     assert places["Feed Control"].row == 1
     assert places["Feed Control"].column == places["Liquid Weight"].column
+    assert layout.mode_selector in MODE_SELECTORS
+
+
+def test_the_file_chooses_how_the_modes_are_drawn(tmp_path):
+    """Keys or a knob: taste, not wiring — both answer the same calls."""
+    path = tmp_path / "control_options.yaml"
+    path.write_text(
+        "grid: [[pH, Temperature, pO2, Liquid Weight, Feed]]\nmode_selector: rotary\n",
+        encoding="utf-8",
+    )
+    layout, problem = load_layout(TITLES, path)
+    assert problem == ""
+    assert layout.mode_selector == "rotary"
+
+    path.write_text("grid: [[pH, Temperature, pO2, Liquid Weight, Feed]]\n", encoding="utf-8")
+    assert load_layout(TITLES, path)[0].mode_selector == DEFAULT_MODE_SELECTOR
+
+
+def test_a_selector_nobody_has_is_refused():
+    with pytest.raises(LayoutError, match="unknown mode_selector"):
+        parse_mode_selector("wheel")
+
+
+def test_the_panels_build_the_selector_the_file_asked_for(qapp):
+    spec = next(s for s in CONTROL_PANELS if s.title == "pO2-Control")
+    assert isinstance(ControlPanel(spec, mode_selector="keys").mode_selector, SegmentedControl)
+    assert isinstance(ControlPanel(spec, mode_selector="rotary").mode_selector, RotarySelector)
+
+
+def test_the_knob_answers_the_calls_a_dropdown_would(qapp):
+    """Whatever it looks like, the panels talk to it as they would a combo."""
+    knob = RotarySelector()
+    for value, text in ((0, "Manual"), (1, "Agitation"), (2, "Aeration")):
+        knob.addItem(text, value)
+    assert knob.count() == 3
+    assert knob.currentData() == 0
+    assert knob.findData(2) == 2
+    assert knob.findData(9) == -1
+
+    seen = []
+    knob.currentIndexChanged.connect(seen.append)
+    assert select_data(knob, 2) is True
+    assert knob.currentText() == "Aeration"
+    assert seen == [2]
+
+
+def test_the_knob_spreads_its_positions_over_the_arc(qapp):
+    knob = RotarySelector()
+    for index in range(5):
+        knob.addItem(f"m{index}", index)
+    angles = [knob._angle(index) for index in range(5)]
+    assert angles[0] == RotarySelector.START
+    assert angles[-1] == RotarySelector.START - RotarySelector.SPAN
+    steps = {round(a - b, 6) for a, b in itertools.pairwise(angles)}
+    assert len(steps) == 1, "the positions are not evenly spaced"
 
 
 def test_a_name_repeated_across_cells_covers_them():
@@ -920,10 +996,10 @@ def test_a_broken_file_falls_back_and_says_why(tmp_path):
     broken = tmp_path / "control_options.yaml"
     broken.write_text("grid:\n  - [pH, Nonsense]\n", encoding="utf-8")
 
-    places, problem = load_layout(TITLES, broken)
-    assert set(places) == set(TITLES)
+    layout, problem = load_layout(TITLES, broken)
+    assert set(layout.places) == set(TITLES)
     assert "unknown panel" in problem
-    assert places == fallback(TITLES)
+    assert layout.places == fallback(TITLES)
 
 
 def test_the_fallback_needs_no_file_at_all():

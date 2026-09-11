@@ -9,6 +9,8 @@ The state always lives in a Qt button, never in a repaint: focus, keyboard
 and the accessibility tree come from Qt, and only the drawing is ours.
 """
 
+import math
+
 from PySide6.QtCore import (
     Property,
     QEasingCurve,
@@ -19,7 +21,15 @@ from PySide6.QtCore import (
     Qt,
     Signal,
 )
-from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QRadialGradient,
+)
 from PySide6.QtWidgets import (
     QAbstractButton,
     QHBoxLayout,
@@ -251,7 +261,11 @@ class SegmentedControl(QWidget):
     #: because the panels connect to it without knowing what they have.
     currentIndexChanged = Signal(int)
 
+    #: What a key would like on either side of its text, and the least it
+    #: will take before the keys go onto a second row. Five modes in a panel
+    #: a quarter of the window wide fit on one row at the lower figure — just.
     PADDING = 12
+    MIN_PADDING = 5
     HEIGHT = 28
     #: Between two rows of keys, when they do not fit on one.
     ROW_GAP = 4
@@ -309,17 +323,39 @@ class SegmentedControl(QWidget):
 
     # ------------------------------------------------------------ layout --
 
-    def _natural(self) -> list[float]:
-        """How wide each key would like to be."""
+    def _text_widths(self) -> list[float]:
         metrics = self.fontMetrics()
-        return [metrics.horizontalAdvance(text) + 2 * self.PADDING for text, _ in self._items]
+        return [metrics.horizontalAdvance(text) for text, _ in self._items]
+
+    def _padding(self, width: float) -> float:
+        """As much air as the keys can have and still stand on one row.
+
+        The comfortable figure when there is room, the tightest that still
+        fits when there is not, and no less — below that they wrap, which is
+        better than a keypad of unreadable slivers.
+        """
+        text = sum(self._text_widths())
+        if not self._items or text <= 0:
+            return self.PADDING
+        air = (width - text) / (2 * len(self._items))
+        return max(self.MIN_PADDING, min(self.PADDING, air))
+
+    def _natural(self, width: float | None = None) -> list[float]:
+        """How wide each key is, at the padding this width allows."""
+        width = self.width() if width is None else width
+        padding = self._padding(width)
+        return [own + 2 * padding for own in self._text_widths()]
+
+    def one_row_width(self) -> int:
+        """The narrowest the keys can stand side by side."""
+        return int(sum(self._text_widths()) + 2 * self.MIN_PADDING * max(1, len(self._items)))
 
     def _rows(self, width: float | None = None) -> list[list[int]]:
         """The keys, grouped into the rows they fit on."""
         if not self._items:
             return []
         width = self.width() if width is None else width
-        natural = self._natural()
+        natural = self._natural(width)
         rows: list[list[int]] = [[]]
         used = 0.0
         for index, own in enumerate(natural):
@@ -333,7 +369,7 @@ class SegmentedControl(QWidget):
     def _cells(self, width: float | None = None) -> dict[int, QRectF]:
         """Where every key sits. One pass, used by both painting and hit test."""
         width = self.width() if width is None else width
-        natural = self._natural()
+        natural = self._natural(width)
         cells: dict[int, QRectF] = {}
         for row, indices in enumerate(self._rows(width)):
             spare = (width - sum(natural[i] for i in indices)) / len(indices)
@@ -346,7 +382,8 @@ class SegmentedControl(QWidget):
         return cells
 
     def sizeHint(self) -> QSize:  # noqa: N802 - Qt API
-        return QSize(max(sum(self._natural()), 60), self.heightForWidth(self.width()))
+        comfortable = sum(own + 2 * self.PADDING for own in self._text_widths())
+        return QSize(max(int(comfortable), 60), self.heightForWidth(self.width()))
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt API
         # One key wide. Below that there is nothing left to wrap.
@@ -471,6 +508,176 @@ class SegmentedControl(QWidget):
                 painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.setPen(QPen(ACCENT, 1.5))
                 painter.drawRoundedRect(outer.adjusted(0.5, 0.5, -0.5, -0.5), 4, 4)
+
+
+class RotarySelector(QWidget):
+    """A knob with its positions around it — the selector of a switchboard.
+
+    Answers the same calls as SegmentedControl and QComboBox, so the panels
+    take either without knowing which. It trades height for width: five modes
+    cost a square of 132 px here and no width at all, where keys cost a row.
+
+    The positions run over 240°, from lower left to lower right, the way a
+    mode switch on a panel does. Clicking a position turns to it; the arrow
+    keys step through them.
+    """
+
+    currentIndexChanged = Signal(int)  # the QComboBox name; see SegmentedControl
+
+    SIZE = 132
+    KNOB = 30
+    TRACK = 46
+    #: Where the first and last position sit, in degrees.
+    START, SPAN = 210.0, 240.0
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._items: list[tuple[str, object]] = []
+        self._index = -1
+        self.setMinimumHeight(self.SIZE)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    # ------------------------------------------------ the QComboBox part --
+
+    def addItem(self, text: str, value=None) -> None:  # noqa: N802 - Qt API
+        self._items.append((text, value))
+        if self._index < 0:
+            self._index = 0
+        self.update()
+
+    def count(self) -> int:
+        return len(self._items)
+
+    def itemText(self, index: int) -> str:  # noqa: N802 - Qt API
+        return self._items[index][0]
+
+    def findData(self, value) -> int:  # noqa: N802 - Qt API
+        for index, (_, data) in enumerate(self._items):
+            if data == value:
+                return index
+        return -1
+
+    def currentIndex(self) -> int:  # noqa: N802 - Qt API
+        return self._index
+
+    def setCurrentIndex(self, index: int) -> None:  # noqa: N802 - Qt API
+        if not self._items or index == self._index:
+            return
+        self._index = max(0, min(index, len(self._items) - 1))
+        self.update()
+        self.currentIndexChanged.emit(self._index)
+
+    def currentData(self):  # noqa: N802 - Qt API
+        return self._items[self._index][1] if 0 <= self._index < len(self._items) else None
+
+    def currentText(self) -> str:  # noqa: N802 - Qt API
+        return self._items[self._index][0] if 0 <= self._index < len(self._items) else ""
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt API
+        return QSize(self.SIZE + 60, self.SIZE)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt API
+        return self.sizeHint()
+
+    # ------------------------------------------------------------ layout --
+
+    def _angle(self, index: int) -> float:
+        if len(self._items) < 2:
+            return 90.0
+        return self.START - self.SPAN * index / (len(self._items) - 1)
+
+    def _centre(self) -> QPointF:
+        return QPointF(self.width() / 2, self.SIZE / 2 + 6)
+
+    def _position(self, index: int, radius: float) -> QPointF:
+        angle = math.radians(self._angle(index))
+        centre = self._centre()
+        return QPointF(centre.x() + radius * math.cos(angle), centre.y() - radius * math.sin(angle))
+
+    # ------------------------------------------------------------- input --
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt API
+        """Turn to the position nearest the click — knob, dot or label alike."""
+        if not self._items:
+            return
+        vector = event.position() - self._centre()
+        angle = math.degrees(math.atan2(-vector.y(), vector.x())) % 360
+        nearest = min(
+            range(len(self._items)),
+            key=lambda index: min(
+                abs(self._angle(index) % 360 - angle),
+                360 - abs(self._angle(index) % 360 - angle),
+            ),
+        )
+        self.setCurrentIndex(nearest)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt API
+        if event.key() in (Qt.Key.Key_Left, Qt.Key.Key_Down):
+            self.setCurrentIndex(self._index - 1)
+        elif event.key() in (Qt.Key.Key_Right, Qt.Key.Key_Up):
+            self.setCurrentIndex(self._index + 1)
+        else:
+            super().keyPressEvent(event)
+
+    # ------------------------------------------------------------- paint --
+
+    def paintEvent(self, event) -> None:  # noqa: N802 - Qt API
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        live = self.isEnabled()
+        centre = self._centre()
+
+        track = QRectF(
+            centre.x() - self.TRACK, centre.y() - self.TRACK, 2 * self.TRACK, 2 * self.TRACK
+        )
+        painter.setPen(QPen(QColor(0xD6, 0xD8, 0xDA), 3))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawArc(track, -30 * 16, int(self.SPAN * 16))
+
+        font = QFont(self.font())
+        font.setPointSizeF(max(7.0, font.pointSizeF() - 2))
+        for index, (text, _) in enumerate(self._items):
+            lit = index == self._index
+            dot = self._position(index, self.TRACK)
+            colour = (SWITCH_ON if lit else SWITCH_OFF) if live else QColor(0xDD, 0xDD, 0xDD)
+            painter.setBrush(colour)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(dot, 4.5, 4.5)
+
+            font.setBold(lit)
+            painter.setFont(font)
+            painter.setPen(TEXT if live else MUTED)
+            label = self._position(index, self.TRACK + 16)
+            width = painter.fontMetrics().horizontalAdvance(text)
+            box = QRectF(label.x() - width / 2, label.y() - 9, width, 18)
+            # The labels left and right of the knob hang off their dot rather
+            # than centring on it, or they would sit on top of the arc.
+            cosine = math.cos(math.radians(self._angle(index)))
+            if cosine > 0.3:
+                box.moveLeft(label.x())
+            elif cosine < -0.3:
+                box.moveRight(label.x())
+            painter.drawText(box, Qt.AlignmentFlag.AlignCenter, text)
+
+        gradient = QRadialGradient(centre + QPointF(-8, -10), self.KNOB * 2)
+        gradient.setColorAt(0.0, QColor(0xFC, 0xFC, 0xFC) if live else QColor(0xF4, 0xF4, 0xF4))
+        gradient.setColorAt(1.0, QColor(0xD2, 0xD5, 0xD8) if live else QColor(0xEC, 0xEC, 0xEC))
+        painter.setBrush(gradient)
+        painter.setPen(QPen(ACCENT if self.hasFocus() and live else QColor(0xA0, 0xA4, 0xA8), 1.5))
+        painter.drawEllipse(centre, self.KNOB, self.KNOB)
+
+        if 0 <= self._index < len(self._items):
+            painter.setPen(
+                QPen(
+                    QColor(0x3C, 0x40, 0x44) if live else MUTED,
+                    3,
+                    Qt.PenStyle.SolidLine,
+                    Qt.PenCapStyle.RoundCap,
+                )
+            )
+            painter.drawLine(centre, self._position(self._index, self.KNOB * 0.8))
 
 
 #: How narrow a value field may become before it stops being readable.

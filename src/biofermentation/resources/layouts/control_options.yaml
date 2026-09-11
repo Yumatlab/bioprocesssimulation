@@ -23,3 +23,11 @@
 grid:
   - [pH, Temperature, pO2, Liquid Weight]
   - [pH, Temperature, pO2, Feed]
+
+# How the modes are drawn. Both show every mode without opening anything;
+# they differ in what they cost and in how they look.
+#
+#   keys    joined keys, all on one line — the panel is made wide enough
+#   rotary  a knob with its positions around it, like a switchboard
+#
+mode_selector: rotary

@@ -30,6 +30,19 @@ from ..resources import LAYOUTS_DIR, default_database
 BUNDLED_LAYOUT = LAYOUTS_DIR / "control_options.yaml"
 USER_LAYOUT_NAME = "control_options.yaml"
 
+#: What the mode row may be drawn as. The panels talk to either through the
+#: same four QComboBox calls, so this is a question of taste, not of wiring.
+MODE_SELECTORS = ("keys", "rotary")
+DEFAULT_MODE_SELECTOR = "keys"
+
+
+@dataclass(frozen=True)
+class Layout:
+    """What the file says: where the panels go and how the modes are drawn."""
+
+    places: dict[str, "Placement"]
+    mode_selector: str = DEFAULT_MODE_SELECTOR
+
 
 @dataclass(frozen=True)
 class Placement:
@@ -117,8 +130,20 @@ def parse_grid(grid, titles: list[str]) -> dict[str, Placement]:
     return places
 
 
-def load_layout(titles: list[str], path: Path | None = None) -> tuple[dict[str, Placement], str]:
-    """The arrangement to draw, and what went wrong on the way to it.
+def parse_mode_selector(value) -> str:
+    """Which drawing of the mode row the file asked for."""
+    if value is None:
+        return DEFAULT_MODE_SELECTOR
+    name = str(value).strip().lower()
+    if name not in MODE_SELECTORS:
+        raise LayoutError(
+            f"unknown mode_selector {value!r} — the choices are: {', '.join(MODE_SELECTORS)}"
+        )
+    return name
+
+
+def load_layout(titles: list[str], path: Path | None = None) -> tuple[Layout, str]:
+    """The layout to draw, and what went wrong on the way to it.
 
     Never raises: a broken file falls back to the bundled arrangement and
     returns the reason. Half a tab because of a typo in a layout file is not
@@ -131,14 +156,17 @@ def load_layout(titles: list[str], path: Path | None = None) -> tuple[dict[str, 
             continue
         try:
             document = yaml.safe_load(candidate.read_text(encoding="utf-8")) or {}
-            return parse_grid(document.get("grid"), titles), problem
+            return Layout(
+                parse_grid(document.get("grid"), titles),
+                parse_mode_selector(document.get("mode_selector")),
+            ), problem
         except (LayoutError, yaml.YAMLError, OSError) as error:
             problem = f"{candidate.name}: {error}"
             continue
 
     if not problem:
         problem = "no layout file found"
-    return fallback(titles), problem
+    return Layout(fallback(titles)), problem
 
 
 def fallback(titles: list[str]) -> dict[str, Placement]:

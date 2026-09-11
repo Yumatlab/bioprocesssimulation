@@ -242,10 +242,15 @@ class ControlWindow(QMainWindow):
         layout.setSpacing(PANEL_SPACING)
         reservoirs = int(self.setup.info.reservoirs or 1)
         specs = {spec.title: spec for spec in CONTROL_PANELS}
-        self.placements, self._layout_problem = load_layout(list(specs))
+        layout_file, self._layout_problem = load_layout(list(specs))
+        self.placements = layout_file.places
 
         for title, place in self.placements.items():
-            panel = ControlPanel(specs[title], reservoirs=reservoirs)
+            panel = ControlPanel(
+                specs[title],
+                reservoirs=reservoirs,
+                mode_selector=layout_file.mode_selector,
+            )
             panel.setObjectName("controlPanel")
             panel.parameter_changed.connect(self._set_parameter)
             panel.parameters_requested.connect(self.open_controller_parameters)

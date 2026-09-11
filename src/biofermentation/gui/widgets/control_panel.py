@@ -19,7 +19,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .indicators import SegmentedControl, StatusLamp, ToggleSwitch, ValueRow, select_data
+from .indicators import (
+    RotarySelector,
+    SegmentedControl,
+    StatusLamp,
+    ToggleSwitch,
+    ValueRow,
+    select_data,
+)
 
 
 @dataclass
@@ -93,7 +100,12 @@ class ControlPanel(QGroupBox):
     parameters_requested = Signal(str)
 
     def __init__(
-        self, spec: PanelSpec, parent: QWidget | None = None, *, reservoirs: int = 1
+        self,
+        spec: PanelSpec,
+        parent: QWidget | None = None,
+        *,
+        reservoirs: int = 1,
+        mode_selector: str = "keys",
     ):
         super().__init__(spec.title, parent)
         self.spec = spec
@@ -114,7 +126,7 @@ class ControlPanel(QGroupBox):
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
 
-        self.mode_selector: SegmentedControl | None = None
+        self.mode_selector: SegmentedControl | RotarySelector | None = None
         self.lamp: StatusLamp | None = None
         if spec.mode_parameter:
             # Caption and lamp on one line, keys across the full width below.
@@ -126,13 +138,20 @@ class ControlPanel(QGroupBox):
             self.lamp = StatusLamp()
             head.addWidget(self.lamp)
             layout.addLayout(head)
-            # Keys instead of a dropdown: the operator sees what there is to
-            # choose without opening anything, and the choice is one click
-            # rather than two.
-            self.mode_selector = SegmentedControl()
+            # Keys or a knob — both instead of a dropdown, which hides the
+            # one thing worth seeing: what there is to choose. Which of the
+            # two is a line in the layout file.
+            self.mode_selector = (
+                RotarySelector() if mode_selector == "rotary" else SegmentedControl()
+            )
             for value, text in spec.modes.items():
                 self.mode_selector.addItem(text, value)
             self.mode_selector.currentIndexChanged.connect(self._mode_changed)
+            if isinstance(self.mode_selector, SegmentedControl):
+                # The one thing in the panel that asks for its full width: a
+                # keypad that wraps is what the arrangement was redone four
+                # times over. Below this the keys still wrap rather than clip.
+                self.mode_selector.setMinimumWidth(self.mode_selector.one_row_width())
             layout.addWidget(self.mode_selector)
 
         self.reservoir_selector: SegmentedControl | None = None
@@ -245,17 +264,12 @@ class ControlPanel(QGroupBox):
         """How wide this panel has to be for nothing in it to be cut off.
 
         The minimum, not the wish: a QDoubleSpinBox asks for the widest number
-        its range allows, and the mode keys ask to stand side by side. Neither
-        has to be granted — the fields have a readable floor of their own, and
-        the keys wrap onto a second row rather than widen the column.
+        its range allows, and that is not granted — the fields have a readable
+        floor of their own. The mode keys are in the minimum, though: their
+        one-row width is set on the selector itself, so it comes back through
+        minimumSizeHint with the real margins around it rather than a guess.
         """
-        width = self.minimumSizeHint().width()
-        if self.mode_selector is not None:
-            # Two keys side by side, plus the layout margins. One key would be
-            # readable but would put every mode on a line of its own.
-            keys = sorted(self.mode_selector._natural(), reverse=True)[:2]
-            width = max(width, int(sum(keys)) + 26)
-        return width
+        return self.minimumSizeHint().width()
 
     def current_mode(self) -> int | None:
         return self.mode_selector.currentData() if self.mode_selector else None

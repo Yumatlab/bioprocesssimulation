@@ -310,14 +310,23 @@ Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
   Der Schalter ist grau, wenn er aus ist, und grün, wenn er an ist; eine Lampe
   daneben sagt dasselbe ein zweites Mal. Die Lampe am Modus bleibt — sie sagt
   etwas anderes, nämlich ob der Regelkreis automatisch fährt.
-- **`SegmentedControl`** ersetzt das Modus-Dropdown. Es beantwortet
-  `addItem`/`findData`/`setCurrentIndex`/`currentData` und heißt sein Signal
+- **Zwei Modus-Wähler, dieselben vier Aufrufe.** `SegmentedControl` (Tasten)
+  und `RotarySelector` (Drehschalter) beantworten beide
+  `addItem`/`findData`/`setCurrentIndex`/`currentData` und heißen ihr Signal
   `currentIndexChanged` — damit tragen `select_data()` und `ControlPanel`
-  beide Varianten, ohne zu wissen, welche sie halten. Passen die Tasten nicht
-  nebeneinander, kommen sie in eine zweite Reihe statt zu verschwinden; die
-  Höhe setzt `resizeEvent` selbst, weil `heightForWidth` in einem
-  `QHBoxLayout` nicht beachtet wird und eine Tastenreihe außerhalb des Widgets
-  eine ist, die niemand drücken kann.
+  jede Variante, ohne zu wissen, welche sie halten. **Welche es ist, steht in
+  der Layoutdatei** (`mode_selector: keys | rotary`); es ist Geschmack, keine
+  Verdrahtung. Der Drehschalter tauscht Breite gegen Höhe: fünf Modi kosten
+  ein Quadrat von 132 px und keine Breite, die Tasten eine Zeile.
+- **Die Tasten stehen auf einer Reihe, weil die Spalte dafür breit genug
+  gemacht wird.** Der Rand je Taste ist beweglich (`PADDING` 12 bis
+  `MIN_PADDING` 5), und `one_row_width()` — die Breite bei engstem Rand —
+  steht als `setMinimumWidth` auf dem Wähler selbst. Damit kommt sie über
+  `minimumSizeHint` mit den echten Rändern zurück, statt über einen
+  geschätzten Zuschlag. Fünf Modi brauchen 215 px Text; in einer Viertelbreite
+  bleiben 5,6 px Rand, und genau dafür ist die Untergrenze da. Darunter wird
+  weiter umgebrochen statt abgeschnitten — die Höhe setzt `resizeEvent`
+  selbst, weil `heightForWidth` in einem `QHBoxLayout` nicht beachtet wird.
 - **Die pO2-Modi heißen ohne Präfix.** „pO2-agitation" in einem Panel namens
   pO2-Control wiederholt nur den Titel und kostete 170 px auf einer Zeile, die
   alle fünf gleichzeitig zeigen muss. Die gespeicherten Modusnummern sind
@@ -330,8 +339,9 @@ Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
   `resources/layouts/control_options.yaml`, eine `control_options.yaml` neben
   der Datenbank ersetzt sie; **Settings → Panel layout…** legt sie an und
   öffnet sie. Dieselbe Abmachung wie beim Stylesheet.
-- **Die Datei *ist* die Anordnung.** Ein Raster aus Namen, eine Zeile je
-  Tabzeile; ein wiederholter Name deckt die Nachbarzellen ab. Namen werden
+- **Die Datei *ist* die Anordnung**, und sie sagt auch, wie die Modi
+  gezeichnet werden. Ein Raster aus Namen, eine Zeile je Tabzeile; ein
+  wiederholter Name deckt die Nachbarzellen ab. Namen werden
   nachsichtig verglichen (`normalise`): `pH`, `pH-Control` und `PH control`
   sind dasselbe Panel. Geprüft wird, dass jedes Panel vorkommt, dass seine
   Zellen ein Rechteck bilden und dass alle Zeilen gleich lang sind.
