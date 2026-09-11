@@ -40,7 +40,7 @@ from biofermentation.gui.widgets import (
 )
 from biofermentation.gui.widgets.tex import tex_label, tex_to_html
 from biofermentation.gui.windows import ControlWindow
-from biofermentation.gui.windows.control_app import PANEL_ORDER
+from biofermentation.gui.windows.control_app import PANEL_PLACES, PANEL_SPACING
 from biofermentation.organisms import discover_organisms
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -609,13 +609,14 @@ def test_the_plot_ticks_point_outwards(qapp):
         assert axis.style["tickLength"] == TICK_LENGTH
 
 
-def test_the_mode_selector_fills_its_row(window):
-    """It stopped at its own size hint and left a gap before the lamp."""
+def test_the_mode_selector_fills_the_panel(window):
+    """It stopped at its own size hint and left a gap beside it."""
+    _laid_out(window)
     for title, panel in window.panels.items():
-        selector, lamp = panel.mode_selector, panel.lamp
-        assert selector.width() >= selector.sizeHint().width(), title
-        gap = lamp.geometry().left() - selector.geometry().right()
-        assert gap < 20, f"{title}: {gap} px between selector and lamp"
+        selector = panel.mode_selector
+        assert selector.width() >= panel.width() - 30, title
+        # The lamp sits on the caption line above the keys, not beside them.
+        assert panel.lamp.geometry().bottom() <= selector.geometry().top(), title
 
 
 def test_the_mode_selector_shows_every_mode_at_once(window):
@@ -644,28 +645,47 @@ def test_clicking_a_mode_key_reports_the_mode_behind_it(qapp):
     assert panel.current_mode() == 3
 
 
-def test_the_panels_are_stacked_rows_in_order(window):
-    """One panel per row, top to bottom, in the order of the table."""
+def _laid_out(window):
+    """Geometry is only real once the window has been through a layout pass."""
+    window.resize(1420, 700)
+    window.show()
+    QApplication.processEvents()
+    return window
+
+
+def test_the_panels_sit_where_the_layout_table_says(window):
+    """Four columns; Liquid Weight and Feed share the fourth."""
     layout = window.tabs.widget(0).layout()
-    for position, title in enumerate(PANEL_ORDER):
-        assert layout.indexOf(window.panels[title]) == position, title
+    assert layout.columnCount() == 4
+    for title, (column, row, span) in PANEL_PLACES.items():
+        index = layout.indexOf(window.panels[title])
+        assert index >= 0, title
+        assert layout.getItemPosition(index) == (row, column, span, 1), title
 
 
-def test_every_row_starts_its_fields_in_the_same_place(window):
-    """Five rows that do not line up are five rows one reads separately.
+def test_every_column_is_the_same_width_and_full_height(window):
+    """Four equal columns, each filled from the top of the tab to the bottom.
 
-    The pO2 keypad is three times the width of an on/off pair, so every mode
-    block is given the width of the widest one.
+    The two panels sharing the fourth column split it into equal halves; the
+    three others are one panel from top to bottom.
     """
+    _laid_out(window)
     widths = [panel.width() for panel in window.panels.values()]
     assert max(widths) - min(widths) <= 1
 
-    starts = {
-        panel.rows[next(iter(panel.rows))].x()
-        for panel in window.panels.values()
-        if panel.rows
-    }
-    assert len(starts) == 1, f"the first field starts at {sorted(starts)}"
+    full = [
+        window.panels[title]
+        for title, (_, _, span) in PANEL_PLACES.items()
+        if span == 2
+    ]
+    half = [
+        window.panels[title]
+        for title, (_, _, span) in PANEL_PLACES.items()
+        if span == 1
+    ]
+    assert {panel.height() for panel in half}.__len__() == 1, "the halves differ"
+    tallest = max(panel.height() for panel in full)
+    assert abs(sum(panel.height() for panel in half) + PANEL_SPACING - tallest) <= 2
 
 
 def test_a_switch_is_as_wide_as_one_field(window):

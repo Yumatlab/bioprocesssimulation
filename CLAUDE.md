@@ -322,26 +322,24 @@ Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
   pO2-Control wiederholt nur den Titel und kostete 170 px auf einer Zeile, die
   alle fünf gleichzeitig zeigen muss. Die gespeicherten Modusnummern sind
   unverändert.
-- **Ein Panel ist eine Zeile über die ganze Breite des Tabs**, die fünf
-  stehen untereinander in der Reihenfolge von `PANEL_ORDER`. Darin: die
-  Modustasten links in voller Länge, dann jedes Feld, dann die Schalter, und
-  rechts außen der Knopf. Alles darin ist eine Beschriftung über einem
-  Bedienelement (`_captioned`), also liegen die Beschriftungen auf einer Linie
-  und die Eingabefelder auf der darunter.
-- **Die Modustasten werden nie umgebrochen und nie gedehnt.** `setFixedWidth`
-  auf ihre Einzeilenbreite: die Zeile existiert genau dafür, dass jeder Modus
-  auf einer Linie steht, und in einem breiten Fenster wären sie sonst das
-  Einzige, was in die Restbreite wächst.
-- **Alle Modusblöcke sind so breit wie der breiteste** (`set_mode_width`, vom
-  Fenster gesetzt). Das pO2-Tastenfeld ist dreimal so breit wie ein
-  Ein/Aus-Paar; ohne das fingen die Felder in jeder Zeile woanders an, und
-  fünf Zeilen, die nicht fluchten, sind fünf Zeilen, die man einzeln liest.
-- **Jedes Wertefeld ist `FIELD_WIDTH` breit**, nicht ein Anteil der Zeile.
-  Eine Zeile mit zwei Feldern gäbe jedem sonst 500 px, und ein breiter Kasten
-  macht einen Sollwert nicht lesbarer. Was übrig bleibt, bleibt leer.
-- **Ein Schalter ist ein Feld breit, nicht ein Panel**, und sitzt auf der
-  Linie der Eingabefelder — er hat keine Beschriftung über sich, sondern
-  daneben.
+- **Die Anordnung steht in `PANEL_PLACES`**, nicht im Aufbaucode: vier
+  Spalten, jede über die ganze Höhe des Tabs. pH, Temperatur und pO2 nehmen je
+  eine ganz, Liquid Weight und Feed teilen sich die vierte in zwei gleich
+  großen Hälften. Alle vier Spalten haben dieselbe Mindestbreite.
+- **Gleiche Hälften brauchen eine gemeinsame Mindesthöhe, nicht nur gleiche
+  Streckung.** `setRowStretch` verteilt nur, was übrig bleibt; die beiden
+  Panels brauchen von sich aus unterschiedlich viel, und das höhere behielte
+  seinen Vorsprung bei jeder Fenstergröße.
+- **Die Panels füllen ihre Zelle**, ohne Ausrichtung. Der Zwischenraum vor dem
+  Knopf sammelt die Luft ein, also steht der Knopf am Fuß jedes Panels und
+  alle vier stehen auf einer Linie.
+- **Die Modusbeschriftung steht über den Tasten, nicht daneben**, mit der
+  Lampe rechts in derselben Zeile. Neben ihr hätten die Tasten rund 60 px
+  weniger, und pO2 fiel von zwei Tastenreihen auf vier.
+- **Felder und Schalter teilen sich ein Raster aus zwei gleich breiten
+  Plätzen.** Ein Sollwert mit Messwert daneben nimmt beide, alles andere
+  einen, und eine Zeile wird gefüllt, bevor die nächste beginnt. Ein Schalter
+  ist ein Platz breit, nicht ein Panel.
 - **`content_width()` fragt das Minimum, nicht den Wunsch.** Eine
   `QDoubleSpinBox` wünscht sich die breiteste Zahl ihres Wertebereichs und die
   Modustasten wünschen sich eine Reihe. Beides muss nicht gewährt werden: die

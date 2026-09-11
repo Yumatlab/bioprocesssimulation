@@ -20,6 +20,7 @@ from PySide6.QtGui import QAction, QPalette, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -64,15 +65,16 @@ port.</p>
 """
 
 
-#: The order of the panels of Control Options, top to bottom. Each one is a
-#: row across the whole tab, so its mode keys fit on a single line.
-PANEL_ORDER = (
-    "pH-Control",
-    "Temperature-Control",
-    "pO2-Control",
-    "Liquid Weight",
-    "Feed Control",
-)
+#: Where each panel of Control Options sits: column, row, how many rows it
+#: spans. Four columns, all of them filling the tab from top to bottom — the
+#: first three hold one panel each, the fourth is split into two equal halves.
+PANEL_PLACES = {
+    "pH-Control": (0, 0, 2),
+    "Temperature-Control": (1, 0, 2),
+    "pO2-Control": (2, 0, 2),
+    "Liquid Weight": (3, 0, 1),
+    "Feed Control": (3, 1, 1),
+}
 PANEL_SPACING = 6
 
 
@@ -236,31 +238,38 @@ class ControlWindow(QMainWindow):
 
     def _build_control_options(self) -> QWidget:
         page = QWidget()
-        layout = QVBoxLayout(page)
+        layout = QGridLayout(page)
         layout.setSpacing(PANEL_SPACING)
         reservoirs = int(self.setup.info.reservoirs or 1)
         specs = {spec.title: spec for spec in CONTROL_PANELS}
-        for title in PANEL_ORDER:
+        for title, (column, row, span) in PANEL_PLACES.items():
             panel = ControlPanel(specs[title], reservoirs=reservoirs)
             panel.setObjectName("controlPanel")
             panel.parameter_changed.connect(self._set_parameter)
             panel.parameters_requested.connect(self.open_controller_parameters)
             self.panels[title] = panel
-            layout.addWidget(panel)
+            # No alignment: every panel fills its cell, and the stretch above
+            # its button turns the slack into one gap at the foot of the
+            # panel instead of an empty strip under the whole tab.
+            layout.addWidget(panel, row, column, span, 1)
 
-        # One width for every mode block, so the fields behind them start at
-        # the same place in all five rows.
-        keys = max(panel.mode_width() for panel in self.panels.values())
-        for panel in self.panels.values():
-            panel.set_mode_width(keys)
-
-        # The tab has to be wide enough for the fullest row — pO2, with five
-        # modes on one line and five setpoints behind them.
-        page.setMinimumWidth(max(panel.content_width() for panel in self.panels.values()))
-        # What is left over in the height goes below the panels, not into
-        # them: a stretched row carries a hole between its fields and its
-        # button.
-        layout.addStretch()
+        # One width for all four columns, so the panels are equally wide.
+        width = max(panel.content_width() for panel in self.panels.values())
+        for column in range(4):
+            layout.setColumnMinimumWidth(column, width)
+            layout.setColumnStretch(column, 1)
+        # Two equal halves in the split column. Equal stretch alone only
+        # shares out what is left over, and the two panels do not need the
+        # same amount to begin with — the taller one would keep its head start
+        # at every window size. A common minimum takes it away.
+        half = max(
+            self.panels[title].minimumSizeHint().height()
+            for title, (_, _, span) in PANEL_PLACES.items()
+            if span == 1
+        )
+        for row in range(2):
+            layout.setRowMinimumHeight(row, half)
+            layout.setRowStretch(row, 1)
         return page
 
     def _build_run_column(self) -> QWidget:
