@@ -644,21 +644,28 @@ def test_clicking_a_mode_key_reports_the_mode_behind_it(qapp):
     assert panel.current_mode() == 3
 
 
-def test_the_panels_sit_in_one_row_in_order(window):
-    """Side by side, in the order of the original's Control Options tab."""
-    page = window.tabs.widget(0)
-    layout = page.layout()
-    for column, title in enumerate(PANEL_ORDER):
-        index = layout.indexOf(window.panels[title])
-        assert index >= 0, title
-        assert layout.getItemPosition(index) == (0, column, 1, 1), title
+def test_the_panels_are_stacked_rows_in_order(window):
+    """One panel per row, top to bottom, in the order of the table."""
+    layout = window.tabs.widget(0).layout()
+    for position, title in enumerate(PANEL_ORDER):
+        assert layout.indexOf(window.panels[title]) == position, title
 
 
-def test_the_panels_are_all_the_same_width(window):
-    """A row of five reads as a set only if they are cut to one width."""
+def test_every_row_starts_its_fields_in_the_same_place(window):
+    """Five rows that do not line up are five rows one reads separately.
+
+    The pO2 keypad is three times the width of an on/off pair, so every mode
+    block is given the width of the widest one.
+    """
     widths = [panel.width() for panel in window.panels.values()]
     assert max(widths) - min(widths) <= 1
-    assert window.tabs.widget(0).layout().columnCount() == len(PANEL_ORDER)
+
+    starts = {
+        panel.rows[next(iter(panel.rows))].x()
+        for panel in window.panels.values()
+        if panel.rows
+    }
+    assert len(starts) == 1, f"the first field starts at {sorted(starts)}"
 
 
 def test_a_switch_is_as_wide_as_one_field(window):
@@ -676,12 +683,13 @@ def test_no_switch_carries_a_lamp(window):
             assert not hasattr(switch, "lamp")
 
 
-def test_every_setpoint_field_of_a_panel_is_the_same_width(window):
+def test_every_value_box_in_the_tab_is_the_same_width(window):
     """A lone setpoint used to take the whole panel, one with a measured value
     beside it half of it — two widths in one column of fields."""
-    for title, panel in window.panels.items():
-        widths = {row.setpoint.width() for row in panel.rows.values()}
-        assert len(widths) == 1, f"{title}: {sorted(widths)}"
+    widths = {
+        row.setpoint.width() for panel in window.panels.values() for row in panel.rows.values()
+    }
+    assert len(widths) == 1, sorted(widths)
 
 
 def test_the_control_window_fits_a_normal_screen(window):

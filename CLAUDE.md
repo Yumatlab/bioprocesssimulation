@@ -322,25 +322,26 @@ Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
   pO2-Control wiederholt nur den Titel und kostete 170 px auf einer Zeile, die
   alle fünf gleichzeitig zeigen muss. Die gespeicherten Modusnummern sind
   unverändert.
-- **Die Anordnung steht in `PANEL_ORDER`**, nicht im Aufbaucode: eine Reihe,
-  fünf Panels nebeneinander, in der Reihenfolge des Originals. Alle gleich
-  breit — eine Reihe von fünf liest sich nur dann als Satz. Die Panels sind
-  **oben ausgerichtet** und behalten die Höhe ihres Inhalts; was übrig bleibt,
-  bekommt eine leere Zeile darunter statt ein Loch in jedem Panel.
-- **Die Modusbeschriftung steht über den Tasten, nicht daneben.** Neben ihr
-  hätten die Tasten rund 60 px weniger, und pO2 fiel von zwei Tastenreihen auf
-  vier — ein Tastenfeld höher als die Felder darunter. Die Lampe sitzt rechts
-  neben der Beschriftung.
-- **Die Reihe kostet Breite.** Fünf Panels nebeneinander brauchen 1425 px, ein
-  Raster aus sechs Abschnitten brauchte 1340. Die Grenze im Test ist deshalb
-  1440 — das schmalste Bildschirmformat, für das die Anwendung gedacht ist.
-- **Felder und Schalter teilen sich ein Raster gleich breiter Plätze**
-  (`PanelSpec.field_columns`: zwei für ein Panel über einen Abschnitt, drei für
-  pO2 über zwei). Ein Sollwert mit Messwert daneben nimmt zwei Plätze, alles
-  andere einen, und eine Zeile wird gefüllt, bevor die nächste beginnt. So
-  stehen in pO2 Sollwert, Messwert und Rührer in der ersten Zeile und die drei
-  Gasflüsse in der zweiten, statt alles untereinander mit leerer rechter
-  Hälfte. Ein Schalter ist ein Platz breit, nicht ein Panel.
+- **Ein Panel ist eine Zeile über die ganze Breite des Tabs**, die fünf
+  stehen untereinander in der Reihenfolge von `PANEL_ORDER`. Darin: die
+  Modustasten links in voller Länge, dann jedes Feld, dann die Schalter, und
+  rechts außen der Knopf. Alles darin ist eine Beschriftung über einem
+  Bedienelement (`_captioned`), also liegen die Beschriftungen auf einer Linie
+  und die Eingabefelder auf der darunter.
+- **Die Modustasten werden nie umgebrochen und nie gedehnt.** `setFixedWidth`
+  auf ihre Einzeilenbreite: die Zeile existiert genau dafür, dass jeder Modus
+  auf einer Linie steht, und in einem breiten Fenster wären sie sonst das
+  Einzige, was in die Restbreite wächst.
+- **Alle Modusblöcke sind so breit wie der breiteste** (`set_mode_width`, vom
+  Fenster gesetzt). Das pO2-Tastenfeld ist dreimal so breit wie ein
+  Ein/Aus-Paar; ohne das fingen die Felder in jeder Zeile woanders an, und
+  fünf Zeilen, die nicht fluchten, sind fünf Zeilen, die man einzeln liest.
+- **Jedes Wertefeld ist `FIELD_WIDTH` breit**, nicht ein Anteil der Zeile.
+  Eine Zeile mit zwei Feldern gäbe jedem sonst 500 px, und ein breiter Kasten
+  macht einen Sollwert nicht lesbarer. Was übrig bleibt, bleibt leer.
+- **Ein Schalter ist ein Feld breit, nicht ein Panel**, und sitzt auf der
+  Linie der Eingabefelder — er hat keine Beschriftung über sich, sondern
+  daneben.
 - **`content_width()` fragt das Minimum, nicht den Wunsch.** Eine
   `QDoubleSpinBox` wünscht sich die breiteste Zahl ihres Wertebereichs und die
   Modustasten wünschen sich eine Reihe. Beides muss nicht gewährt werden: die

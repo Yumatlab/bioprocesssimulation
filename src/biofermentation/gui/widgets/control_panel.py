@@ -8,12 +8,12 @@ easier to check against the original than five near-identical constructors.
 
 from dataclasses import dataclass, field
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -72,9 +72,6 @@ class PanelSpec:
     #: The parameter holding the reservoir this panel works on (R_feed). Set
     #: it and the panel gets a reservoir selector and fills in every `{n}`.
     reservoir_parameter: str | None = None
-    #: How many field slots fit across this panel. Two for a panel one section
-    #: wide, three for pO2, which covers two of them.
-    field_columns: int = 2
     fields: list[FieldSpec] = field(default_factory=list)
     switches: list[SwitchSpec] = field(default_factory=list)
     has_parameters_button: bool = True
@@ -82,6 +79,30 @@ class PanelSpec:
     parameter_groups: list[ParameterGroup] = field(default_factory=list)
     #: Per reservoir instead of once, as the feed gains are.
     parameter_groups_per_reservoir: list[ParameterGroup] = field(default_factory=list)
+
+
+#: How wide one value box is. Every field of every panel gets the same, so a
+#: column of panels reads down as well as across.
+FIELD_WIDTH = 100
+
+
+def _captioned(caption: str, control) -> QVBoxLayout:
+    """A caption over a control, the shape everything in a panel row has.
+
+    ValueRow is built the same way, so a mode selector and a setpoint line up
+    without either of them knowing about the other.
+    """
+    column = QVBoxLayout()
+    column.setContentsMargins(0, 0, 0, 0)
+    column.setSpacing(4)
+    label = QLabel(caption)
+    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    column.addWidget(label)
+    if isinstance(control, QLayout):
+        column.addLayout(control)
+    else:
+        column.addWidget(control)
+    return column
 
 
 class ControlPanel(QGroupBox):
@@ -110,21 +131,17 @@ class ControlPanel(QGroupBox):
         #: change can refill without asking the window for it.
         self._p: dict | None = None
 
-        layout = QVBoxLayout(self)
-        layout.setSpacing(8)
+        # A panel is a row across the whole tab: the mode keys at full length
+        # on the left, then every field, then the switches, and the button at
+        # the far right. Everything in it is a caption over a control, so the
+        # captions line up along the top of the row and the controls along the
+        # bottom — stacked panels then read as a table without being one.
+        layout = QHBoxLayout(self)
+        layout.setSpacing(10)
 
         self.mode_selector: SegmentedControl | None = None
         self.lamp: StatusLamp | None = None
         if spec.mode_parameter:
-            # Caption above, keys below across the whole panel. Beside the
-            # caption they would have some 60 px less, and pO2 fell from two
-            # rows of keys to four — a keypad taller than the fields under it.
-            head = QHBoxLayout()
-            head.addWidget(QLabel("Mode:"))
-            head.addStretch()
-            self.lamp = StatusLamp()
-            head.addWidget(self.lamp)
-            layout.addLayout(head)
             # Keys instead of a dropdown: the operator sees what there is to
             # choose without opening anything, and the choice is one click
             # rather than two.
@@ -132,30 +149,31 @@ class ControlPanel(QGroupBox):
             for value, text in spec.modes.items():
                 self.mode_selector.addItem(text, value)
             self.mode_selector.currentIndexChanged.connect(self._mode_changed)
-            layout.addWidget(self.mode_selector)
+            # Fixed, not stretched: a panel is a row across the whole tab so
+            # that every mode stands on one line, and the keys are the only
+            # thing the layout could have taken the space from. Fixed also
+            # keeps them from growing into the slack of a wide window.
+            self.mode_selector.setFixedWidth(self.mode_selector.sizeHint().width())
+            self.lamp = StatusLamp()
+            keys = QHBoxLayout()
+            keys.setContentsMargins(0, 0, 0, 0)
+            keys.setSpacing(6)
+            keys.addWidget(self.mode_selector)
+            keys.addWidget(self.lamp)
+            layout.addLayout(_captioned("Mode:", keys))
 
         self.reservoir_selector: SegmentedControl | None = None
         if spec.reservoir_parameter and self.reservoirs > 1:
-            # Only worth the row when there is a choice. With one reservoir
+            # Only worth showing when there is a choice. With one reservoir
             # the panel simply works on R1, as the original does.
-            layout.addWidget(QLabel("Reservoir:"))
             self.reservoir_selector = SegmentedControl()
             for number in range(1, self.reservoirs + 1):
                 self.reservoir_selector.addItem(f"R{number}", number)
             self.reservoir_selector.currentIndexChanged.connect(self._reservoir_changed)
-            layout.addWidget(self.reservoir_selector)
-
-        # Fields and switches share one grid of equally wide slots. A setpoint
-        # with a measured value beside it takes two, everything else takes
-        # one, and a row is filled before the next one is started. That is why
-        # a panel twice as wide holds its fields in three columns instead of
-        # stacking them down one side with the other half empty.
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(4)  # the same as inside a ValueRow
-        grid.setVerticalSpacing(8)
-        for column in range(spec.field_columns):
-            grid.setColumnStretch(column, 1)
-        row = column = 0
+            self.reservoir_selector.setFixedWidth(
+                self.reservoir_selector.sizeHint().width()
+            )
+            layout.addLayout(_captioned("Reservoir:", self.reservoir_selector))
 
         for spec_field in spec.fields:
             widget = ValueRow(
@@ -174,15 +192,14 @@ class ControlPanel(QGroupBox):
                     )
                 )
             self.rows[spec_field.parameter] = widget
+            # A fixed width, not a share of the row: a panel with two fields
+            # would otherwise hand each of them 500 px, and a wide box makes a
+            # setpoint no easier to read. What is left over stays empty.
             slots = 2 if spec_field.actual_label else 1
-            if column + slots > spec.field_columns:
-                row, column = row + 1, 0
-            grid.addWidget(widget, row, column, 1, slots)
-            column += slots
+            target = FIELD_WIDTH * slots + 4 * (slots - 1)
+            widget.setFixedWidth(max(target, widget.minimumSizeHint().width()))
+            layout.addWidget(widget)
 
-        # The switches start their own row: they are commands, not readings.
-        if spec.switches and column:
-            row, column = row + 1, 0
         for switch_spec in spec.switches:
             switch = ToggleSwitch(switch_spec.label)
             switch.toggled.connect(
@@ -191,12 +208,11 @@ class ControlPanel(QGroupBox):
                 )
             )
             self.switches[switch_spec.parameter] = switch
-            if column + 1 > spec.field_columns:
-                row, column = row + 1, 0
-            grid.addWidget(switch, row, column)
-            column += 1
+            switch.setFixedWidth(max(FIELD_WIDTH, switch.minimumSizeHint().width()))
+            # Bottom-aligned: a switch has no caption, so it belongs on the
+            # line of the boxes, not floating in the middle of the row.
+            layout.addWidget(switch, 0, Qt.AlignmentFlag.AlignBottom)
 
-        layout.addLayout(grid)
         layout.addStretch()
 
         if spec.has_parameters_button:
@@ -204,7 +220,7 @@ class ControlPanel(QGroupBox):
             self.parameters_button.clicked.connect(
                 lambda: self.parameters_requested.emit(spec.title)
             )
-            layout.addWidget(self.parameters_button)
+            layout.addWidget(self.parameters_button, 0, Qt.AlignmentFlag.AlignBottom)
 
     # ------------------------------------------------------------ state --
 
@@ -240,21 +256,29 @@ class ControlPanel(QGroupBox):
                 self.spec.reservoir_parameter, float(self.reservoir)
             )
 
+    def mode_width(self) -> int:
+        """How wide this panel's mode keys are, all on one line."""
+        return self.mode_selector.width() if self.mode_selector is not None else 0
+
+    def set_mode_width(self, width: int) -> None:
+        """Give every panel's keys the same width, so the rows line up.
+
+        The pO2 keypad is three times the width of an on/off pair. Left to
+        themselves the fields behind them would start at a different place in
+        every row, and five rows that do not line up are five rows one has to
+        read separately.
+        """
+        if self.mode_selector is not None:
+            self.mode_selector.setFixedWidth(max(width, self.mode_selector.sizeHint().width()))
+
     def content_width(self) -> int:
         """How wide this panel has to be for nothing in it to be cut off.
 
         The minimum, not the wish: a QDoubleSpinBox asks for the widest number
-        its range allows, and the mode keys ask to stand side by side. Neither
-        has to be granted — the fields have a readable floor of their own and
-        the keys wrap onto a second row.
+        its range allows. The mode keys are in it at full length — their
+        minimum is their one-row width, set in the constructor.
         """
-        width = self.minimumSizeHint().width()
-        if self.mode_selector is not None:
-            # Two keys side by side, plus the layout margins. One key would be
-            # readable but would put every mode on a row of its own.
-            keys = sorted(self.mode_selector._natural(), reverse=True)[:2]
-            width = max(width, int(sum(keys)) + 26)
-        return width
+        return self.minimumSizeHint().width()
 
     def current_mode(self) -> int | None:
         return self.mode_selector.currentData() if self.mode_selector else None

@@ -20,7 +20,6 @@ from PySide6.QtGui import QAction, QPalette, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QFormLayout,
-    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -65,8 +64,8 @@ port.</p>
 """
 
 
-#: The order of the panels of Control Options, left to right — one row, as the
-#: original has them and as the thesis screenshot on page 54 shows them.
+#: The order of the panels of Control Options, top to bottom. Each one is a
+#: row across the whole tab, so its mode keys fit on a single line.
 PANEL_ORDER = (
     "pH-Control",
     "Temperature-Control",
@@ -237,30 +236,31 @@ class ControlWindow(QMainWindow):
 
     def _build_control_options(self) -> QWidget:
         page = QWidget()
-        layout = QGridLayout(page)
+        layout = QVBoxLayout(page)
         layout.setSpacing(PANEL_SPACING)
         reservoirs = int(self.setup.info.reservoirs or 1)
         specs = {spec.title: spec for spec in CONTROL_PANELS}
-        for column, title in enumerate(PANEL_ORDER):
+        for title in PANEL_ORDER:
             panel = ControlPanel(specs[title], reservoirs=reservoirs)
             panel.setObjectName("controlPanel")
             panel.parameter_changed.connect(self._set_parameter)
             panel.parameters_requested.connect(self.open_controller_parameters)
             self.panels[title] = panel
-            # Top-aligned: a panel keeps the height its contents need instead
-            # of being stretched to the tallest one in the row. pO2 has twice
-            # the fields of the others and would leave them full of nothing.
-            layout.addWidget(panel, 0, column, Qt.AlignmentFlag.AlignTop)
+            layout.addWidget(panel)
 
-        # One width for all five, so the row reads as a set of equal panels.
-        width = max(panel.content_width() for panel in self.panels.values())
-        for column in range(len(PANEL_ORDER)):
-            layout.setColumnMinimumWidth(column, width)
-            layout.setColumnStretch(column, 1)
-        # Whatever is left over in the height goes below the panels, not into
-        # them: stretched panels carry a hole between their last field and
-        # their button.
-        layout.setRowStretch(1, 1)
+        # One width for every mode block, so the fields behind them start at
+        # the same place in all five rows.
+        keys = max(panel.mode_width() for panel in self.panels.values())
+        for panel in self.panels.values():
+            panel.set_mode_width(keys)
+
+        # The tab has to be wide enough for the fullest row — pO2, with five
+        # modes on one line and five setpoints behind them.
+        page.setMinimumWidth(max(panel.content_width() for panel in self.panels.values()))
+        # What is left over in the height goes below the panels, not into
+        # them: a stretched row carries a hole between its fields and its
+        # button.
+        layout.addStretch()
         return page
 
     def _build_run_column(self) -> QWidget:
