@@ -33,11 +33,15 @@ from biofermentation.gui.widgets import (
     CONTROL_PANELS,
     ControlPanel,
     PhaseGrid,
+    SegmentedControl,
+    ToggleSwitch,
     condition_text,
     select_data,
 )
+from biofermentation.gui.widgets.indicators import GREEN, RED
 from biofermentation.gui.widgets.tex import tex_label, tex_to_html
 from biofermentation.gui.windows import ControlWindow
+from biofermentation.gui.windows.control_app import PANEL_PLACES, PANEL_SPACING
 from biofermentation.organisms import discover_organisms
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -108,14 +112,73 @@ def test_every_panel_builds_from_its_specification(qapp):
         assert len(panel.switches) == len(spec.switches)
 
 
+def test_a_loaded_switch_neither_moves_nor_reports(qapp):
+    """Opening a project must not look like somebody threw the switches."""
+    switch = ToggleSwitch("Acid")
+    seen = []
+    switch.toggled.connect(seen.append)
+
+    switch.set_checked(True)
+    assert switch.is_checked() is True
+    assert switch.switch.travel == 1.0, "it should be over already, not sliding"
+    assert seen == []
+
+
+def test_clicking_a_switch_reports_it_and_slides(qapp):
+    switch = ToggleSwitch("Acid")
+    seen = []
+    switch.toggled.connect(seen.append)
+
+    switch.switch.click()
+    assert seen == [True]
+    # The animation carries the knob; the state is there the moment it starts.
+    assert switch.is_checked() is True
+
+
+def test_the_feed_lamp_follows_its_switch(qapp):
+    """The lamp is the only one of the two that is redrawn from the state."""
+    switch = ToggleSwitch("Feed", lamp=True)
+    assert switch.lamp.color() == RED
+    switch.set_checked(True)
+    assert switch.lamp.color() == GREEN
+
+
+def test_the_selector_answers_the_calls_a_dropdown_would(qapp):
+    """select_data and the panels must not care which of the two they hold."""
+    selector = SegmentedControl()
+    for value, text in ((0, "Manual"), (1, "Auto")):
+        selector.addItem(text, value)
+
+    assert selector.count() == 2
+    assert selector.currentIndex() == 0
+    assert selector.currentData() == 0
+    assert selector.findData(1) == 1
+    assert selector.findData(7) == -1
+    assert select_data(selector, 1) is True
+    assert selector.currentData() == 1
+    assert selector.currentText() == "Auto"
+
+
+def test_the_selector_reports_a_change_once(qapp):
+    selector = SegmentedControl()
+    selector.addItem("Manual", 0)
+    selector.addItem("Auto", 1)
+    seen = []
+    selector.currentIndexChanged.connect(seen.append)
+
+    selector.setCurrentIndex(1)
+    selector.setCurrentIndex(1)  # the same key again is not a change
+    assert seen == [1]
+
+
 def test_the_mode_greys_out_what_it_does_not_use(qapp):
     """pO2-agitation drives the stirrer, so its setpoint is not editable."""
     panel = ControlPanel(next(s for s in CONTROL_PANELS if s.title == "pO2-Control"))
-    select_data(panel.mode_box, 1)  # pO2-agitation
+    select_data(panel.mode_selector, 1)  # pO2-agitation
     assert panel.rows["NStw"].isEnabled() is False
     assert panel.rows["FnAIRw"].isEnabled() is True
 
-    select_data(panel.mode_box, 0)  # manual
+    select_data(panel.mode_selector, 0)  # manual
     assert panel.rows["NStw"].isEnabled() is True
 
 
@@ -501,13 +564,51 @@ def test_the_plot_ticks_point_outwards(qapp):
         assert axis.style["tickLength"] == TICK_LENGTH
 
 
-def test_the_mode_dropdown_fills_its_row(window):
+def test_the_mode_selector_fills_its_row(window):
     """It stopped at its own size hint and left a gap before the lamp."""
     for title, panel in window.panels.items():
-        box, lamp = panel.mode_box, panel.lamp
-        assert box.width() > box.sizeHint().width(), title
-        gap = lamp.geometry().left() - box.geometry().right()
-        assert gap < 20, f"{title}: {gap} px between dropdown and lamp"
+        selector, lamp = panel.mode_selector, panel.lamp
+        assert selector.width() >= selector.sizeHint().width(), title
+        gap = lamp.geometry().left() - selector.geometry().right()
+        assert gap < 20, f"{title}: {gap} px between selector and lamp"
+
+
+def test_the_mode_selector_shows_every_mode_at_once(window):
+    """That is the point of it: no mode hides behind a click."""
+    for title, panel in window.panels.items():
+        selector = panel.mode_selector
+        assert selector.count() == len(panel.spec.modes), title
+        assert sum(selector._widths()) <= selector.width() + 1, title
+
+
+def test_clicking_a_mode_key_reports_the_mode_behind_it(qapp):
+    """The keys carry the numbers parameter_controlmodesTab stores."""
+    panel = ControlPanel(next(s for s in CONTROL_PANELS if s.title == "pO2-Control"))
+    seen = []
+    panel.parameter_changed.connect(lambda name, value: seen.append((name, value)))
+    panel.mode_selector.setCurrentIndex(3)  # Gasmix
+    assert seen == [("Mode_pO2", 3.0)]
+    assert panel.current_mode() == 3
+
+
+def test_the_panels_sit_where_the_layout_table_says(window):
+    """pO2 across the top left, the small ones underneath, feed bottom right."""
+    page = window.tabs.widget(0)
+    layout = page.layout()
+    for title, (row, column, span) in PANEL_PLACES.items():
+        index = layout.indexOf(window.panels[title])
+        assert index >= 0, title
+        assert layout.getItemPosition(index) == (row, column, 1, span), title
+
+
+def test_pO2_is_exactly_two_columns_wide(window):  # noqa: N802 - the name of the panel
+    """Equal columns are what make the four small panels look like a set."""
+    panels = window.panels
+    single = [panels[t] for t, (_, _, span) in PANEL_PLACES.items() if span == 1]
+    widest = max(panel.width() for panel in single)
+    narrowest = min(panel.width() for panel in single)
+    assert widest - narrowest <= 1
+    assert abs(panels["pO2-Control"].width() - (2 * widest + PANEL_SPACING)) <= 2
 
 
 def test_the_control_window_fits_a_normal_screen(window):

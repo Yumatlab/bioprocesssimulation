@@ -10,17 +10,15 @@ from dataclasses import dataclass, field
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QComboBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
-from .indicators import StatusLamp, ToggleSwitch, ValueRow, select_data
+from .indicators import SegmentedControl, StatusLamp, ToggleSwitch, ValueRow, select_data
 
 
 @dataclass
@@ -93,24 +91,19 @@ class ControlPanel(QGroupBox):
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
 
-        self.mode_box: QComboBox | None = None
+        self.mode_selector: SegmentedControl | None = None
         self.lamp: StatusLamp | None = None
         if spec.mode_parameter:
             row = QHBoxLayout()
             row.addWidget(QLabel("Mode:"))
-            self.mode_box = QComboBox()
-            # Sized by its longest entry, so no mode is cut off and every
-            # panel can be given the same width without one of them
-            # overflowing.
-            self.mode_box.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-            # Its size hint is the longest entry, so nothing is cut off, and
-            # it grows into whatever the panel has left over. Without this the
-            # box stops halfway and leaves a gap before the lamp.
-            self.mode_box.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            # Keys instead of a dropdown: the operator sees what there is to
+            # choose without opening anything, and the choice is one click
+            # rather than two.
+            self.mode_selector = SegmentedControl()
             for value, text in spec.modes.items():
-                self.mode_box.addItem(text, value)
-            self.mode_box.currentIndexChanged.connect(self._mode_changed)
-            row.addWidget(self.mode_box, 1)
+                self.mode_selector.addItem(text, value)
+            self.mode_selector.currentIndexChanged.connect(self._mode_changed)
+            row.addWidget(self.mode_selector, 1)
             self.lamp = StatusLamp()
             row.addWidget(self.lamp)
             layout.addLayout(row)
@@ -151,25 +144,21 @@ class ControlPanel(QGroupBox):
     def content_width(self) -> int:
         """How wide this panel has to be for nothing in it to be cut off."""
         width = self.sizeHint().width()
-        if self.mode_box is not None:
-            metrics = self.mode_box.fontMetrics()
-            longest = max(
-                (metrics.horizontalAdvance(text) for text in self.spec.modes.values()),
-                default=0,
-            )
-            # Dropdown arrow, frame, the "Mode:" caption and the layout margins.
-            width = max(width, longest + 130)
+        if self.mode_selector is not None:
+            # All the keys side by side, plus the "Mode:" caption, the lamp
+            # and the layout margins.
+            width = max(width, self.mode_selector.sizeHint().width() + 90)
         return width
 
     def current_mode(self) -> int | None:
-        return self.mode_box.currentData() if self.mode_box else None
+        return self.mode_selector.currentData() if self.mode_selector else None
 
     def load(self, p) -> None:
         """Fill every widget from the parameter set, without emitting."""
-        if self.mode_box is not None and self.spec.mode_parameter in p:
-            self.mode_box.blockSignals(True)
-            select_data(self.mode_box, p[self.spec.mode_parameter])
-            self.mode_box.blockSignals(False)
+        if self.mode_selector is not None and self.spec.mode_parameter in p:
+            self.mode_selector.blockSignals(True)
+            select_data(self.mode_selector, p[self.spec.mode_parameter])
+            self.mode_selector.blockSignals(False)
 
         for spec_field in self.spec.fields:
             row = self.rows[spec_field.parameter]
@@ -181,9 +170,8 @@ class ControlPanel(QGroupBox):
         for switch_spec in self.spec.switches:
             switch = self.switches[switch_spec.parameter]
             if switch_spec.parameter in p:
-                switch.checkbox.blockSignals(True)
+                # set_checked neither animates nor emits; see ToggleSwitch.
                 switch.set_checked(bool(p[switch_spec.parameter]))
-                switch.checkbox.blockSignals(False)
 
         self.apply_mode()
 
@@ -211,7 +199,7 @@ class ControlPanel(QGroupBox):
 
     def _mode_changed(self) -> None:
         self.apply_mode()
-        if self.spec.mode_parameter and self.mode_box is not None:
+        if self.spec.mode_parameter and self.mode_selector is not None:
             self.parameter_changed.emit(
-                self.spec.mode_parameter, float(self.mode_box.currentData())
+                self.spec.mode_parameter, float(self.mode_selector.currentData())
             )

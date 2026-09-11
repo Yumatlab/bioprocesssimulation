@@ -259,6 +259,37 @@ gelten über den Anlass hinaus:
    Bedingung selbst, so wie `PhaseEditor.accept()` den Phasentyp liest statt
    den Reservoir-Dropdown zu fragen.
 
+### Die Bedienelemente der Control Options
+
+Nach dem zweiten Anwendertest sind die Schalter und die Modusauswahl neu.
+Beide sind selbst gezeichnet, aber **der Zustand liegt immer in einem
+Qt-Element**, nie in der Zeichnung — Fokus, Tastatur und der
+Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
+
+- **`SlideSwitch`** trägt die Flags (`f_acid`, `f_alkali`, `f_cooling`,
+  `f_heating`, `f_harvest`, `f_feed`). Ein `QAbstractButton` mit einer
+  animierten `Property`; `set_state_now()` ist der Ladeweg — ohne Animation
+  und ohne Signal, denn ein Schalter, der beim Öffnen eines Projekts von
+  allein hinüberfährt, sieht aus, als hätte ihn jemand umgelegt. `ToggleSwitch`
+  ist die Zeile darum: Beschriftung links, Schalter rechts, optional die Lampe
+  für einen Zustand, den der Schalter nicht trägt (Feed: der Schalter sagt,
+  was der Bediener will, die Lampe, ob das Reservoir fördert).
+- **`SegmentedControl`** ersetzt das Modus-Dropdown. Es beantwortet
+  `addItem`/`findData`/`setCurrentIndex`/`currentData` und heißt sein Signal
+  `currentIndexChanged` — damit tragen `select_data()` und `ControlPanel`
+  beide Varianten, ohne zu wissen, welche sie halten.
+- **Die pO2-Modi heißen ohne Präfix.** „pO2-agitation" in einem Panel namens
+  pO2-Control wiederholt nur den Titel und kostete 170 px auf einer Zeile, die
+  alle fünf gleichzeitig zeigen muss. Die gespeicherten Modusnummern sind
+  unverändert.
+- **Die Anordnung steht in `PANEL_PLACES`**, nicht im Aufbaucode: pO2 über
+  zwei Spalten oben links, darunter pH und Temperatur, rechts Liquid Weight
+  und Feed. Alle drei Spalten haben dieselbe Mindestbreite, also sind die vier
+  kleinen Panels gleich breit und pO2 genau zwei davon. Die Panels sind
+  **oben ausgerichtet**: sonst wird ein kurzes Panel auf die Höhe des
+  längsten in seiner Zeile gezogen und trägt 130 px Leere zwischen seinem
+  letzten Feld und seinem Schalter.
+
 **Abweichung vom Original, bewusst:** Der Variable Pool zeigt `FT1` als
 Säurepumpe und `FT2` als Laugenpumpe (so steht es in
 `variableTab.description`). Die MATLAB-Version vertauscht die beiden in

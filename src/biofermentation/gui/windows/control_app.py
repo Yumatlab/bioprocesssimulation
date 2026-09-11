@@ -20,6 +20,7 @@ from PySide6.QtGui import QAction, QPalette, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -62,6 +63,19 @@ Automation at the University of Applied Sciences Hamburg.</p>
 reproduced here: they are the university's image assets, not part of this
 port.</p>
 """
+
+
+#: Where each panel of Control Options sits: row, column, how many columns it
+#: spans. pO2 is the panel with five setpoints and five modes and gets the room
+#: for it; the other four are one column each.
+PANEL_PLACES = {
+    "pO2-Control": (0, 0, 2),
+    "Liquid Weight": (0, 2, 1),
+    "pH-Control": (1, 0, 1),
+    "Temperature-Control": (1, 1, 1),
+    "Feed Control": (1, 2, 1),
+}
+PANEL_SPACING = 6
 
 
 class ControlWindow(QMainWindow):
@@ -220,21 +234,35 @@ class ControlWindow(QMainWindow):
 
     def _build_control_options(self) -> QWidget:
         page = QWidget()
-        layout = QHBoxLayout(page)
-        layout.setSpacing(6)
+        layout = QGridLayout(page)
+        layout.setSpacing(PANEL_SPACING)
         for spec in CONTROL_PANELS:
             panel = ControlPanel(spec)
             panel.setObjectName("controlPanel")
             panel.parameter_changed.connect(self._set_parameter)
             panel.parameters_requested.connect(self.open_controller_parameters)
             self.panels[spec.title] = panel
-            layout.addWidget(panel, 1)
+            row, column, span = PANEL_PLACES[spec.title]
+            # Top-aligned: a panel keeps the height its contents need instead
+            # of being stretched to the tallest one in its row. Liquid Weight
+            # next to pO2 would otherwise carry 130 px of nothing between its
+            # last field and its switch.
+            layout.addWidget(panel, row, column, 1, span, Qt.AlignmentFlag.AlignTop)
 
-        # One width for all five, taken from the panel that needs the most —
-        # pO2-Control, whose mode list is the longest.
-        width = max(panel.content_width() for panel in self.panels.values())
-        for panel in self.panels.values():
-            panel.setMinimumWidth(width)
+        # One width for all three columns, so the four single-column panels
+        # are equally wide and pO2 is exactly two of them. A panel that spans
+        # two columns needs half of what it asks for out of each.
+        width = max(
+            panel.content_width() // span if span > 1 else panel.content_width()
+            for title, panel in self.panels.items()
+            for _, _, span in [PANEL_PLACES[title]]
+        )
+        for column in range(3):
+            layout.setColumnMinimumWidth(column, width)
+            layout.setColumnStretch(column, 1)
+        # The top row carries pO2 with its five setpoints; extra height goes
+        # there rather than stretching the one-field panels underneath.
+        layout.setRowStretch(0, 1)
         return page
 
     def _build_run_column(self) -> QWidget:

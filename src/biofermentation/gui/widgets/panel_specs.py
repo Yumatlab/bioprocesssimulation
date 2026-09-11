@@ -78,12 +78,15 @@ TEMPERATURE_PANEL = PanelSpec(
 PO2_PANEL = PanelSpec(
     title="pO2-Control",
     mode_parameter="Mode_pO2",
+    # Written without the "pO2-" of the original: the keys sit inside a panel
+    # titled pO2-Control, and the prefix cost 170 px on a row that has to show
+    # all five at once. The stored mode numbers are unchanged.
     modes={
         0: "Manual",
-        1: "pO2-agitation",
-        2: "pO2-aeration",
-        3: "pO2-gasmix",
-        4: "pO2-feed",
+        1: "Agitation",
+        2: "Aeration",
+        3: "Gasmix",
+        4: "Feed",
     },
     fields=[
         FieldSpec("pO2w", "pO_{2w} [%]", actual="pO2", actual_label="pO_{2} [%]", decimals=1),
