@@ -253,7 +253,8 @@ def test_a_curve_carries_its_name_at_the_end(qapp):
     t = np.linspace(0, 2, 20)
     plot.update_data(t, {"a": t})
     assert plot._labels[0].isVisible() is True
-    assert plot._labels[0].pos().y() == pytest.approx(2.0)
+    # At the end of the flag stub, which starts at the last data point.
+    assert plot._labels[0].pos().y() >= 2.0
 
 
 def test_a_template_without_a_selection_draws_nothing(qapp):
@@ -621,3 +622,89 @@ def test_narrower_captions_bring_the_scales_closer(qapp):
             plot_view.CAPTION_FONT_SCALE = original
 
     assert stack_width(0.85) < stack_width(1.0)
+
+
+# --------------------------------------------------------------- flags --
+
+
+def _flag_vector(plot, position: int = 0) -> tuple[float, float]:
+    """The stub of one curve, in pixels."""
+    stub = plot._stubs[position]
+    x, y = stub.getData()
+    pixel_x, pixel_y = plot._views[position].viewPixelSize()
+    return (x[1] - x[0]) / pixel_x, (y[1] - y[0]) / pixel_y
+
+
+def test_a_flag_is_a_stub_with_the_name_at_its_end(qapp):
+    """The angle setting drew nothing at all before; MATLAB multiplies it
+    straight onto the y span and calls the result an angle."""
+    plot = _probe_plot(qapp, count=1)
+    stub, label = plot._stubs[0], plot._labels[0]
+    assert stub.isVisible()
+
+    x, y = stub.getData()
+    assert len(x) == 2
+    assert label.pos().x() == pytest.approx(x[1])
+    assert label.pos().y() == pytest.approx(y[1])
+
+
+def test_the_flag_angle_is_an_angle_in_pixels(qapp):
+    """Every scale has a different range, so an angle taken in data units
+    would come out differently on each of them."""
+    import math
+
+    plot = _probe_plot(qapp)
+    plot.template.flagangle = 30.0
+    plot.template.flaglength = 0.05
+    t = np.linspace(0, 10, 200)
+    plot.update_data(t, {"a": t, "b": t * 10, "c": t * 100})
+
+    for position in range(len(plot._stubs)):
+        dx, dy = _flag_vector(plot, position)
+        # viewPixelSize gives the magnitude of a pixel, so dy counts upwards
+        # here the way the data does.
+        assert math.degrees(math.atan2(dy, dx)) == pytest.approx(30.0, abs=1.0)
+        assert math.hypot(dx, dy) == pytest.approx(0.05 * plot._views[position].width(), rel=0.02)
+
+
+def test_changing_the_flag_settings_shows(qapp):
+    plot = _probe_plot(qapp, count=1)
+    t = np.linspace(0, 10, 200)
+
+    plot.template.flagangle = 0.0
+    plot.template.flaglength = 0.04
+    plot.update_data(t, {"a": t})
+    flat = _flag_vector(plot)
+
+    plot.template.flagangle = 60.0
+    plot.update_data(t, {"a": t})
+    steep = _flag_vector(plot)
+
+    assert abs(flat[1]) < 1e-6, "a zero angle has to be horizontal"
+    assert steep[1] > flat[1], "a positive angle has to point upwards"
+    assert steep[0] < flat[0], "and reach less far sideways"
+
+
+def test_a_flag_of_zero_length_draws_no_stub(qapp):
+    plot = _probe_plot(qapp, count=1)
+    plot.template.flaglength = 0.0
+    plot.update_data(np.linspace(0, 10, 50), {"a": np.linspace(0, 10, 50)})
+    assert plot._stubs[0].isVisible() is False
+    assert plot._labels[0].isVisible() is True
+
+
+def test_the_time_axis_takes_its_divisions_from_the_template(qapp):
+    """axisxtick did nothing; the setting has to mean what it says."""
+    plot = _probe_plot(qapp, count=1)
+    plot.template.axisxtick = 4
+    plot.set_x_range(0, 8)
+    assert plot.bottom_axis._tickSpacing == [(2.0, 0), (2.0, 0)]
+
+
+def test_the_caption_does_not_sit_on_the_first_tick(qapp):
+    from biofermentation.gui.widgets.plot_view import CAPTION_GAP
+
+    plot = _probe_plot(qapp)
+    for caption, axis in zip(plot._captions, plot._axes, strict=True):
+        gap = axis.geometry().top() - caption.geometry().bottom()
+        assert gap >= CAPTION_GAP - 1

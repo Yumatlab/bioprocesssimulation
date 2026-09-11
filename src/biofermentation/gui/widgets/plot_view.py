@@ -29,6 +29,7 @@ figure. Without that each axis picks its own spacing and the gridlines of one
 scale fall between those of the next.
 """
 
+import math
 from typing import ClassVar
 
 import numpy as np
@@ -58,6 +59,10 @@ TICK_TEXT_OFFSET = 6
 #: axes themselves 26 to 48. Shrinking the numbers alone moves the stack by
 #: four pixels; this brings the scales about fifty pixels closer together.
 CAPTION_FONT_SCALE = 0.85
+
+#: Pixels between the caption row and the top of the axis below it, so the
+#: caption does not sit on the first tick number.
+CAPTION_GAP = 10
 
 
 class EndLabelledAxis(pg.AxisItem):
@@ -186,6 +191,7 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         self._captions: list[pg.LabelItem] = []
         self._curves: list[pg.PlotDataItem] = []
         self._labels: list[pg.TextItem] = []
+        self._stubs: list[pg.PlotCurveItem] = []
         self._variables: list[PlotVariable] = []
 
     # ------------------------------------------------------------ build --
@@ -231,6 +237,9 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         # between.
         self.ci.layout.setHorizontalSpacing(0)
         self.ci.layout.setVerticalSpacing(0)
+        # …except under the captions, which would otherwise touch the topmost
+        # tick number of their own axis.
+        self.ci.layout.setRowSpacing(1, CAPTION_GAP)
 
         unit = template.axisxunit.strip("[] ")
         self.bottom_axis = OutwardTimeAxis("bottom")
@@ -326,23 +335,33 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         curve = pg.PlotDataItem([], [], pen=pen)
         view.addItem(curve)
 
-        # The curve's name at its right end, in its own colour — plotFlags of
-        # the original. With six scales the plot is unreadable without it.
+        # The flag: a short stub out of the last data point with the name at
+        # its end — plotFlags of the original. With six scales the plot is
+        # unreadable without it.
         flag = pg.TextItem(
             html=f'<span style="color:{color.name()}">{caption}</span>', anchor=(0, 0.5)
         )
         font = QFont()
-        font.setPointSizeF(self.template.flagfontsize * 0.6 if self.template else 10)
+        font.setPointSizeF(self.template.flagfontsize if self.template else 10.0)
         flag.setFont(font)
-        # ignoreBounds: the label sits past the last data point, and letting
-        # it count towards the range would stretch the axis every step.
+
+        stub_pen = QPen(color)
+        stub_pen.setWidthF(self.template.flaglinewidth if self.template else 1.25)
+        stub_pen.setCosmetic(True)
+        stub = pg.PlotCurveItem([], [], pen=stub_pen)
+
+        # ignoreBounds: both sit past the last data point, and letting them
+        # count towards the range would stretch the axis every step.
+        view.addItem(stub, ignoreBounds=True)
         view.addItem(flag, ignoreBounds=True)
+        stub.hide()
         flag.hide()
 
         self._views.append(view)
         self._axes.append(axis)
         self._curves.append(curve)
         self._labels.append(flag)
+        self._stubs.append(stub)
         self._apply_range(position, variable.ymin, variable.ymax)
 
     def _apply_range(self, position: int, lower: float, upper: float) -> None:
@@ -370,6 +389,7 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         self._captions.clear()
         self._curves.clear()
         self._labels.clear()
+        self._stubs.clear()
         self._variables.clear()
         self.main_view = None
         self.bottom_axis = None
@@ -404,30 +424,60 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
             self.set_x_range(self.template.tstart, float(t[-1]))
 
     def _place_label(self, position: int, x: np.ndarray, y: np.ndarray) -> None:
+        """Draw the flag of one curve: stub, then name at the end of it.
+
+        The stub is laid out in pixels and only then converted into the data
+        coordinates of this ViewBox. Every scale has a different range — rpm
+        against per-hour against grams per litre — so an angle taken in data
+        units would come out differently on every one of them, which is what
+        the angle setting did before: MATLAB multiplies it straight onto the
+        y span and calls the result an angle.
+        """
+        label, stub = self._labels[position], self._stubs[position]
         finite = np.isfinite(y)
         if not finite.any():
-            self._labels[position].hide()
+            label.hide()
+            stub.hide()
             return
+
         last = int(np.flatnonzero(finite)[-1])
-        offset = 0.0
+        x0, y0 = float(x[last]), float(y[last])
+
+        dx = dy = 0.0
         if self.template is not None:
-            span = max(float(x[-1]) - float(x[0]), 1e-9)
-            offset = span * self.template.flaglength
-        self._labels[position].setPos(float(x[last]) + offset, float(y[last]))
-        self._labels[position].show()
+            view = self._views[position]
+            pixel_x, pixel_y = view.viewPixelSize()
+            length = self.template.flaglength * view.width()
+            angle = math.radians(self.template.flagangle)
+            dx = math.cos(angle) * length * pixel_x
+            dy = math.sin(angle) * length * pixel_y
+
+        if dx or dy:
+            stub.setData([x0, x0 + dx], [y0, y0 + dy])
+            stub.show()
+        else:
+            stub.hide()
+
+        label.setPos(x0 + dx, y0 + dy)
+        label.show()
 
     def set_x_range(self, start: float, end: float) -> None:
-        """The time axis picks its own ticks.
+        """Set the time range and give it axisxtick divisions.
 
-        The y-axes get a fixed number of divisions because their limits are
-        the user's and the scales have to be readable across. The time axis
-        grows with the run, and forcing axisxtick divisions onto a range of
-        0 to 18 h gives ticks at 3.6 h — pyqtgraph's own choice of round
-        numbers is better here.
+        The same rule as for the y-axes, so the setting means the same thing
+        on both. It can produce unround numbers — five divisions of 0 to 18 h
+        are 3.6 h apart — but a setting that does nothing is worse than one
+        that does what it says. Both ends of the range are always labelled,
+        see EndLabelledAxis.
         """
         if self.main_view is None:
             return
         self.main_view.setXRange(start, end, padding=0)
+
+        divisions = int(self.template.axisxtick) if self.template else 0
+        if self.bottom_axis is not None and divisions > 0 and end > start:
+            step = (end - start) / divisions
+            self.bottom_axis.setTickSpacing(major=step, minor=step)
 
     def set_y_range(self, name: str, lower: float, upper: float) -> None:
         for position, variable in enumerate(self._variables):

@@ -508,3 +508,29 @@ def test_the_mode_dropdown_fills_its_row(window):
         assert box.width() > box.sizeHint().width(), title
         gap = lamp.geometry().left() - box.geometry().right()
         assert gap < 20, f"{title}: {gap} px between dropdown and lamp"
+
+
+def test_the_control_window_fits_a_normal_screen(window):
+    """It asked for 1600 px: a QDoubleSpinBox sizes itself to the widest text
+    its range allows, and these accept plus or minus a billion."""
+    assert window.minimumSizeHint().width() <= 1400
+    assert window.width() <= 1400
+
+
+def test_pressing_inoculate_during_a_run_disables_it_at_once(window):
+    """The press is the feedback that it was taken — not the next step."""
+    state = window.runner.state
+    state.p["f_Inoc"] = 0.0
+    state.a["inoc_occ"] = 0
+    window.runner._on_tick()
+    window.refresh()
+    assert window.inoculate_button.isEnabled() is True
+
+    window.inoculate_button.click()
+    assert window.inoculate_button.isEnabled() is False
+    assert state.p["f_Inoc"] == 1.0
+
+    # And it stays dead once the step has actually done it.
+    state.a["inoc_occ"] = 1
+    window.refresh()
+    assert window.inoculate_button.isEnabled() is False

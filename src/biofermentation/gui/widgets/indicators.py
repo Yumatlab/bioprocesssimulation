@@ -139,6 +139,24 @@ class ToggleSwitch(QWidget):
         self.checkbox.setEnabled(enabled)
 
 
+#: How narrow a value field may become before it stops being readable.
+FIELD_MIN_WIDTH = 72
+
+
+def _take_what_you_get(widget) -> None:
+    """Let a field have whatever width the panel can spare.
+
+    A QDoubleSpinBox sizes itself to the widest text its range allows, and
+    these accept plus or minus a billion — two of them side by side asked for
+    264 px, five panels of them for a 1600 px window. Ignored means the layout
+    goes by the minimum below instead of by that hint.
+    """
+    from PySide6.QtWidgets import QSizePolicy
+
+    widget.setMinimumWidth(FIELD_MIN_WIDTH)
+    widget.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+
+
 class ValueRow(QWidget):
     """A setpoint next to its measured value, the way every panel shows one.
 
@@ -176,6 +194,7 @@ class ValueRow(QWidget):
         self.setpoint.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
         self.setpoint.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.setpoint.valueChanged.connect(self.setpoint_changed.emit)
+        _take_what_you_get(self.setpoint)
         layout.addWidget(self.setpoint, 1, 0)
 
         self.actual: QLineEdit | None = None
@@ -188,6 +207,7 @@ class ValueRow(QWidget):
             self.actual = QLineEdit()
             self.actual.setReadOnly(True)
             self.actual.setAlignment(Qt.AlignmentFlag.AlignRight)
+            _take_what_you_get(self.actual)
             layout.addWidget(self.actual, 1, 1)
 
     def set_actual(self, value: float) -> None:

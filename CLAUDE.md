@@ -246,7 +246,14 @@ gelten über den Anlass hinaus:
 5. **Der Zustand des Phasenautomaten steht in `processTab`.** Beim Laden
    eines Projekts muss die laufende Phase übernommen werden
    (`adopt_active_phase`), sonst startet der Automat sie neu.
-6. **`isVisible()` ist keine Zustandsabfrage.** Ein Widget in einem nicht
+6. **Eine gestylte QSS-Regel nimmt dem Stil das Zeichnen ab.** Betrifft
+   inzwischen drei Stellen: das Combobox-Popup, den `:checked`-Zustand einer
+   QPushButton und den Kasten einer QCheckBox — die Häkchen wurden weiter
+   gezeichnet, aber ein nicht angehaktes Feld war unsichtbar, und eine Liste
+   davon sah leer aus. Wer ein Widget anfasst, muss auch seine Unterelemente
+   mitliefern. Umgekehrt gilt: Finger weg von `QComboBox::drop-down`, sonst
+   ist der Ausklapppfeil weg und aus Rahmen lässt sich keiner bauen.
+7. **`isVisible()` ist keine Zustandsabfrage.** Ein Widget in einem nicht
    angezeigten Dialog meldet `False`, egal wie es gesetzt wurde. Für "ist
    dieses Feld gerade gemeint?" gilt `isVisibleTo(parent)` — oder besser die
    Bedingung selbst, so wie `PhaseEditor.accept()` den Phasentyp liest statt
@@ -312,6 +319,11 @@ diesem Panel — das Feld mit der Beschriftung `F_T1` liest `v.FT2`.
 
 ### Offen aus Phase 6
 
+- **Drei Templateeinstellungen wirken noch nicht.** `graphvlinewidth` (es gibt
+  keine senkrechten Phasenmarkierungen), `axisyoffset` (der Abstand der
+  gestapelten Y-Achsen ergibt sich aus der Breite ihrer Beschriftungen) und
+  `axisylabeloffsetabove`/`-below`. Alles andere im Settings-Dialog erreicht
+  die Zeichnung.
 - **Kein `TemplateManager`.** Templates lassen sich laden, ändern und
   speichern, aber nicht anlegen, kopieren oder löschen
   (`FigureAppTemplateManager.mlapp`).

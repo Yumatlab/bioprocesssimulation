@@ -66,7 +66,9 @@ class ControlWindow(QMainWindow):
         self.setWindowTitle(
             f"Control App - {info.name} - {info.organism_name} - {info.bioreactor_name}"
         )
-        self.resize(1290, 690)
+        # The five controller panels and the run column need this much;
+        # see ControlPanel.content_width and indicators.FIELD_MIN_WIDTH.
+        self.resize(1340, 700)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -174,7 +176,6 @@ class ControlWindow(QMainWindow):
         self.template_menu.aboutToShow.connect(self._fill_template_menu)
 
         settings = bar.addMenu("Settings")
-        self.disconnect_action = add(settings, "Disconnect", self.toggle_connection)
         add(settings, "Reset controller parameters", self.reset_controller_gains)
 
     def _fill_template_menu(self) -> None:
@@ -434,8 +435,11 @@ class ControlWindow(QMainWindow):
         state = self.runner.state
         happened = bool(state.a.get("inoc_occ", 0))
         started = state.idx > 0
+        # Once it has been pressed during a run it stays dead, whether or not
+        # the next step has already set inoc_occ.
+        requested = started and bool(state.p.get("f_Inoc", 0))
 
-        self.inoculate_button.setEnabled(not (happened and started))
+        self.inoculate_button.setEnabled(not (started and (happened or requested)))
         self.inoculate_button.setCheckable(not started)
         if not started:
             self.inoculate_button.blockSignals(True)
@@ -464,6 +468,10 @@ class ControlWindow(QMainWindow):
         else:
             with self.runner.editing() as editable:
                 editable.p["f_Inoc"] = 1.0
+            # Dead immediately, not only once the next step has set inoc_occ:
+            # the press is the feedback that it was taken.
+            self.inoculate_button.setEnabled(False)
+            self.inoculate_button.setToolTip("Inoculating…")
             self.note("Inoculation requested", "Process")
         self.refresh()
 
@@ -608,18 +616,6 @@ class ControlWindow(QMainWindow):
 
     def show_information(self) -> None:
         self.tabs.setCurrentWidget(self.information_tab)
-
-    def toggle_connection(self) -> None:
-        """Stop the timer without ending the session, as Disconnect does."""
-        if self.runner.running:
-            self.runner.pause()
-            self.disconnect_action.setText("Reconnect")
-            self.note("Disconnected", "Process")
-        else:
-            self.runner.start()
-            self.disconnect_action.setText("Disconnect")
-            self.note("Reconnected", "Process")
-        self.refresh()
 
     def reset_controller_gains(self) -> None:
         """Put every controller gain back to the model default."""

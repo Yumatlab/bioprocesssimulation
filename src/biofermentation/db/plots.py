@@ -85,8 +85,8 @@ class PlotTemplate:
     axisyoffset: float = 50.0
     axislabelfontsize: float = 12.0
     axislinewidth: float = 1.75
-    flaglength: float = 0.04
-    flagangle: float = 45.0
+    flaglength: float = 0.03
+    flagangle: float = 25.0
     flaglinewidth: float = 1.25
     flagfontsize: float = 16.0
     refreshrate: float = 2.0

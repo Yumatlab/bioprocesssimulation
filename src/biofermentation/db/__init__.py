@@ -24,7 +24,7 @@ from .project import (
     save_project_with_backup,
     unique_project_name,
 )
-from .seed import export_defaults, load_defaults
+from .seed import export_defaults, load_defaults, refresh_reference_values
 
 __all__ = [
     "Condition",
@@ -47,6 +47,7 @@ __all__ = [
     "load_project_info",
     "load_project_log",
     "load_project_variables",
+    "refresh_reference_values",
     "save_project",
     "save_project_with_backup",
     "unique_project_name",

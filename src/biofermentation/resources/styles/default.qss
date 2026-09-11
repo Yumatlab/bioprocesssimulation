@@ -34,6 +34,46 @@ QLabel, QCheckBox, QRadioButton, QGroupBox {
     color: #1a1a1a;
 }
 
+/* Styling QCheckBox at all takes the box away — the tick was still drawn but
+ * an unticked entry showed nothing at all, so a list of them looked empty.
+ * Once ::indicator is styled the style draws no tick either, hence the
+ * filled square for the checked state. */
+QCheckBox::indicator,
+QTreeWidget::indicator,
+QTreeView::indicator,
+QRadioButton::indicator {
+    width: 13px;
+    height: 13px;
+    border: 1px solid #8a8a8a;
+    border-radius: 3px;
+    background: white;
+}
+
+QRadioButton::indicator {
+    border-radius: 7px;
+}
+
+QCheckBox::indicator:checked,
+QTreeWidget::indicator:checked,
+QTreeView::indicator:checked,
+QRadioButton::indicator:checked {
+    background: #2f7fd1;
+    border-color: #1d63a8;
+}
+
+QCheckBox::indicator:hover,
+QTreeWidget::indicator:hover,
+QTreeView::indicator:hover {
+    border-color: #2f7fd1;
+}
+
+QCheckBox::indicator:disabled,
+QTreeWidget::indicator:disabled,
+QTreeView::indicator:disabled {
+    background: #ededed;
+    border-color: #c8c8c8;
+}
+
 QLabel:disabled, QCheckBox:disabled, QRadioButton:disabled {
     color: #9a9a9a;
 }

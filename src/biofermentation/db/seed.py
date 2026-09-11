@@ -22,6 +22,7 @@ parameterTab.unit, where a dimensionless parameter carries ''.
 
 import csv
 import sqlite3
+from collections.abc import Sequence
 from pathlib import Path
 
 NULL = r"\N"
@@ -122,6 +123,101 @@ def export_defaults(db_path: Path | str, target_dir: Path | str = DEFAULTS_DIR) 
     finally:
         conn.close()
     return written
+
+
+def refresh_reference_values(
+    db_path: Path | str,
+    tables: Sequence[str] = ("default_modelTab", "model_parameterTab", "plot_templateTab"),
+    source_dir: Path | str = DEFAULTS_DIR,
+    *,
+    dry_run: bool = False,
+) -> list[tuple[str, str, object, object]]:
+    """Bring the reference values of an existing database up to the shipped set.
+
+    load_defaults() empties a table before it refills it, which cascades into
+    project data — it is the rebuild path, not an update path. This one only
+    UPDATEs rows that exist in both, matched on the primary key. Nothing is
+    inserted and nothing is deleted, so a database with projects in it is
+    safe.
+
+    Needed because a user's database is a copy of the template taken the day
+    they first ran the program: new defaults in the code never reach it
+    otherwise. Returns (table, primary key, before, after) for every value
+    that differs; with dry_run the list is all it does.
+    """
+    source_dir = Path(source_dir)
+    changes: list[tuple[str, str, object, object]] = []
+    conn = sqlite3.connect(Path(db_path), isolation_level=None)
+    try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("BEGIN")
+        for table in tables:
+            path = source_dir / f"{table}.csv"
+            if not path.is_file():
+                raise FileNotFoundError(f"no default set for {table} at {path}")
+            key = _primary_key(conn, table)
+            with path.open(encoding="utf-8", newline="") as handle:
+                for row in csv.DictReader(handle):
+                    changes.extend(_update_row(conn, table, key, row, dry_run))
+        conn.execute("ROLLBACK" if dry_run else "COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    finally:
+        conn.close()
+    return changes
+
+
+def _primary_key(conn: sqlite3.Connection, table: str) -> str:
+    for row in conn.execute(f'PRAGMA table_info("{table}")'):
+        if row["pk"]:
+            return row["name"]
+    raise ValueError(f"{table} has no primary key to match rows on")
+
+
+def _update_row(
+    conn: sqlite3.Connection, table: str, key: str, row: dict, dry_run: bool
+) -> list[tuple[str, str, object, object]]:
+    """One row of the CSV against the database. Only differing values move."""
+    identifier = row.get(key)
+    if identifier is None:
+        return []
+    current = conn.execute(f'SELECT * FROM "{table}" WHERE "{key}" = ?', (identifier,)).fetchone()
+    if current is None:
+        return []  # a row this database does not have; inserting could cascade
+
+    # sqlite3.Row has no membership test of its own.
+    columns = set(current.keys())
+    changes = []
+    for column, raw in row.items():
+        if column == key or column not in columns:
+            continue
+        wanted = _value(raw)
+        have = current[column]
+        if _differs(have, wanted):
+            changes.append((table, f"{key}={identifier}.{column}", have, wanted))
+            if not dry_run:
+                conn.execute(
+                    f'UPDATE "{table}" SET "{column}" = ? WHERE "{key}" = ?',
+                    (wanted, identifier),
+                )
+    return changes
+
+
+def _value(raw: str):
+    """A CSV cell as it should go into the database."""
+    if raw == NULL:
+        return None
+    try:
+        return float(raw) if "." in raw or "e" in raw.lower() else int(raw)
+    except ValueError:
+        return raw
+
+
+def _differs(have, wanted) -> bool:
+    if isinstance(have, (int, float)) and isinstance(wanted, (int, float)):
+        return abs(float(have) - float(wanted)) > 1e-12
+    return have != wanted
 
 
 def load_defaults(

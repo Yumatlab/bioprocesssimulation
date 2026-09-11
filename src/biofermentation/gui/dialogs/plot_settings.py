@@ -51,8 +51,8 @@ STANDARD = {
     "axisyoffset": 50.0,
     "axislabelfontsize": 12.0,
     "axislinewidth": 1.75,
-    "flaglength": 0.005,
-    "flagangle": 0.0,
+    "flaglength": 0.03,
+    "flagangle": 25.0,
     "flaglinewidth": 1.25,
     "flagfontsize": 16.0,
 }

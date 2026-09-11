@@ -455,3 +455,19 @@ def test_every_tab_page_of_the_control_window_is_white(control_window):
             viewport = page.viewport()
             assert viewport.backgroundRole() == QPalette.ColorRole.Base
             assert viewport.palette().base().color().name() == "#ffffff"
+
+
+def test_a_checkbox_draws_a_visible_box(qapp):
+    """Styling QCheckBox at all took the box away — the tick was still drawn
+    but an unticked entry showed nothing, so a list of them looked empty."""
+    import re
+
+    from biofermentation.gui.style import BUNDLED_STYLE
+
+    sheet = BUNDLED_STYLE.read_text(encoding="utf-8")
+    indicator = re.search(r"QCheckBox::indicator[^{]*\{([^}]*)\}", sheet, re.S)
+    assert indicator, "no rule for the checkbox indicator"
+    body = indicator.group(1)
+    assert "border:" in body
+    assert "background:" in body
+    assert re.search(r"QCheckBox::indicator:checked[^{]*\{[^}]*background:", sheet, re.S)

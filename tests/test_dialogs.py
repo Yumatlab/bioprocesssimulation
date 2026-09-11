@@ -407,6 +407,8 @@ def test_the_control_window_has_its_menu_bar(window):
     assert "Open data table" in entries["Export"]
     assert "Export project…" in entries["Export"]
     assert "Open plot" in entries["Plots"]
+    # Disconnect is gone: pausing the run does the same and says so.
+    assert "Disconnect" not in entries["Settings"]
 
 
 def test_the_template_submenu_lists_what_the_database_has(window):
@@ -422,18 +424,6 @@ def test_the_figure_window_has_its_menu_bar(window):
         assert menus == ["Export", "Template", "Options"]
     finally:
         figure.close()
-
-
-def test_disconnect_stops_the_timer_without_ending_the_session(window):
-    window.runner.start()
-    window.toggle_connection()
-    assert window.runner.running is False
-    assert window.disconnect_action.text() == "Reconnect"
-
-    window.toggle_connection()
-    assert window.runner.running is True
-    assert window.disconnect_action.text() == "Disconnect"
-    window.runner.pause()
 
 
 def test_resetting_the_gains_restores_the_model_defaults(window):
