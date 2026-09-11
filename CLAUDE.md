@@ -514,9 +514,11 @@ Kopieren der `.db` ohne WAL sind sie verloren.
   `idx-1` liest, steht im Python-Code `# MATLAB lag`. Eine Korrektur vor dem
   Referenzlauf würde jede Abweichung unzuordenbar machen.
 
-  **Drei Ausnahmen, alle im Gasmischer und alle außerhalb des verifizierten
-  Fensters** (der Referenzlauf fährt `Mode_pO2` = 1, keiner dieser Zweige
-  läuft dort; der Vergleich bei Schritt 403 ist bitgleich geblieben):
+  **Vier Ausnahmen, alle in der Begasung und alle außerhalb des verifizierten
+  Fensters.** Verifiziert ist der *Lauf*, nicht die Datei: Projekt 716 fährt
+  `Mode_pO2` = 1 mit `f_O2` = 1, und keiner dieser Zweige wird dort betreten.
+  Der Vergleich bei Schritt 403 ist nach jeder der vier Änderungen bitgleich
+  geblieben — nachgemessen, nicht angenommen:
 
   1. `FnO2 = FnGw - FnAIR(previdx)` mischt einen aktuellen Sollwert mit einem
      vorherigen Fluss. Bei 100 % Sauerstoffanforderung geht `FnAIR` richtig
@@ -537,9 +539,33 @@ Kopieren der `.db` ohne WAL sind sie verloren.
      auf. Geprüft wird jetzt der Index, durch den geteilt wird — so wie die
      Pichia-Quelle es schon tut.
 
+  4. Die E.-coli-Quelle hat für die beiden Gase zwei Blöcke derselben Form
+     untereinander, und der zweite trägt die Variable des ersten:
+
+     ```matlab
+     if app.p.f_O2 == 1
+         app.v.FnO2(idx) = app.p.FnO2w;
+     else
+         app.v.FnAIR(idx) = 0;      % müsste FnO2 sein
+     end
+     ```
+
+     Reinen Sauerstoff abzuschalten schaltete damit die **Luft** ab — und
+     ließ `FnO2` ungeschrieben. Das Präallokations-NaN vergiftet die Summe
+     eine Zeile weiter, `carry_forward` reicht daraufhin `FnO2` *und* die
+     Gesamtmenge aus dem Vorschritt nach, und die friert auf ihrem Startwert
+     ein: gemessen `FnAIR` = 0 und `FnO2` = 0 neben `FnG` = 7,5 l/min, ein
+     Gasstrom, den keine Komponente speist. `xOGin` geht auf 0, `kLa` rechnet
+     mit den 7,5 l/min weiter, `OTR` wird negativ, und pO2 fällt auf 0 —
+     während die Oberfläche den Reaktor als begast anzeigt. `f_O2` ist ein
+     `cyclic`-Flag und im Parameterdialog während des Laufs erreichbar. Die
+     Pichia-Quelle hat die Zeile richtig.
+
   Festgehalten in `test_organisms.py`: das Einlassgemisch bleibt in
-  [`xOAIR`, 1], kein Fluss wird negativ, `FnG` nie null, und pO2 bleibt unter
-  dem Gleichgewicht seines eigenen Gasstroms.
+  [`xOAIR`, 1], kein Fluss wird negativ, `FnG` nie null, **`FnG` ist immer die
+  Summe seiner Komponenten**, jedes Flag schreibt seinen eigenen Fluss, und
+  pO2 bleibt unter dem Gleichgewicht seines eigenen Gasstroms. Die
+  Summenprüfung ist die schärfste davon — sie hätte beide Defekte gefunden.
 - **Qt bleibt aus `core/` heraus, bis auf eine Datei.** `core/runner.py`
   läuft ohne Oberfläche und ohne PySide6; nur `core/simulation_runner.py`
   importiert Qt, und `core/__init__.py` zieht sie nicht mit herein. Ein

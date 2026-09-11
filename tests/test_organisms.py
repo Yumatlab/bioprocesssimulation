@@ -696,3 +696,75 @@ def test_the_probe_never_reads_above_its_own_equilibrium(registry, organism, pro
         * 100
     )
     assert (pO2 <= ceiling + 1e-6).all(), f"worst excess {float((pO2 - ceiling).max()):.2f} points"
+
+
+@pytest.mark.parametrize(("organism", "project", "mode"), PO2_MODES)
+def test_the_gas_total_matches_its_components(registry, organism, project, mode):
+    """The strongest guard over this corner, and the one that would have found
+    both defects: a total that no component feeds is not a total.
+
+    E. coli left FnO2 unwritten when pure oxygen was switched off, so the sum
+    became NaN and carry_forward froze the total at its starting value —
+    7.5 l/min next to FnAIR = 0 and FnO2 = 0.
+    """
+    state, _ = _gas_run(organism, project, mode)
+    stop = state.idx + 1
+    parts = [
+        np.asarray(state.v[name][:stop], dtype=float) for name in ("FnAIR", "FnO2", "FnN2", "FnCO2")
+    ]
+    total = np.asarray(state.v.FnG[:stop], dtype=float)
+    assert np.allclose(total, sum(parts), rtol=0, atol=1e-9)
+
+
+@pytest.mark.parametrize("organism", ["escherichia_coli", "pichia_pastoris"])
+def test_switching_the_oxygen_off_leaves_the_air_alone(registry, organism):
+    """The one-line regression.
+
+    The E. coli source has two blocks of the same shape for the two gases, and
+    the second carries the variable of the first:
+
+        if app.p.f_O2 == 1
+            app.v.FnO2(idx) = app.p.FnO2w;
+        else
+            app.v.FnAIR(idx) = 0;      % should be FnO2
+
+    so f_O2 = 0 switched the air off instead. Measured before the correction,
+    pO2 went to zero and the culture suffocated while the window still
+    reported 7.5 l/min of gas.
+    """
+    project = ECOLI_PROJECT if organism == "escherichia_coli" else PICHIA_PROJECT
+    model = get_organism(organism)
+    shared = {"f_Inoc": 1.0, "f_InocStart": 1.0, "deltatsec": 2.0, "Mode_pO2": 1.0}
+
+    def last(**flags):
+        p = _parameters(project, **(shared | flags))
+        state = build_state(p, model, dt=2 / 3600)
+        run_steps(state, model, 300)
+        v, i = state.v, state.idx
+        return float(v.FnAIR[i]), float(v.FnO2[i]), float(v.FnG[i]), float(v.xOGin[i])
+
+    air_on = last(f_air=1.0, f_O2=1.0, FnAIRw=7.5, FnO2w=0.0)
+    oxygen_off = last(f_air=1.0, f_O2=0.0, FnAIRw=7.5, FnO2w=0.0)
+    assert oxygen_off == pytest.approx(air_on), "f_O2 = 0 changed the air flow"
+    assert oxygen_off[0] == pytest.approx(7.5), "the air was switched off"
+
+    # And the other way round: air off, pure oxygen on.
+    air_off = last(f_air=0.0, f_O2=1.0, FnAIRw=7.5, FnO2w=2.0)
+    assert air_off[0] == 0.0
+    assert air_off[1] == pytest.approx(2.0)
+    assert air_off[2] == pytest.approx(2.0)
+    assert air_off[3] == pytest.approx(1.0), "pure oxygen is a mole fraction of one"
+
+
+@pytest.mark.parametrize("organism", ["escherichia_coli", "pichia_pastoris"])
+def test_each_gas_flag_writes_its_own_flow(registry, organism):
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "biofermentation"
+        / "organisms"
+        / organism
+        / "model.py"
+    ).read_text(encoding="utf-8")
+    assert "v.FnO2[i] = p.FnO2w if p.f_O2 == 1 else 0.0" in source
+    assert "v.FnAIR[i] = p.FnAIRw if p.f_air == 1 else 0.0" in source

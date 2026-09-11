@@ -469,8 +469,6 @@ class PichiaPastoris(OrganismModel):
             return
         if p.f_aeration == 1:
             v.FnAIR[i] = p.FnAIRw if p.f_air == 1 else 0.0
-            # Pichia assigns FnO2 correctly here; E. coli's revision of this
-            # branch writes FnAIR by mistake.
             v.FnO2[i] = p.FnO2w if p.f_O2 == 1 else 0.0
             # Corrected: summed from this step, not the one before.
             #

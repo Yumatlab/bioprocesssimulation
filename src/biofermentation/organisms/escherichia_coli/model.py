@@ -436,14 +436,28 @@ class EscherichiaColi(OrganismModel):
             return
         if p.f_aeration == 1:
             v.FnAIR[i] = p.FnAIRw if p.f_air == 1 else 0.0
-            if p.f_O2 == 1:
-                v.FnO2[i] = p.FnO2w
-            else:
-                # MATLAB bug, reproduced: the else branch of the O2 test
-                # assigns FnAIR instead of FnO2, so switching pure oxygen off
-                # silently zeroes the air rate as well. Left in place because
-                # the reference run contains its effect.
-                v.FnAIR[i] = 0.0
+            # Corrected, not reproduced. The source has two blocks of the same
+            # shape here, and the second carries the variable of the first:
+            #
+            #     if app.p.f_O2 == 1
+            #         app.v.FnO2(idx) = app.p.FnO2w;
+            #     else
+            #         app.v.FnAIR(idx) = 0;      % should be FnO2
+            #     end
+            #
+            # Switching pure oxygen off therefore switched the *air* off, and
+            # left FnO2 unwritten — a preallocation NaN, which poisons the sum
+            # below, so carry_forward hands both FnO2 and the total the values
+            # of the step before. The total then freezes at whatever it was:
+            # measured, FnAIR = 0 and FnO2 = 0 next to FnG = 7.5 l/min, a gas
+            # stream no component feeds, and pO2 falls to zero while the
+            # window reports the reactor as aerated.
+            #
+            # The Pichia source has this line right. f_O2 is a cyclic flag and
+            # can be switched during a run, but the reference run never leaves
+            # it — project 716 has f_O2 = 1 — so the verified window is
+            # untouched. See CLAUDE.md.
+            v.FnO2[i] = p.FnO2w if p.f_O2 == 1 else 0.0
             v.FnG[i] = v.FnAIR[i] + v.FnO2[i] + v.FnN2[i] + v.FnCO2[i]
         else:
             v.FnG[i] = 0.0
