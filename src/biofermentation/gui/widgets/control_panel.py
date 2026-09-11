@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -46,7 +47,6 @@ class SwitchSpec:
     parameter: str
     label: str
     modes: tuple[int, ...] = ()
-    lamp: bool = False
 
 
 @dataclass
@@ -72,6 +72,9 @@ class PanelSpec:
     #: The parameter holding the reservoir this panel works on (R_feed). Set
     #: it and the panel gets a reservoir selector and fills in every `{n}`.
     reservoir_parameter: str | None = None
+    #: How many field slots fit across this panel. Two for a panel one section
+    #: wide, three for pO2, which covers two of them.
+    field_columns: int = 2
     fields: list[FieldSpec] = field(default_factory=list)
     switches: list[SwitchSpec] = field(default_factory=list)
     has_parameters_button: bool = True
@@ -140,6 +143,18 @@ class ControlPanel(QGroupBox):
             row.addWidget(self.reservoir_selector, 1)
             layout.addLayout(row)
 
+        # Fields and switches share one grid of equally wide slots. A setpoint
+        # with a measured value beside it takes two, everything else takes
+        # one, and a row is filled before the next one is started. That is why
+        # a panel twice as wide holds its fields in three columns instead of
+        # stacking them down one side with the other half empty.
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(4)  # the same as inside a ValueRow
+        grid.setVerticalSpacing(8)
+        for column in range(spec.field_columns):
+            grid.setColumnStretch(column, 1)
+        row = column = 0
+
         for spec_field in spec.fields:
             widget = ValueRow(
                 self._resolve(spec_field.label),
@@ -157,19 +172,30 @@ class ControlPanel(QGroupBox):
                     )
                 )
             self.rows[spec_field.parameter] = widget
-            layout.addWidget(widget)
+            slots = 2 if spec_field.actual_label else 1
+            if column + slots > spec.field_columns:
+                row, column = row + 1, 0
+            grid.addWidget(widget, row, column, 1, slots)
+            column += slots
 
-        layout.addStretch()
-
+        # The switches start their own row: they are commands, not readings.
+        if spec.switches and column:
+            row, column = row + 1, 0
         for switch_spec in spec.switches:
-            switch = ToggleSwitch(switch_spec.label, lamp=switch_spec.lamp)
+            switch = ToggleSwitch(switch_spec.label)
             switch.toggled.connect(
                 lambda checked, name=switch_spec.parameter: self.parameter_changed.emit(
                     name, float(checked)
                 )
             )
             self.switches[switch_spec.parameter] = switch
-            layout.addWidget(switch)
+            if column + 1 > spec.field_columns:
+                row, column = row + 1, 0
+            grid.addWidget(switch, row, column)
+            column += 1
+
+        layout.addLayout(grid)
+        layout.addStretch()
 
         if spec.has_parameters_button:
             self.parameters_button = QPushButton("Parameters")

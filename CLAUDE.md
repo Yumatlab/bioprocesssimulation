@@ -306,9 +306,10 @@ Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
   animierten `Property`; `set_state_now()` ist der Ladeweg — ohne Animation
   und ohne Signal, denn ein Schalter, der beim Öffnen eines Projekts von
   allein hinüberfährt, sieht aus, als hätte ihn jemand umgelegt. `ToggleSwitch`
-  ist die Zeile darum: Beschriftung links, Schalter rechts, optional die Lampe
-  für einen Zustand, den der Schalter nicht trägt (Feed: der Schalter sagt,
-  was der Bediener will, die Lampe, ob das Reservoir fördert).
+  ist die Zeile darum: Beschriftung links, Schalter rechts, **keine Lampe**.
+  Der Schalter ist grau, wenn er aus ist, und grün, wenn er an ist; eine Lampe
+  daneben sagt dasselbe ein zweites Mal. Die Lampe am Modus bleibt — sie sagt
+  etwas anderes, nämlich ob der Regelkreis automatisch fährt.
 - **`SegmentedControl`** ersetzt das Modus-Dropdown. Es beantwortet
   `addItem`/`findData`/`setCurrentIndex`/`currentData` und heißt sein Signal
   `currentIndexChanged` — damit tragen `select_data()` und `ControlPanel`
@@ -321,14 +322,19 @@ Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
   pO2-Control wiederholt nur den Titel und kostete 170 px auf einer Zeile, die
   alle fünf gleichzeitig zeigen muss. Die gespeicherten Modusnummern sind
   unverändert.
-- **Die Anordnung steht in `PANEL_PLACES`**, nicht im Aufbaucode: sechs
-  gleich große Abschnitte, fünf davon belegt — pO2 oben links, darunter pH und
-  Temperatur, rechts Liquid Weight und Feed. Der sechste bleibt absichtlich
-  frei; freie Fläche neben einem Panel liest sich besser als Felder, die auf
-  eine Breite gezogen sind, die niemand braucht. Die Panels sind **oben
-  ausgerichtet**: sonst wird ein kurzes Panel auf die Höhe des längsten in
-  seiner Zeile gezogen und trägt 130 px Leere zwischen seinem letzten Feld und
-  seinem Schalter.
+- **Die Anordnung steht in `PANEL_PLACES`**, nicht im Aufbaucode: sechs gleich
+  breite Abschnitte, pO2 über die beiden oben links, daneben Liquid Weight,
+  darunter pH, Temperatur und Feed. Die Panels sind **oben ausgerichtet** und
+  behalten die Höhe ihres Inhalts; was übrig bleibt, bekommt eine leere Zeile
+  darunter. Auf die beiden Zeilen verteilt ergäbe es ein Loch in jedem Panel
+  statt eines Feldes unter allen.
+- **Felder und Schalter teilen sich ein Raster gleich breiter Plätze**
+  (`PanelSpec.field_columns`: zwei für ein Panel über einen Abschnitt, drei für
+  pO2 über zwei). Ein Sollwert mit Messwert daneben nimmt zwei Plätze, alles
+  andere einen, und eine Zeile wird gefüllt, bevor die nächste beginnt. So
+  stehen in pO2 Sollwert, Messwert und Rührer in der ersten Zeile und die drei
+  Gasflüsse in der zweiten, statt alles untereinander mit leerer rechter
+  Hälfte. Ein Schalter ist ein Platz breit, nicht ein Panel.
 - **`content_width()` fragt das Minimum, nicht den Wunsch.** Eine
   `QDoubleSpinBox` wünscht sich die breiteste Zahl ihres Wertebereichs und die
   Modustasten wünschen sich eine Reihe. Beides muss nicht gewährt werden: die

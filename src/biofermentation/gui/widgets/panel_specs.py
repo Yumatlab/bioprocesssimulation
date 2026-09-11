@@ -88,6 +88,9 @@ PO2_PANEL = PanelSpec(
         3: "Gasmix",
         4: "Feed",
     },
+    # Two sections wide, so three field slots across: setpoint, measurement
+    # and the stirrer on the first row, the three gas flows on the second.
+    field_columns=3,
     fields=[
         FieldSpec("pO2w", "pO_{2w} [%]", actual="pO2", actual_label="pO_{2} [%]", decimals=1),
         # Live only where the mode does not drive them itself.
@@ -141,7 +144,7 @@ FEED_PANEL = PanelSpec(
         # not to the moment. It is set in Parameters or by a phase.
         FieldSpec("FR{n}max", "F_{R{n}max} [l/h]", decimals=4, read_only=True),
     ],
-    switches=[SwitchSpec("f_feed", "Feed", lamp=True)],
+    switches=[SwitchSpec("f_feed", "Feed")],
     # One block per reservoir; the project says how many there are.
     parameter_groups_per_reservoir=[_pid("Reservoir {n}", "feedR{n}")],
 )

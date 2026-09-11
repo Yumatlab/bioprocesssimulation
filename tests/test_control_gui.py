@@ -38,10 +38,9 @@ from biofermentation.gui.widgets import (
     condition_text,
     select_data,
 )
-from biofermentation.gui.widgets.indicators import GREEN, RED
 from biofermentation.gui.widgets.tex import tex_label, tex_to_html
 from biofermentation.gui.windows import ControlWindow
-from biofermentation.gui.windows.control_app import PANEL_PLACES
+from biofermentation.gui.windows.control_app import PANEL_PLACES, PANEL_SPACING
 from biofermentation.organisms import discover_organisms
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -133,14 +132,6 @@ def test_clicking_a_switch_reports_it_and_slides(qapp):
     assert seen == [True]
     # The animation carries the knob; the state is there the moment it starts.
     assert switch.is_checked() is True
-
-
-def test_the_feed_lamp_follows_its_switch(qapp):
-    """The lamp is the only one of the two that is redrawn from the state."""
-    switch = ToggleSwitch("Feed", lamp=True)
-    assert switch.lamp.color() == RED
-    switch.set_checked(True)
-    assert switch.lamp.color() == GREEN
 
 
 def test_the_selector_answers_the_calls_a_dropdown_would(qapp):
@@ -664,15 +655,36 @@ def test_the_panels_sit_where_the_layout_table_says(window):
 
 
 def test_the_tab_is_six_equal_sections(window):
-    """Five panels of the same width, and one section left free on purpose."""
-    widths = [panel.width() for panel in window.panels.values()]
-    assert max(widths) - min(widths) <= 1
-
+    """Six sections of the same width; pO2 covers the two on the top left."""
     page = window.tabs.widget(0)
     layout = page.layout()
-    assert (layout.rowCount(), layout.columnCount()) == (2, 3)
-    assert len(PANEL_PLACES) == 5, "one of the six sections stays empty"
-    assert all(span == 1 for _, _, span in PANEL_PLACES.values())
+    assert layout.columnCount() == 3
+    assert sum(span for _, _, span in PANEL_PLACES.values()) == 6
+
+    single = [
+        window.panels[title]
+        for title, (_, _, span) in PANEL_PLACES.items()
+        if span == 1
+    ]
+    widths = [panel.width() for panel in single]
+    assert max(widths) - min(widths) <= 1
+    wide = window.panels["pO2-Control"]
+    assert abs(wide.width() - (2 * max(widths) + PANEL_SPACING)) <= 2
+
+
+def test_a_switch_is_as_wide_as_one_field(window):
+    """Label and switch in one slot — not stretched across the whole panel."""
+    for title, panel in window.panels.items():
+        for name, switch in panel.switches.items():
+            field = next(iter(panel.rows.values())).setpoint.width()
+            assert switch.width() <= field * 2, f"{title}/{name}"
+
+
+def test_no_switch_carries_a_lamp(window):
+    """The switch is grey when off and green when on; a lamp repeats that."""
+    for panel in window.panels.values():
+        for switch in panel.switches.values():
+            assert not hasattr(switch, "lamp")
 
 
 def test_every_setpoint_field_of_a_panel_is_the_same_width(window):

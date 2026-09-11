@@ -191,9 +191,10 @@ class SlideSwitch(QAbstractButton):
 class ToggleSwitch(QWidget):
     """A labelled slide switch, the way a controller panel shows a flag.
 
-    Label on the left, switch on the right, optionally a lamp for a state the
-    switch does not carry itself — the feed switch says what the operator
-    asked for, the lamp whether the reservoir is actually feeding.
+    Label on the left, switch on the right, and nothing else: the switch is
+    grey when it is off and green when it is on, so a lamp next to it would
+    say a second time what the switch already says. It is as wide as one field
+    of the panel grid, not as wide as the panel.
     """
 
     toggled = Signal(bool)
@@ -202,7 +203,6 @@ class ToggleSwitch(QWidget):
         self,
         label: str = "",
         *,
-        lamp: bool = False,
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
@@ -220,17 +220,7 @@ class ToggleSwitch(QWidget):
 
         self.switch = SlideSwitch()
         layout.addWidget(self.switch)
-
-        self.lamp = StatusLamp(RED, diameter=11) if lamp else None
-        if self.lamp is not None:
-            layout.addWidget(self.lamp)
-
-        self.switch.toggled.connect(self._on_toggled)
-
-    def _on_toggled(self, checked: bool) -> None:
-        if self.lamp is not None:
-            self.lamp.set_on(checked)
-        self.toggled.emit(checked)
+        self.switch.toggled.connect(self.toggled.emit)
 
     def is_checked(self) -> bool:
         return self.switch.isChecked()
@@ -242,8 +232,6 @@ class ToggleSwitch(QWidget):
         operator moved something.
         """
         self.switch.set_state_now(checked)
-        if self.lamp is not None:
-            self.lamp.set_on(bool(checked))
 
 
 class SegmentedControl(QWidget):

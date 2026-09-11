@@ -66,11 +66,10 @@ port.</p>
 
 
 #: Where each panel of Control Options sits: row, column, how many columns it
-#: spans. Six equal sections, five of them taken — the sixth stays empty on
-#: purpose. Free space next to a panel reads better than fields stretched to
-#: fill a width nobody needs.
+#: spans. Six equal sections; pO2 covers the two on the top left, the other
+#: four take one each.
 PANEL_PLACES = {
-    "pO2-Control": (0, 0, 1),
+    "pO2-Control": (0, 0, 2),
     "Liquid Weight": (0, 2, 1),
     "pH-Control": (1, 0, 1),
     "Temperature-Control": (1, 1, 1),
@@ -109,8 +108,8 @@ class ControlWindow(QMainWindow):
         )
         # The five controller panels and the run column need this much; see
         # ControlPanel.content_width and indicators.FIELD_MIN_WIDTH. The
-        # height carries the two rows of panels — pO2 is the tall one.
-        self.resize(1340, 800)
+        # height carries the two rows of panels and the run column.
+        self.resize(1340, 720)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -266,9 +265,10 @@ class ControlWindow(QMainWindow):
         for column in range(3):
             layout.setColumnMinimumWidth(column, width)
             layout.setColumnStretch(column, 1)
-        # The top row carries pO2 with its five setpoints; extra height goes
-        # there rather than stretching the one-field panels underneath.
-        layout.setRowStretch(0, 1)
+        # Both rows keep the height their panels need; whatever is left over
+        # goes to an empty row underneath. Sharing it out between the two
+        # would put a hole inside every panel instead of one below them all.
+        layout.setRowStretch(2, 1)
         return page
 
     def _build_run_column(self) -> QWidget:
