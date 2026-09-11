@@ -20,7 +20,7 @@ A name repeated across neighbouring cells makes that panel cover them. What
 comes back is one `Placement` per panel, in Qt's addWidget order.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -41,7 +41,13 @@ class Layout:
     """What the file says: where the panels go and how the modes are drawn."""
 
     places: dict[str, "Placement"]
-    mode_selector: str = DEFAULT_MODE_SELECTOR
+    #: Per panel title. Not one setting for all of them: five modes are a
+    #: different problem from two, and the panel with five may well want the
+    #: knob while the rest keep their keys.
+    mode_selectors: dict[str, str] = field(default_factory=dict)
+
+    def selector_for(self, title: str) -> str:
+        return self.mode_selectors.get(title, DEFAULT_MODE_SELECTOR)
 
 
 @dataclass(frozen=True)
@@ -130,16 +136,44 @@ def parse_grid(grid, titles: list[str]) -> dict[str, Placement]:
     return places
 
 
-def parse_mode_selector(value) -> str:
-    """Which drawing of the mode row the file asked for."""
-    if value is None:
-        return DEFAULT_MODE_SELECTOR
+def _one_selector(value) -> str:
     name = str(value).strip().lower()
     if name not in MODE_SELECTORS:
         raise LayoutError(
             f"unknown mode_selector {value!r} — the choices are: {', '.join(MODE_SELECTORS)}"
         )
     return name
+
+
+def parse_mode_selector(value, titles: list[str]) -> dict[str, str]:
+    """Which drawing of the mode row each panel asked for.
+
+    One name applies to every panel; a mapping names the exceptions and may
+    carry a `default` for the rest:
+
+        mode_selector:
+          default: keys
+          pO2: rotary
+    """
+    if value is None:
+        return dict.fromkeys(titles, DEFAULT_MODE_SELECTOR)
+    if not isinstance(value, dict):
+        return dict.fromkeys(titles, _one_selector(value))
+
+    known = {normalise(title): title for title in titles}
+    default = DEFAULT_MODE_SELECTOR
+    chosen: dict[str, str] = {}
+    for key, name in value.items():
+        if normalise(key) == "default":
+            default = _one_selector(name)
+            continue
+        if normalise(key) not in known:
+            raise LayoutError(
+                f"unknown panel {key!r} under mode_selector — "
+                f"the names are: {', '.join(titles)}"
+            )
+        chosen[known[normalise(key)]] = _one_selector(name)
+    return {title: chosen.get(title, default) for title in titles}
 
 
 def load_layout(titles: list[str], path: Path | None = None) -> tuple[Layout, str]:
@@ -158,7 +192,7 @@ def load_layout(titles: list[str], path: Path | None = None) -> tuple[Layout, st
             document = yaml.safe_load(candidate.read_text(encoding="utf-8")) or {}
             return Layout(
                 parse_grid(document.get("grid"), titles),
-                parse_mode_selector(document.get("mode_selector")),
+                parse_mode_selector(document.get("mode_selector"), titles),
             ), problem
         except (LayoutError, yaml.YAMLError, OSError) as error:
             problem = f"{candidate.name}: {error}"

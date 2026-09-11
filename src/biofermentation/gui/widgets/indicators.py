@@ -270,11 +270,13 @@ class SegmentedControl(QWidget):
     #: Between two rows of keys, when they do not fit on one.
     ROW_GAP = 4
 
-    def __init__(self, parent: QWidget | None = None, *, accent: QColor = ACCENT):
+    def __init__(self, parent: QWidget | None = None, *, accent: QColor = SWITCH_ON):
         super().__init__(parent)
         self._items: list[tuple[str, object]] = []
         self._index = -1
         self._hover = -1
+        # Green, like the switches beside it: on this surface green is the
+        # colour of something that is on, and a mode key says the same thing.
         self.accent = accent
         self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -534,6 +536,10 @@ class RotarySelector(QWidget):
         super().__init__(parent)
         self._items: list[tuple[str, object]] = []
         self._index = -1
+        #: The value that means "nobody is controlling" — its dot is drawn red
+        #: rather than green when it is the chosen one. That is what the lamp
+        #: beside the panel used to say, and the knob says it now.
+        self._manual_value: object | None = None
         self.setMinimumHeight(self.SIZE)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -558,6 +564,11 @@ class RotarySelector(QWidget):
             if data == value:
                 return index
         return -1
+
+    def set_manual_value(self, value) -> None:
+        """Which position is hand control, and gets the red dot when chosen."""
+        self._manual_value = value
+        self.update()
 
     def currentIndex(self) -> int:  # noqa: N802 - Qt API
         return self._index
@@ -638,10 +649,17 @@ class RotarySelector(QWidget):
 
         font = QFont(self.font())
         font.setPointSizeF(max(7.0, font.pointSizeF() - 2))
-        for index, (text, _) in enumerate(self._items):
+        for index, (text, value) in enumerate(self._items):
             lit = index == self._index
             dot = self._position(index, self.TRACK)
-            colour = (SWITCH_ON if lit else SWITCH_OFF) if live else QColor(0xDD, 0xDD, 0xDD)
+            # The chosen position is lit — green for a control mode, red for
+            # hand control. The others are the grey of an unlit lamp.
+            manual = self._manual_value is not None and value == self._manual_value
+            colour = (
+                ((RED if manual else SWITCH_ON) if lit else SWITCH_OFF)
+                if live
+                else QColor(0xDD, 0xDD, 0xDD)
+            )
             painter.setBrush(colour)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawEllipse(dot, 4.5, 4.5)
@@ -723,17 +741,18 @@ class ValueRow(QWidget):
         layout = QGridLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
-        # Two columns, always — the setpoint keeps the width of the left one
-        # whether or not there is a measured value beside it. Without this a
-        # lone setpoint took the whole panel and the fields of one panel came
-        # out in two different widths.
+        # Two equal columns: setpoint on the left, measured value on the
+        # right. A row without a measured value spans both, so every value box
+        # in the tab is the same width — a lone setpoint used to get half of
+        # what a setpoint with a reading beside it got.
         layout.setColumnStretch(0, 1)
         layout.setColumnStretch(1, 1)
+        span = 1 if actual_label else 2
 
         self.setpoint_caption = QLabel(tex_to_html(setpoint_label))
         self.setpoint_caption.setTextFormat(Qt.TextFormat.RichText)
         self.setpoint_caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.setpoint_caption, 0, 0)
+        layout.addWidget(self.setpoint_caption, 0, 0, 1, span)
 
         self.setpoint = QDoubleSpinBox()
         self.setpoint.setDecimals(decimals)
@@ -742,7 +761,7 @@ class ValueRow(QWidget):
         self.setpoint.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.setpoint.valueChanged.connect(self.setpoint_changed.emit)
         _take_what_you_get(self.setpoint)
-        layout.addWidget(self.setpoint, 1, 0)
+        layout.addWidget(self.setpoint, 1, 0, 1, span)
 
         self.actual: QLineEdit | None = None
         self.actual_caption: QLabel | None = None

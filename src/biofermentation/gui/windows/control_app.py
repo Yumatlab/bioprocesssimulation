@@ -249,7 +249,7 @@ class ControlWindow(QMainWindow):
             panel = ControlPanel(
                 specs[title],
                 reservoirs=reservoirs,
-                mode_selector=layout_file.mode_selector,
+                mode_selector=layout_file.selector_for(title),
             )
             panel.setObjectName("controlPanel")
             panel.parameter_changed.connect(self._set_parameter)

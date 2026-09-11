@@ -308,16 +308,21 @@ Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
   allein hinüberfährt, sieht aus, als hätte ihn jemand umgelegt. `ToggleSwitch`
   ist die Zeile darum: Beschriftung links, Schalter rechts, **keine Lampe**.
   Der Schalter ist grau, wenn er aus ist, und grün, wenn er an ist; eine Lampe
-  daneben sagt dasselbe ein zweites Mal. Die Lampe am Modus bleibt — sie sagt
-  etwas anderes, nämlich ob der Regelkreis automatisch fährt.
+  daneben sagt dasselbe ein zweites Mal.
 - **Zwei Modus-Wähler, dieselben vier Aufrufe.** `SegmentedControl` (Tasten)
   und `RotarySelector` (Drehschalter) beantworten beide
   `addItem`/`findData`/`setCurrentIndex`/`currentData` und heißen ihr Signal
   `currentIndexChanged` — damit tragen `select_data()` und `ControlPanel`
-  jede Variante, ohne zu wissen, welche sie halten. **Welche es ist, steht in
-  der Layoutdatei** (`mode_selector: keys | rotary`); es ist Geschmack, keine
-  Verdrahtung. Der Drehschalter tauscht Breite gegen Höhe: fünf Modi kosten
-  ein Quadrat von 132 px und keine Breite, die Tasten eine Zeile.
+  jede Variante, ohne zu wissen, welche sie halten. **Welcher wo steht, sagt
+  die Layoutdatei, je Panel** (`mode_selector:` als Name für alle oder als
+  Zuordnung mit `default`); es ist Geschmack, keine Verdrahtung. Fünf Modi
+  sind ein anderes Problem als zwei: pO2 trägt den Drehschalter, der Breite
+  gegen Höhe tauscht (132 px Quadrat, keine Breite), der Rest die Tasten.
+- **Keine Modus-Lampe mehr — der Wähler sagt es selbst.** Die gewählte Taste
+  ist grün wie die Schalter daneben, und der Punkt des Drehschalters ist grün
+  für einen Regelmodus und rot für Handbetrieb. Welcher Wert Handbetrieb ist,
+  weiß das Panel: `MANUAL_MODE = 0`, so nummeriert
+  `parameter_controlmodesTab` jeden Regler dieser Anwendung.
 - **Die Tasten stehen auf einer Reihe, weil die Spalte dafür breit genug
   gemacht wird.** Der Rand je Taste ist beweglich (`PADDING` 12 bis
   `MIN_PADDING` 5), und `one_row_width()` — die Breite bei engstem Rand —
@@ -369,9 +374,10 @@ Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
   `QDoubleSpinBox` wünscht sich die breiteste Zahl ihres Wertebereichs und die
   Modustasten wünschen sich eine Reihe. Beides muss nicht gewährt werden: die
   Felder haben eine lesbare Untergrenze, und die Tasten brechen um.
-- **Eine `ValueRow` hat immer zwei Spalten**, auch ohne Messwert daneben.
-  Sonst nahm ein alleinstehender Sollwert die ganze Panelbreite und die Felder
-  einer Spalte kamen in zwei verschiedenen Breiten heraus.
+- **Eine `ValueRow` hat immer zwei Spalten** — Sollwert links, Messwert
+  rechts. Ohne Messwert **spannt der Sollwert über beide**: sonst bekommt ein
+  alleinstehendes Feld die halbe Breite eines Feldes mit Messwert daneben,
+  gemessen 72 gegen 133 px in derselben Spalte.
 - **Das Feed-Panel arbeitet auf einem Reservoir.** `R_feed` sagt auf welchem,
   und eine Phase kann es unter dem Panel wechseln. Deshalb tragen seine
   `FieldSpec`s ein `{n}` im Parameternamen und im Label (`cS{n}Lw`, `FR{n}w`,

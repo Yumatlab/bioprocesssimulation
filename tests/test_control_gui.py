@@ -51,6 +51,7 @@ from biofermentation.gui.widgets import (
     condition_text,
     select_data,
 )
+from biofermentation.gui.widgets.control_panel import MANUAL_MODE
 from biofermentation.gui.widgets.tex import tex_label, tex_to_html
 from biofermentation.gui.windows import ControlWindow
 from biofermentation.gui.windows.control_app import PANEL_SPACING
@@ -626,10 +627,14 @@ def test_the_mode_selector_fills_the_panel(window):
     """It stopped at its own size hint and left a gap beside it."""
     _laid_out(window)
     for title, panel in window.panels.items():
-        selector = panel.mode_selector
-        assert selector.width() >= panel.width() - 30, title
-        # The lamp sits on the caption line above the keys, not beside them.
-        assert panel.lamp.geometry().bottom() <= selector.geometry().top(), title
+        assert panel.mode_selector.width() >= panel.width() - 30, title
+
+
+def test_no_panel_carries_a_mode_lamp(window):
+    """The selector says it itself: a green key, or a green dot on the knob —
+    and a red one where the loop is on hand control."""
+    for panel in window.panels.values():
+        assert not hasattr(panel, "lamp")
 
 
 def test_the_mode_selector_shows_every_mode_at_once(window):
@@ -888,27 +893,36 @@ def test_the_bundled_layout_is_the_one_the_window_draws():
     assert places["Liquid Weight"].row == 0
     assert places["Feed Control"].row == 1
     assert places["Feed Control"].column == places["Liquid Weight"].column
-    assert layout.mode_selector in MODE_SELECTORS
+    assert set(layout.mode_selectors) == set(TITLES)
+    assert set(layout.mode_selectors.values()) <= set(MODE_SELECTORS)
+    # What the bundled file asks for: the knob where there are five modes.
+    assert layout.selector_for("pO2-Control") == "rotary"
+    assert layout.selector_for("pH-Control") == "keys"
 
 
-def test_the_file_chooses_how_the_modes_are_drawn(tmp_path):
+def test_one_name_chooses_for_every_panel():
     """Keys or a knob: taste, not wiring — both answer the same calls."""
-    path = tmp_path / "control_options.yaml"
-    path.write_text(
-        "grid: [[pH, Temperature, pO2, Liquid Weight, Feed]]\nmode_selector: rotary\n",
-        encoding="utf-8",
-    )
-    layout, problem = load_layout(TITLES, path)
-    assert problem == ""
-    assert layout.mode_selector == "rotary"
+    assert parse_mode_selector("rotary", TITLES) == dict.fromkeys(TITLES, "rotary")
+    assert parse_mode_selector(None, TITLES) == dict.fromkeys(TITLES, DEFAULT_MODE_SELECTOR)
 
-    path.write_text("grid: [[pH, Temperature, pO2, Liquid Weight, Feed]]\n", encoding="utf-8")
-    assert load_layout(TITLES, path)[0].mode_selector == DEFAULT_MODE_SELECTOR
+
+def test_a_mapping_names_the_exceptions():
+    """Five modes are a different problem from two, and may want the knob
+    while the rest keep their keys."""
+    chosen = parse_mode_selector({"default": "keys", "pO2": "rotary"}, TITLES)
+    assert chosen["pO2-Control"] == "rotary"
+    assert set(chosen.values()) == {"keys", "rotary"}
+    assert all(chosen[title] == "keys" for title in TITLES if title != "pO2-Control")
+
+    # Without a default the rest fall back to the built-in one.
+    assert parse_mode_selector({"pO2": "rotary"}, TITLES)["pH-Control"] == DEFAULT_MODE_SELECTOR
 
 
 def test_a_selector_nobody_has_is_refused():
     with pytest.raises(LayoutError, match="unknown mode_selector"):
-        parse_mode_selector("wheel")
+        parse_mode_selector("wheel", TITLES)
+    with pytest.raises(LayoutError, match="unknown panel"):
+        parse_mode_selector({"Nonsense": "keys"}, TITLES)
 
 
 def test_the_panels_build_the_selector_the_file_asked_for(qapp):
@@ -932,6 +946,31 @@ def test_the_knob_answers_the_calls_a_dropdown_would(qapp):
     assert select_data(knob, 2) is True
     assert knob.currentText() == "Aeration"
     assert seen == [2]
+
+
+def test_the_knob_marks_hand_control_in_red(qapp):
+    """What the lamp beside the panel used to say, said by the knob."""
+    knob = RotarySelector()
+    for value, text in ((0, "Manual"), (1, "Agitation")):
+        knob.addItem(text, value)
+    knob.set_manual_value(0)
+    assert knob._manual_value == 0
+
+    panel = ControlPanel(
+        next(s for s in CONTROL_PANELS if s.title == "pO2-Control"), mode_selector="rotary"
+    )
+    # The panel marks it without being told: mode 0 is hand control for every
+    # controller in this application.
+    assert panel.mode_selector._manual_value == MANUAL_MODE
+
+
+def test_every_value_box_in_the_tab_is_the_same_width_across_panels(window):
+    """A setpoint without a reading beside it used to get half the width."""
+    _laid_out(window)
+    widths = {
+        row.setpoint.width() for panel in window.panels.values() for row in panel.rows.values()
+    }
+    assert max(widths) - min(widths) <= 2, sorted(widths)
 
 
 def test_the_knob_spreads_its_positions_over_the_arc(qapp):
