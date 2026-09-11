@@ -287,16 +287,26 @@ diesem Panel — das Feld mit der Beschriftung `F_T1` liest `v.FT2`.
   Zustand bei Schritt 402 trifft den Wert bei 403 auf acht Nachkommastellen,
   und der Feed wächst mit exakt `qXpX1w`. Damit deckt die Verifikation seit
   Phase 3 auch den Exponentialfeed und einen Phasenübergang ab.
-- **Pichia-Defaults sind verfälscht.** `default_modelTab` hat für Pichia je
-  zwei Zeilen für `yXpOgr`, `yCpO` und `qOpXm` (parameterID 206/207/208). Die
-  jeweils zweite trägt Wert *und* Beschreibung der Methanol-Toxizitätsparameter
-  `kS2tox`/`kappatox`/`qXpXtox` (309/310/311), die daneben korrekt existieren.
-  Die falschen Werte sind in `project_parameterTab` gelandet: Projekt 519
-  rechnet mit `yXpOgr` = 40 statt 1,773, `yCpO` = 15 statt 1,375, `qOpXm` = 0,5
-  statt 0,0117. Das verdoppelt die Sauerstoffaufnahmerate. Es ist das in der
-  MATLAB-Dokumentation genannte Duplikat — dort nur als Blocker beim Anlegen
-  von Projekten beschrieben, nicht als Wertverfälschung.
-  Festgehalten als `xfail(strict=True)` in `test_definitions.py`.
+- **Pichia-Defaults waren verfälscht — behoben.** `default_modelTab` hatte für
+  Pichia je zwei Zeilen für `yXpOgr`, `yCpO` und `qOpXm` (parameterID
+  206/207/208). Die jeweils zweite trug Wert *und* Beschreibung der
+  Methanol-Toxizitätsparameter `kS2tox`/`kappatox`/`qXpXtox` (309/310/311),
+  die daneben korrekt existieren. Die falschen Werte waren in
+  `project_parameterTab` gelandet: die Projekte 519 und 520 rechneten mit
+  `yXpOgr` = 40 statt 1,773, `yCpO` = 15 statt 1,375 und `qOpXm` = 0,5 statt
+  0,0117 — etwa die dreifache Sauerstoffaufnahmerate. `model_parameterTab`
+  war durchgehend korrekt; nur `create_project` las von dort, `loadPhases` aus
+  `default_modelTab`.
+
+  Bereinigt mit `db/repair.py` (Werkzeug: `tools/repair_database.py`), auf
+  Template und CSV-Satz angewendet. Die Erkennung rät nicht: eine Streuzeile
+  trägt die Beschreibung eines anderen Parameters neben dessen eigenem Wert,
+  und der Projektwert wird aus `model_parameterTab` wiederhergestellt.
+
+  **Die neun halb angelegten Projekte bleiben stehen.** Sie sind nicht zu
+  öffnen, aber sie sind auch der einzige verbliebene Beleg dafür, was der
+  MATLAB-Anlegepfad getan hat — und die Grundlage der Forensik weiter unten.
+  `repair()` löscht sie nur mit `remove_broken_projects=True`.
 - **`variable_handlingTab` passt zu keinem der beiden Modelle.** Sieben
   E.-coli- und sechs Pichia-Zeitreihen werden gerechnet, aber keinem
   Organismus zugeordnet und daher nie gespeichert — darunter `xO2` und `xCO2`,
@@ -304,9 +314,14 @@ diesem Panel — das Feld mit der Beschriftung `F_T1` liest `v.FT2`.
   `load_project_state` meldet sie jetzt in `a.restarted_variables`.
   Umgekehrt sind E. coli 19 Pichia-Variablen zugeordnet, für die es keine
   Bilanz gibt. `xfail(strict=True)` in `test_organisms.py`.
-- **pO2 überschwingt bei Pichia** auf über 1000 %, auch mit korrigierten
-  Parametern. E. coli bleibt bei ~133 %. Ob MATLAB dasselbe zeigt, entscheidet
-  der Referenzlauf.
+- **pO2 überschwingt bei Pichia** weiterhin über 100 %, gemessen 123 % bei
+  reiner Luftbegasung — physikalisch unmöglich, denn ohne Sauerstoffanreicherung
+  ist die Luftsättigung die Obergrenze. Die Bereinigung der Defaults hat die
+  Sauerstoffaufnahmerate auf etwa ein Drittel gebracht (OUR 1,67 → 0,61 g/(lh)
+  bei t = 0,33 h) und das Überschwingen von 1000 % auf 123 % gedrückt, aber
+  nicht beseitigt: es liegt in der Bilanz, nicht in den Parametern. E. coli
+  bleibt bei ~133 % und ist verifiziert; für Pichia entscheidet das ein
+  Referenzlauf, den es nicht gibt.
 
 ### Offen aus Phase 7
 

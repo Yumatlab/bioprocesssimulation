@@ -364,11 +364,8 @@ default_modelparameterID,organismID,parameterID,value,description
 363,2,195,0.02,Spcific substrate maintenance rate methanol
 364,2,196,0.7429,Substrate limitation constant methanol
 365,2,206,1.773,Oxygen growth yield coefficient
-366,2,206,40.0,Methanol toxicity concentration [5%v/v]
 367,2,207,1.375,Cell internal respiratory behavior
-368,2,207,15.0,Slope of toxicity turn on function
 369,2,208,0.0117,Specific O2 maintenance rate
-370,2,208,0.5,Methanol death rate
 371,2,209,0.69,Relation CO2/O2 transition
 372,2,210,0.0004,Oxygen limitation constant
 373,2,211,0.0005,Inhibition of product production due to O2

@@ -26,11 +26,58 @@ BROKEN = {707, 708, 709, 711, 712, 714, 715, 732, 733}
 INTACT = {519, 520, 716, 725, 727}
 
 
+#: The three parameters the strays sat on, with the parameter whose value and
+#: description they carried and the value the project should have had.
+STRAYS = (
+    ("yXpOgr", "kS2tox", "Methanol toxicity concentration [5%v/v]", 40.0, 1.773),
+    ("yCpO", "kappatox", "Slope of toxicity turn on function", 15.0, 1.375),
+    ("qOpXm", "qXpXtox", "Methanol death rate", 0.5, 0.0117),
+)
+
+
 @pytest.fixture
 def db_copy(tmp_path: Path) -> Path:
+    """A copy of the template with the parameter damage put back.
+
+    The template carried it until it was repaired. A test that relies on a
+    fixture being broken stops testing anything the moment the fixture is
+    fixed, so the damage is made here instead — from the description of it in
+    the module docstring of db/repair.py, not from whatever happens to be in
+    the file.
+    """
     target = tmp_path / "SimulationAppDB.db"
     shutil.copy(TEMPLATE_DB, target)
+
+    with sqlite3.connect(target) as conn:
+        pichia = conn.execute(
+            "SELECT organismID FROM organismTab WHERE name = 'Pichia pastoris'"
+        ).fetchone()[0]
+        for name, _, description, value, _ in STRAYS:
+            parameter = conn.execute(
+                "SELECT parameterID FROM parameterTab WHERE name = ?", (name,)
+            ).fetchone()[0]
+            # The misfiled second row, as MATLAB left it.
+            conn.execute(
+                "INSERT INTO default_modelTab (organismID, parameterID, value, description) "
+                "VALUES (?, ?, ?, ?)",
+                (pichia, parameter, value, description),
+            )
+            # And the value it carried into the projects created from it.
+            conn.execute(
+                """
+                UPDATE project_parameterTab SET value = ?
+                 WHERE parameterID = ?
+                   AND projectID IN (SELECT projectID FROM projectTab WHERE organismID = ?)
+                """,
+                (value, parameter, pichia),
+            )
     return target
+
+
+def test_the_fixture_really_is_damaged(db_copy: Path):
+    """Otherwise every test below would pass against a clean database."""
+    assert len(find_duplicate_model_defaults(db_copy)) == len(STRAYS)
+    assert find_corrupted_project_parameters(db_copy)
 
 
 def _count(db_path: Path, sql: str, params: tuple = ()) -> int:
@@ -87,8 +134,19 @@ def test_a_dry_run_changes_nothing(db_copy: Path):
     assert _count(db_copy, "SELECT COUNT(*) FROM projectTab") == before
 
 
+def test_a_broken_project_is_only_removed_when_asked_for(db_copy: Path):
+    """It is unopenable, but it is also the only record of what the MATLAB
+    create path did."""
+    before = _count(db_copy, "SELECT COUNT(*) FROM projectTab")
+    report = repair(db_copy, dry_run=False)
+
+    assert report["broken_projects"], "the fixture proves nothing otherwise"
+    assert report["removed_projects"] is False
+    assert _count(db_copy, "SELECT COUNT(*) FROM projectTab") == before
+
+
 def test_repair_removes_only_the_unusable_projects(db_copy: Path):
-    repair(db_copy, dry_run=False)
+    repair(db_copy, dry_run=False, remove_broken_projects=True)
     with sqlite3.connect(f"file:{db_copy}?mode=ro", uri=True) as conn:
         remaining = {row[0] for row in conn.execute("SELECT projectID FROM projectTab")}
     assert remaining == INTACT
@@ -97,7 +155,7 @@ def test_repair_removes_only_the_unusable_projects(db_copy: Path):
 def test_repair_cascades_instead_of_deleting_by_hand(db_copy: Path):
     """The defect being repaired was a manual cascade with foreign keys off."""
     assert _count(db_copy, "SELECT COUNT(*) FROM project_parameterTab WHERE projectID = 732") == 42
-    repair(db_copy, dry_run=False)
+    repair(db_copy, dry_run=False, remove_broken_projects=True)
     assert _count(db_copy, "SELECT COUNT(*) FROM project_parameterTab WHERE projectID = 732") == 0
 
 
@@ -131,7 +189,7 @@ def test_operator_settings_are_left_alone(db_copy: Path):
 
 
 def test_a_repaired_database_is_clean_and_stays_clean(db_copy: Path):
-    repair(db_copy, dry_run=False)
+    repair(db_copy, dry_run=False, remove_broken_projects=True)
 
     with sqlite3.connect(f"file:{db_copy}?mode=ro", uri=True) as conn:
         assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"

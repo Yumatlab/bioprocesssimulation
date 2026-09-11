@@ -281,15 +281,39 @@ def test_importing_after_supplying_the_organism_works(db, tmp_path):
     assert load_phases(db, result["projectID"]).info.organism_name == "Escherichia coli"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="default_modelTab holds two rows for three Pichia parameters, so a "
-    "definition cannot say which value counts; see CLAUDE.md, known defects",
-)
-def test_pichia_can_be_exported_as_an_organism(db):
-    """Until the duplicates are fixed, a Pichia project cannot be moved to an
+def test_pichia_can_be_exported_as_an_organism(db, tmp_path):
+    """Held as a strict xfail until the duplicates in default_modelTab were
+    repaired: without the export there is no moving a Pichia project to an
     installation that does not already have the organism."""
-    export_definition(db, "Pichia pastoris")
+    definition = export_definition(db, "Pichia pastoris")
+    assert [model.name for model in definition.models] == [
+        "Pichia model (late stage)",
+        "Pichia pastoris",
+    ]
+
+    definition.display_name = "P. pastoris (lab strain)"
+    write_definition(definition, tmp_path / "pichia.yaml")
+    counts = import_definition(db, load_definition(tmp_path / "pichia.yaml"))
+    assert counts["models"] == 2
+
+
+def test_a_pichia_project_can_be_moved_to_an_empty_installation(db, tmp_path):
+    yaml_path = write_definition(export_definition(db, "Pichia pastoris"), tmp_path / "p.yaml")
+    folder = _export(db, PICHIA_PROJECT, tmp_path)
+
+    with sqlite3.connect(db) as conn:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("DELETE FROM organismTab WHERE name = 'Pichia pastoris'")
+        conn.execute(
+            "DELETE FROM modelTab WHERE organismID NOT IN (SELECT organismID FROM organismTab)"
+        )
+
+    with pytest.raises(MissingPrerequisiteError):
+        import_package(db, folder)
+
+    import_definition(db, load_definition(yaml_path))
+    result = import_package(db, folder)
+    assert load_phases(db, result["projectID"]).info.organism_name == "Pichia pastoris"
 
 
 def test_a_folder_that_is_not_an_export_says_so(db, tmp_path):

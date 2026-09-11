@@ -161,19 +161,25 @@ def test_reimporting_a_shipped_definition_changes_nothing(db_copy, organism):
     }
 
 
-@pytest.mark.xfail(
-    reason="default_modelTab duplicates three Pichia parameters; the strays carry "
-    "the methanol toxicity values that also live under kS2tox/kappatox/qXpXtox",
-    strict=True,
-)
 def test_pichia_defaults_are_not_duplicated():
     """The 206/207/208 against 309/310/311 duplicate from the MATLAB notes.
 
     It was known to block the creation of Pichia projects. What went unnoticed
     is that the stray values reached project_parameterTab as well, so every
-    Pichia project runs with an oxygen growth yield of 40 instead of 1.773.
+    Pichia project ran with an oxygen growth yield of 40 instead of 1.773.
+
+    Repaired with db/repair.py; this test held it as a strict xfail until then
+    and now guards the repair.
     """
-    export_definition(TEMPLATE_DB, "Pichia pastoris")
+    definition = export_definition(TEMPLATE_DB, "Pichia pastoris")
+    values = {p.name: p.default for p in definition.parameters}
+    assert values["yXpOgr"] == pytest.approx(1.773)
+    assert values["yCpO"] == pytest.approx(1.375)
+    assert values["qOpXm"] == pytest.approx(0.0117)
+    # The numbers that were sitting on them belong to these three.
+    assert values["kS2tox"] == pytest.approx(40.0)
+    assert values["kappatox"] == pytest.approx(15.0)
+    assert values["qXpXtox"] == pytest.approx(0.5)
 
 
 def test_an_import_leaves_no_foreign_key_violations(db_copy):

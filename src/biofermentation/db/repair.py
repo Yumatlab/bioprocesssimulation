@@ -116,12 +116,27 @@ def find_corrupted_project_parameters(db_path: Path | str) -> list[dict]:
         ]
 
 
-def repair(db_path: Path | str, *, dry_run: bool = True) -> dict:
+def repair(
+    db_path: Path | str,
+    *,
+    dry_run: bool = True,
+    remove_broken_projects: bool = False,
+) -> dict:
     """Report what is broken, and with dry_run=False repair it.
 
     Everything happens in the one transaction get_connection holds, with
     foreign keys on — the deletion of a project cascades the way SQLite
     intends rather than being taken apart by hand.
+
+    The two parameter repairs are safe by construction: a stray default is
+    identified by carrying another parameter's description next to that
+    parameter's own value, and a corrupted project value is restored from
+    model_parameterTab, which holds the right number.
+
+    Deleting a half-created project is not in that class. It is unopenable,
+    but it is also the only remaining record of what the MATLAB create path
+    did, so it goes only when asked for — `remove_broken_projects=True`. The
+    report lists them either way.
     """
     broken = find_broken_projects(db_path)
     strays = find_duplicate_model_defaults(db_path)
@@ -131,15 +146,17 @@ def repair(db_path: Path | str, *, dry_run: bool = True) -> dict:
         "stray_defaults": strays,
         "corrupted_parameters": corrupted,
         "applied": not dry_run,
+        "removed_projects": bool(not dry_run and remove_broken_projects),
     }
     if dry_run:
         return report
 
     with get_connection(db_path) as conn:
-        conn.executemany(
-            "DELETE FROM projectTab WHERE projectID = ?",
-            [(row["projectID"],) for row in broken],
-        )
+        if remove_broken_projects:
+            conn.executemany(
+                "DELETE FROM projectTab WHERE projectID = ?",
+                [(row["projectID"],) for row in broken],
+            )
         conn.executemany(
             "DELETE FROM default_modelTab WHERE default_modelparameterID = ?",
             [(row["default_modelparameterID"],) for row in strays],
