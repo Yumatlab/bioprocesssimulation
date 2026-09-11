@@ -314,14 +314,15 @@ diesem Panel — das Feld mit der Beschriftung `F_T1` liest `v.FT2`.
   `load_project_state` meldet sie jetzt in `a.restarted_variables`.
   Umgekehrt sind E. coli 19 Pichia-Variablen zugeordnet, für die es keine
   Bilanz gibt. `xfail(strict=True)` in `test_organisms.py`.
-- **pO2 überschwingt bei Pichia** weiterhin über 100 %, gemessen 123 % bei
-  reiner Luftbegasung — physikalisch unmöglich, denn ohne Sauerstoffanreicherung
-  ist die Luftsättigung die Obergrenze. Die Bereinigung der Defaults hat die
-  Sauerstoffaufnahmerate auf etwa ein Drittel gebracht (OUR 1,67 → 0,61 g/(lh)
-  bei t = 0,33 h) und das Überschwingen von 1000 % auf 123 % gedrückt, aber
-  nicht beseitigt: es liegt in der Bilanz, nicht in den Parametern. E. coli
-  bleibt bei ~133 % und ist verifiziert; für Pichia entscheidet das ein
-  Referenzlauf, den es nicht gibt.
+- **pO2 über 100 % ist kein Fehler.** Die Sonde wird gegen `pGcal` und
+  `xOGcal` kalibriert (`cOL100 = pGcal·xOGcal/HO2`) und liest im Gleichgewicht
+  `pG·xOGin/(pGcal·xOGcal)·100`. Projekt 519 begast mit 15 l/min Luft **plus
+  1 l/min reinem Sauerstoff** (`f_O2` = 1, `FnO2w` = 1) — `xOGin` = 0,2588
+  statt 0,2094, Gleichgewicht 124,7 %, gemessen 123,4 %. Die Bilanz rechnet
+  richtig, das Projekt begast angereichert. Die früher notierten 1000 %
+  stammten aus den verfälschten Pichia-Defaults und sind mit deren Bereinigung
+  weg. In allen vier pO2-Modi bleibt pO2 jetzt unter der Grenze, die sein
+  eigenes Gasgemisch zulässt.
 
 ### Offen aus Phase 7
 
@@ -512,6 +513,33 @@ Kopieren der `.db` ohne WAL sind sie verloren.
   Original einen Wert bei `idx` schreibt und im nächsten Ausdruck den bei
   `idx-1` liest, steht im Python-Code `# MATLAB lag`. Eine Korrektur vor dem
   Referenzlauf würde jede Abweichung unzuordenbar machen.
+
+  **Drei Ausnahmen, alle im Gasmischer und alle außerhalb des verifizierten
+  Fensters** (der Referenzlauf fährt `Mode_pO2` = 1, keiner dieser Zweige
+  läuft dort; der Vergleich bei Schritt 403 ist bitgleich geblieben):
+
+  1. `FnO2 = FnGw - FnAIR(previdx)` mischt einen aktuellen Sollwert mit einem
+     vorherigen Fluss. Bei 100 % Sauerstoffanforderung geht `FnAIR` richtig
+     auf null und `FnO2` wird dann `FnGw - FnGw` = 0 — **das Gas geht im
+     Moment des höchsten Bedarfs aus**, gemessen 27 von 2000 Schritten. Auf
+     dem Weg dorthin wird der Fluss negativ (−9 l/min bei Pichia) und `xOGin`
+     verlässt [0, 1] (bis −0,48). In der Quelle steht an genau dieser Zeile
+     `% HIER NOCHMAL CHECKEN`. Jetzt `FnAIR(idx)`.
+  2. Die Pichia-Quelle summiert `FnG` an **allen drei** Stellen aus den
+     Flüssen des vorigen Schritts, die E.-coli-Quelle an allen drei aus denen
+     des aktuellen. `xOGin` teilt durch diese Summe und benutzt dabei die
+     aktuellen Komponenten — gemessen fiel `xOGin` auf 0,079, wo nur Luft und
+     Sauerstoff flossen und 0,209 die Untergrenze ist. Pichia rechnet jetzt
+     wie E. coli.
+  3. Die E.-coli-Quelle prüft `FnG(previdx) > 0` und teilt dann durch
+     `FnG(idx)`. Ein Schritt ohne Gas ergibt `0/0`; das NaN wird anschließend
+     von `carry_forward` durch das vorige Gemisch ersetzt und fällt nirgends
+     auf. Geprüft wird jetzt der Index, durch den geteilt wird — so wie die
+     Pichia-Quelle es schon tut.
+
+  Festgehalten in `test_organisms.py`: das Einlassgemisch bleibt in
+  [`xOAIR`, 1], kein Fluss wird negativ, `FnG` nie null, und pO2 bleibt unter
+  dem Gleichgewicht seines eigenen Gasstroms.
 - **Qt bleibt aus `core/` heraus, bis auf eine Datei.** `core/runner.py`
   läuft ohne Oberfläche und ohne PySide6; nur `core/simulation_runner.py`
   importiert Qt, und `core/__init__.py` zieht sie nicht mit herein. Ein

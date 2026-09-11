@@ -419,8 +419,9 @@ class PichiaPastoris(OrganismModel):
 
             v.FnAIR[i] = yaeration / 100 * p.FnAIRmax
             v.FnO2[i] = diff / 100 * p.FnO2max
-            # Summed from idx - 1, so FnG lags the rates just written.
-            v.FnG[i] = v.FnAIR[prev] + v.FnO2[prev] + v.FnN2[prev] + v.FnCO2[prev]
+            # Corrected: summed from this step, not the one before. See the
+            # note in _aeration.
+            v.FnG[i] = v.FnAIR[i] + v.FnO2[i] + v.FnN2[i] + v.FnCO2[i]
 
         elif p.Mode_pO2 == 3:  # gas mixing
             cEgasmix = p.pO2w - v.pO2[prev]
@@ -438,8 +439,26 @@ class PichiaPastoris(OrganismModel):
             xOGinw = ygasmix / 100
 
             v.FnAIR[i] = (p.FnGw * (xOGinw - 1)) / (p.xOAIR - 1)
-            v.FnO2[i] = p.FnGw - v.FnAIR[prev]
-            v.FnG[i] = v.FnAIR[prev] + v.FnO2[prev] + v.FnN2[prev] + v.FnCO2[prev]
+            # Corrected, not reproduced. The original computes the oxygen
+            # flow from the *previous* step's air flow:
+            #
+            #     app.v.FnO2(idx) = app.p.FnGw - app.v.FnAIR(previdx);
+            #       % HIER NOCHMAL CHECKEN
+            #
+            # — the author's own note sits on that line. Mixing a current
+            # setpoint with a previous flow makes the mixture impossible for
+            # one step after every change: asked for pure oxygen, FnAIR
+            # correctly goes to zero and FnO2 then comes out as
+            # FnGw - FnGw = 0, so the gas is switched off at the moment of
+            # highest demand — 27 of 2000 steps in a measured run. On the way
+            # there the flow goes negative and xOGin leaves [0, 1].
+            #
+            # The gas mixing branch is outside the verified window: the
+            # reference run is Mode_pO2 = 1. See CLAUDE.md.
+            v.FnO2[i] = p.FnGw - v.FnAIR[i]
+            # And the total from this step, not the one before. See the note
+            # in _aeration.
+            v.FnG[i] = v.FnAIR[i] + v.FnO2[i] + v.FnN2[i] + v.FnCO2[i]
 
         if p.Mode_pO2 != 1:
             v.NSt[i] = p.NStw if p.f_motor == 1 else 0.0
@@ -453,7 +472,17 @@ class PichiaPastoris(OrganismModel):
             # Pichia assigns FnO2 correctly here; E. coli's revision of this
             # branch writes FnAIR by mistake.
             v.FnO2[i] = p.FnO2w if p.f_O2 == 1 else 0.0
-            v.FnG[i] = v.FnAIR[prev] + v.FnO2[prev] + v.FnN2[prev] + v.FnCO2[prev]
+            # Corrected: summed from this step, not the one before.
+            #
+            # The Pichia source writes previdx at all three places where it
+            # totals the gas — here and in both pO2 control branches — while
+            # the E. coli source, the one the verification rests on, writes
+            # idx at all three. xOGin divides this total using the current
+            # component flows, so summing the previous ones puts a mixture in
+            # the balance that was never fed: measured, xOGin dropped to 0.079
+            # where nothing but air and oxygen were flowing and 0.209 is the
+            # floor.
+            v.FnG[i] = v.FnAIR[i] + v.FnO2[i] + v.FnN2[i] + v.FnCO2[i]
         else:
             v.FnG[i] = 0.0
 

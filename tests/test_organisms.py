@@ -15,7 +15,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from biofermentation.core.runner import build_state, load_project_state, run_simulation
+from biofermentation.core.runner import (
+    build_state,
+    load_project_state,
+    run_simulation,
+    run_steps,
+)
 from biofermentation.db import load_phases
 from biofermentation.organisms import (
     OrganismMetadata,
@@ -533,3 +538,161 @@ def test_the_reference_run_covers_more_than_a_bare_batch():
     assert reference["FT2"].abs().max() > 0, "alkali pump never ran"
     assert reference["cS3L"].abs().max() > 0, "no acetate was formed"
     assert reference["NSt"].max() > reference["NSt"].min(), "agitation never moved"
+
+
+# ----------------------------------------------- the inlet gas mixture --
+#
+# The gas mixing and aeration branches write FnAIR, FnO2 and their total, and
+# the oxygen balance divides by that total. The originals mix a current
+# setpoint with a previous flow there, which produces mixtures that cannot
+# exist. Corrected in both models; these tests hold the correction.
+#
+# The verified E. coli window is untouched by it: the reference run is
+# Mode_pO2 = 1, where no branch below is reached. See docs/ and CLAUDE.md.
+
+
+def _gas_run(organism: str, project: int, mode: float, steps: int = 1500):
+    model = get_organism(organism)
+    p = _parameters(project, f_Inoc=1.0, f_InocStart=1.0, deltatsec=2.0, Mode_pO2=mode)
+    state = build_state(p, model, dt=2 / 3600)
+    run_steps(state, model, steps)
+    return state, p
+
+
+PO2_MODES = [
+    (organism, project, mode)
+    for organism, project in (
+        ("escherichia_coli", ECOLI_PROJECT),
+        ("pichia_pastoris", PICHIA_PROJECT),
+    )
+    for mode in (0.0, 1.0, 2.0, 3.0)
+]
+
+
+@pytest.mark.parametrize(("organism", "project", "mode"), PO2_MODES)
+def test_the_inlet_gas_is_a_mixture_that_could_exist(registry, organism, project, mode):
+    """Air and oxygen only, so the oxygen fraction cannot leave [xOAIR, 1].
+
+    Before the correction it reached -0.48: the oxygen flow was computed as
+    FnGw minus the *previous* step's air flow.
+    """
+    state, p = _gas_run(organism, project, mode)
+    stop = state.idx + 1
+    fraction = np.asarray(state.v.xOGin[:stop], dtype=float)
+
+    assert np.isfinite(fraction).all()
+    assert fraction.min() >= p["xOAIR"] - 1e-9, f"{fraction.min()} is below air"
+    assert fraction.max() <= 1.0 + 1e-9
+
+
+@pytest.mark.parametrize(("organism", "project", "mode"), PO2_MODES)
+def test_no_flow_of_gas_is_ever_negative(registry, organism, project, mode):
+    state, _ = _gas_run(organism, project, mode)
+    stop = state.idx + 1
+    for name in ("FnAIR", "FnO2", "FnN2", "FnCO2", "FnG"):
+        values = np.asarray(state.v[name][:stop], dtype=float)
+        assert values.min() >= -1e-9, f"{name} goes to {values.min()}"
+
+
+@pytest.mark.parametrize(("organism", "project", "mode"), PO2_MODES)
+def test_the_reactor_is_never_left_without_gas(registry, organism, project, mode):
+    """FnG = 0 divided the oxygen balance by zero — 27 steps in a measured run,
+    and every one of them at the moment of highest oxygen demand."""
+    state, _ = _gas_run(organism, project, mode)
+    total = np.asarray(state.v.FnG[: state.idx + 1], dtype=float)
+    assert (total > 0).all(), f"{int((total <= 0).sum())} steps without gas"
+
+
+@pytest.mark.parametrize("organism", ["escherichia_coli", "pichia_pastoris"])
+def test_asking_for_pure_oxygen_delivers_gas(registry, organism):
+    """The regression in one line.
+
+    At a setpoint of 100 % oxygen the air flow correctly goes to zero. The
+    original then computed FnO2 = FnGw - FnAIR(previdx), which is
+    FnGw - FnGw = 0 while the previous step was still on air: full demand
+    turned the gas off.
+    """
+    project = ECOLI_PROJECT if organism == "escherichia_coli" else PICHIA_PROJECT
+    model = get_organism(organism)
+    # The gain is turned up so the controller pins at its upper limit at once.
+    # What is under test is the mixer's arithmetic, not the tuning.
+    p = _parameters(
+        project,
+        f_Inoc=1.0,
+        f_InocStart=1.0,
+        deltatsec=2.0,
+        Mode_pO2=3.0,
+        pO2w=100.0,
+        KP_gasmix=50.0,
+    )
+    state = build_state(p, model, dt=2 / 3600)
+    run_steps(state, model, 300)
+    stop = state.idx + 1
+
+    air = np.asarray(state.v.FnAIR[:stop], dtype=float)
+    oxygen = np.asarray(state.v.FnO2[:stop], dtype=float)
+    total = np.asarray(state.v.FnG[:stop], dtype=float)
+
+    pure = np.flatnonzero(air < 1e-9)
+    assert pure.size, "the controller never asked for pure oxygen"
+    assert (oxygen[pure] > 0).all(), "pure oxygen was asked for and none was fed"
+    assert np.allclose(total[pure], p["FnGw"])
+
+
+@pytest.mark.parametrize("organism", ["escherichia_coli", "pichia_pastoris"])
+def test_the_gas_total_is_summed_from_the_step_it_belongs_to(registry, organism):
+    """xOGin divides by this total using the current component flows.
+
+    The Pichia source sums the previous ones at all three places where it
+    totals the gas, the E. coli source the current ones at all three. Both
+    read the current ones now.
+    """
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "biofermentation"
+        / "organisms"
+        / organism
+        / "model.py"
+    ).read_text(encoding="utf-8")
+    assert "v.FnG[i] = v.FnAIR[prev]" not in source
+    assert source.count("v.FnG[i] = v.FnAIR[i] + v.FnO2[i] + v.FnN2[i] + v.FnCO2[i]") == 3
+
+
+@pytest.mark.parametrize("organism", ["escherichia_coli", "pichia_pastoris"])
+def test_the_guard_tests_the_total_it_divides_by(registry, organism):
+    """The E. coli source guards on FnG(previdx) and divides by FnG(idx)."""
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "biofermentation"
+        / "organisms"
+        / organism
+        / "model.py"
+    ).read_text(encoding="utf-8")
+    assert "if v.FnG[i] > 0:" in source
+    assert "if v.FnG[prev] > 0:" not in source
+
+
+@pytest.mark.parametrize(("organism", "project", "mode"), PO2_MODES)
+def test_the_probe_never_reads_above_its_own_equilibrium(registry, organism, project, mode):
+    """pO2 over 100 % is not by itself wrong — a probe calibrated on air at
+    pGcal reads above 100 when the gas is enriched or the pressure is higher.
+    What it must not do is read above the equilibrium of the gas it is in.
+
+    The first seconds are exempt: the vessel starts at 2 bar and settles to
+    1.5, so the liquid really does hold more oxygen than the new equilibrium
+    and degasses through the probe's nine-second lag.
+    """
+    state, p = _gas_run(organism, project, mode)
+    stop = state.idx + 1
+    settled = slice(int(0.02 / (2 / 3600)), stop)  # after the first 0.02 h
+
+    pO2 = np.asarray(state.v.pO2[:stop], dtype=float)[settled]
+    ceiling = (
+        np.asarray(state.v.pG[:stop], dtype=float)[settled]
+        * np.asarray(state.v.xOGin[:stop], dtype=float)[settled]
+        / (p["pGcal"] * p["xOGcal"])
+        * 100
+    )
+    assert (pO2 <= ceiling + 1e-6).all(), f"worst excess {float((pO2 - ceiling).max()):.2f} points"

@@ -93,7 +93,14 @@ class EscherichiaColi(OrganismModel):
 
         # Mole fraction at the reactor inlet [-]. The CO2 term is dropped in
         # the original: this simulation never aerates with CO2.
-        if v.FnG[prev] > 0:
+        #
+        # Corrected, not reproduced: the original guards on FnG(previdx) and
+        # then divides by FnG(idx), so a step that stops the gas divides by
+        # zero — 0/0, whose NaN carry_forward then replaces with the previous
+        # mixture, leaving the step to transfer oxygen out of a gas stream
+        # that is not flowing. Pichia's copy of this line already tests the
+        # index it divides by; this now matches it.
+        if v.FnG[i] > 0:
             v.xOGin[i] = (p.xOAIR * v.FnAIR[i] + v.FnO2[i]) / v.FnG[i]
         else:
             v.xOGin[i] = 0.0
@@ -399,8 +406,23 @@ class EscherichiaColi(OrganismModel):
 
             xOGinw = ygasmix / 100 * 1
             v.FnAIR[i] = (p.FnGw * (xOGinw - 1)) / (p.xOAIR - 1)
-            # MATLAB lag, and flagged in the original as needing a check.
-            v.FnO2[i] = p.FnGw - v.FnAIR[prev]
+            # Corrected, not reproduced. The original computes the oxygen
+            # flow from the *previous* step's air flow:
+            #
+            #     app.v.FnO2(idx) = app.p.FnGw - app.v.FnAIR(previdx);
+            #       % HIER NOCHMAL CHECKEN
+            #
+            # — the author's own note sits on that line. Mixing a current
+            # setpoint with a previous flow makes the mixture impossible for
+            # one step after every change: asked for pure oxygen, FnAIR
+            # correctly goes to zero and FnO2 then comes out as
+            # FnGw - FnGw = 0, so the gas is switched off at the moment of
+            # highest demand — 27 of 2000 steps in a measured run. On the way
+            # there the flow goes negative and xOGin leaves [0, 1].
+            #
+            # The gas mixing branch is outside the verified window: the
+            # reference run is Mode_pO2 = 1. See CLAUDE.md.
+            v.FnO2[i] = p.FnGw - v.FnAIR[i]
             v.FnG[i] = v.FnAIR[i] + v.FnO2[i] + v.FnN2[i] + v.FnCO2[i]
 
         # Stirrer speed unless pO2 controls it [1/min]
