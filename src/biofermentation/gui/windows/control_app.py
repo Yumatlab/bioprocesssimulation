@@ -216,6 +216,36 @@ class ControlWindow(QMainWindow):
         add(settings, "Reset controller parameters", self.reset_controller_gains)
         add(settings, "Panel layout…", self.edit_panel_layout)
 
+        # Held on the window: setCornerWidget does not take ownership of a
+        # temporary, and the lamps were collected out from under it.
+        self.signal_lights = self._build_signal_lights()
+        bar.setCornerWidget(self.signal_lights, Qt.Corner.TopRightCorner)
+
+    def _build_signal_lights(self) -> QWidget:
+        """The two state lamps, in the empty right half of the menu bar.
+
+        They used to head the run column, which put them below the tab bar
+        with a strip of nothing above them — while the menu bar ran the whole
+        width of the window with four entries on it. This is the same height
+        as the menus and costs no room at all.
+
+        No "Connected" lamp: there is no standing connection to report. The
+        database is read once at the start and written once at the end, and a
+        lamp that is green for the life of the window says nothing.
+        """
+        strip = QWidget()
+        row = QHBoxLayout(strip)
+        row.setContentsMargins(0, 0, 10, 0)
+        row.setSpacing(6)
+        self.lamps: dict[str, StatusLamp] = {}
+        for name in ("Process Running", "Inoculated"):
+            row.addWidget(QLabel(name))
+            lamp = StatusLamp()
+            self.lamps[name] = lamp
+            row.addWidget(lamp)
+            row.addSpacing(8)
+        return strip
+
     def _fill_template_menu(self) -> None:
         """Filled on opening, as the original's context menu is."""
         from ...db.plots import list_plot_templates
@@ -294,20 +324,6 @@ class ControlWindow(QMainWindow):
         column = QWidget()
         column.setFixedWidth(210)
         layout = QVBoxLayout(column)
-
-        # No "Connected" lamp: there is no standing connection to report. The
-        # database is read once at the start and written once at the end, and
-        # a lamp that is green for the life of the window says nothing.
-        self.lamps: dict[str, StatusLamp] = {}
-        for name in ("Process Running", "Inoculated"):
-            row = QHBoxLayout()
-            row.addStretch()
-            row.addWidget(QLabel(name))
-            lamp = StatusLamp()
-            self.lamps[name] = lamp
-            row.addWidget(lamp)
-            layout.addLayout(row)
-        layout.addSpacing(20)
 
         time_row = QHBoxLayout()
         time_row.addWidget(QLabel("Process Time [h]"))

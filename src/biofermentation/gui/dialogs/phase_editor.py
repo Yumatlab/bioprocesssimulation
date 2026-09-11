@@ -29,6 +29,7 @@ from ...control import EndCondition, PhaseType, StartCondition
 from ...db.models import Condition, Phase
 from ..widgets.indicators import select_data
 from ..widgets.tex import tex_to_html
+from .parameters import offered_parameters
 
 #: The only two phase types that draw from a reservoir.
 FEED_TYPES = (PhaseType.PULSE_FEED, PhaseType.EXPONENTIAL_FEED)
@@ -198,6 +199,9 @@ class PhaseEditor(QDialog):
         form.addRow("", self.parameters_button)
 
         self.type_box.currentIndexChanged.connect(self._update_for_type)
+        # The feed parameters belong to one reservoir, so changing it changes
+        # what the button leads to.
+        self.reservoir_box.currentIndexChanged.connect(self._update_for_type)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -230,9 +234,18 @@ class PhaseEditor(QDialog):
         is_stop = phase_type == PhaseType.STOP
         self.end_editor.setVisible(not is_stop)
 
-        # Every phase type but Stop can carry a parameter set; an update phase
-        # is the one whose whole purpose it is.
-        self.parameters_button.setEnabled(not is_stop and self._p_meta is not None)
+        # What a type can carry, it offers; what it cannot, it does not
+        # pretend to. A manual phase applies nothing when it starts, so its
+        # button would open a dialog that could not do anything.
+        self._draft.typeID = phase_type
+        self._draft.reservoirID = self.reservoir_box.currentData() if needs_reservoir else None
+        offers = bool(self._p_meta) and bool(offered_parameters(self._draft, self._p_meta))
+        self.parameters_button.setEnabled(offers)
+        self.parameters_button.setToolTip(
+            ""
+            if offers
+            else "A phase of this type applies no parameters when it starts."
+        )
         count = len(self._draft.parameters)
         self.parameters_button.setText(f"Parameters… ({count})" if count else "Parameters…")
 

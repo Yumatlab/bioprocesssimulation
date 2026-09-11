@@ -294,6 +294,30 @@ abbrechen.
   zu zeigen. `confirm_leave()` läuft dabei wirklich; ein modaler Dialog in
   einer Fixture ist ein hängender Testlauf, und das ist zweimal passiert.
 
+### Was eine Phase an Parametern anbietet
+
+`PHASE_PARAMETERS` in `control/phases.py` sagt, womit eine Phase arbeitet —
+`{n}` steht für ihr Reservoir. Die Tabelle steht neben den Handlern, die sie
+lesen, damit beides nicht auseinanderläuft.
+
+- **Update Parameter Set** bekommt alles Zyklische; dafür ist der Typ da.
+- **Exponentialfeed** bekommt die fünf, aus denen er `FRj` rechnet, für sein
+  Reservoir und kein anderes. **Pulsfeed** die zwei, die er multipliziert.
+  `reading_rate` spielt hier keine Rolle: diese Werte liest der Phasenhandler
+  beim Start der Phase, nicht der erste Schritt des Laufs.
+- **Manual und Stop** bekommen nichts, und ihre Schaltfläche ist abgeschaltet.
+  Eine Liste von Feldern, die nichts bewirken, ist schlechter als keine.
+- **Nicht dabei: `t{n}j`, `cXL{n}j`, `FR{n}j`.** Das sind Ergebnisse — die
+  Phase schreibt sie beim Start, und sie zum Bearbeiten anzubieten hieße
+  anzubieten, ihre eigene Aufzeichnung zu überschreiben.
+
+**Ein Feld, das seinen Wert nicht darstellen kann, meldet eine Änderung, die
+niemand gemacht hat.** `KD_gasmix` ist 1e-05, die `QDoubleSpinBox` hatte vier
+Nachkommastellen, hielt also 0.0000 und gab das zurück: in jedem Phasendialog
+stand „KD_gasmix: 1e-05 → 0", ungefragt. `_decimals_for()` gibt jedem Feld so
+viele Stellen, wie sein Wert braucht, und `_differs()` misst in dem, was das
+Feld zeigen kann (eine halbe letzte Stelle) statt in 1e-15.
+
 ### Die Bedienelemente der Control Options
 
 Nach dem zweiten Anwendertest sind die Schalter und die Modusauswahl neu.

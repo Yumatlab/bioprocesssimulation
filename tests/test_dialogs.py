@@ -15,7 +15,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication, QDialog
 
-from biofermentation.control import PhaseAutomaton
+from biofermentation.control import PhaseAutomaton, PhaseType
 from biofermentation.core.runner import DEFAULT_DT, load_project_state
 from biofermentation.core.simulation_runner import SimulationRunner
 from biofermentation.db import load_phases
@@ -707,6 +707,7 @@ def test_a_phase_stores_only_what_was_changed(window):
 
     phase = window.setup.phases[-1]
     phase.parameters = {}
+    phase.typeID = PhaseType.PARAMETER_UPDATE
     p = window.runner.state.p
     dialog = PhaseParameterDialog(phase, window.setup.p_meta, p)
 
@@ -724,6 +725,7 @@ def test_the_reset_button_appears_only_on_a_changed_parameter(window):
 
     phase = window.setup.phases[-1]
     phase.parameters = {}
+    phase.typeID = PhaseType.PARAMETER_UPDATE
     dialog = PhaseParameterDialog(phase, window.setup.p_meta, window.runner.state.p)
 
     assert dialog._resets["pO2w"].isVisibleTo(dialog) is False
@@ -740,6 +742,7 @@ def test_the_dialog_lists_what_the_phase_will_do(window):
 
     phase = window.setup.phases[-1]
     phase.parameters = {}
+    phase.typeID = PhaseType.PARAMETER_UPDATE
     dialog = PhaseParameterDialog(phase, window.setup.p_meta, window.runner.state.p)
     assert "Nothing" in dialog.summary.toPlainText()
 
@@ -748,11 +751,110 @@ def test_the_dialog_lists_what_the_phase_will_do(window):
     assert "→" in dialog.summary.toPlainText()
 
 
+def test_only_an_update_phase_offers_the_whole_parameter_set(window):
+    """A manual phase applies nothing, so it offers nothing.
+
+    A list of fields that do nothing is worse than no list.
+    """
+    from biofermentation.gui.dialogs.parameters import offered_parameters
+
+    phase = window.setup.phases[-1]
+    p_meta = window.setup.p_meta
+
+    phase.typeID = PhaseType.PARAMETER_UPDATE
+    everything = offered_parameters(phase, p_meta)
+    assert len(everything) > 50
+    assert all(meta["reading_rate"] == "cyclic" for meta in everything)
+
+    for type_id in (PhaseType.MANUAL, PhaseType.STOP):
+        phase.typeID = type_id
+        assert offered_parameters(phase, p_meta) == []
+
+
+def test_a_feed_phase_offers_its_own_reservoir_and_nothing_else(window):
+    """The five the exponential feed computes FRj from, for that reservoir."""
+    from biofermentation.gui.dialogs.parameters import offered_parameters
+
+    phase = window.setup.phases[-1]
+    p_meta = window.setup.p_meta
+
+    phase.typeID = PhaseType.EXPONENTIAL_FEED
+    phase.reservoirID = 1
+    names = [meta["parametername"] for meta in offered_parameters(phase, p_meta)]
+    assert names == ["qXpX1w", "qS1pXm", "yXpS1gr", "cS1R1", "FR1max"]
+
+    phase.reservoirID = 2
+    names = [meta["parametername"] for meta in offered_parameters(phase, p_meta)]
+    assert all(name.count("2") for name in names), names
+    assert "qXpX1w" not in names
+
+    phase.typeID = PhaseType.PULSE_FEED
+    phase.reservoirID = 1
+    names = [meta["parametername"] for meta in offered_parameters(phase, p_meta)]
+    assert names == ["kR1", "FR1max"]
+
+
+def test_the_results_a_feed_phase_writes_are_not_offered(window):
+    """t1j, cXL1j and FR1j are its record of what it did, not settings."""
+    from biofermentation.gui.dialogs.parameters import offered_parameters
+
+    phase = window.setup.phases[-1]
+    phase.typeID = PhaseType.EXPONENTIAL_FEED
+    phase.reservoirID = 1
+    names = {meta["parametername"] for meta in offered_parameters(phase, window.setup.p_meta)}
+    assert names.isdisjoint({"t1j", "cXL1j", "FR1j"})
+
+
+def test_a_value_the_field_cannot_show_is_not_a_change(window):
+    """KD_gasmix is 1e-05, and a box with four decimals handed back 0.
+
+    Every phase then carried "KD_gasmix: 1e-05 → 0" without anyone touching
+    it, and the dialog offered to apply that.
+    """
+    from biofermentation.gui.dialogs import PhaseParameterDialog
+
+    phase = window.setup.phases[-1]
+    phase.parameters = {}
+    phase.typeID = PhaseType.PARAMETER_UPDATE
+    p = window.runner.state.p
+    p["KD_gasmix"] = 1e-05
+
+    dialog = PhaseParameterDialog(phase, window.setup.p_meta, p)
+    assert dialog._boxes["KD_gasmix"].value() == pytest.approx(1e-05)
+    assert "Nothing" in dialog.summary.toPlainText()
+    assert dialog._resets["KD_gasmix"].isVisibleTo(dialog) is False
+
+    dialog.accept()
+    assert phase.parameters == {}
+
+
+def test_a_field_gets_enough_places_for_what_is_put_into_it():
+    from biofermentation.gui.dialogs.parameters import _decimals_for
+
+    assert _decimals_for(1.0) == 4, "the ordinary case keeps four"
+    assert _decimals_for(0.0) == 4
+    assert _decimals_for(1234.5) == 4
+    assert _decimals_for(1e-05) == 8, "0.0000 is not 1e-05"
+    assert _decimals_for(1e-30) == 12, "and there is an end to it"
+
+
+def test_the_drop_button_is_wide_enough_to_read(window):
+    """A fixed 28 px left the stylesheet's padding and clipped the label."""
+    from biofermentation.gui.dialogs import PhaseParameterDialog
+
+    phase = window.setup.phases[-1]
+    phase.typeID = PhaseType.PARAMETER_UPDATE
+    dialog = PhaseParameterDialog(phase, window.setup.p_meta, window.runner.state.p)
+    button = next(iter(dialog._resets.values()))
+    assert button.width() >= button.sizeHint().width()
+
+
 def test_an_existing_phase_parameter_comes_back_into_the_dialog(window):
     from biofermentation.gui.dialogs import PhaseParameterDialog
 
     phase = window.setup.phases[-1]
     phase.parameters = {"pO2w": 42.0}
+    phase.typeID = PhaseType.PARAMETER_UPDATE
     dialog = PhaseParameterDialog(phase, window.setup.p_meta, window.runner.state.p)
     assert dialog._boxes["pO2w"].value() == pytest.approx(42.0)
     assert dialog._resets["pO2w"].isVisibleTo(dialog) is True
@@ -764,6 +866,7 @@ def test_cancelling_the_phase_editor_drops_the_parameters(window):
 
     phase = window.setup.phases[-1]
     phase.parameters = {}
+    phase.typeID = PhaseType.PARAMETER_UPDATE
     dialog = PhaseEditor(
         phase,
         window.setup.lookups,

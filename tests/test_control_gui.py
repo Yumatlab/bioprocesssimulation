@@ -699,6 +699,18 @@ def _laid_out(window):
     return window
 
 
+def test_the_signal_lights_sit_in_the_menu_bar(window):
+    """They used to head the run column, below the tab bar with a strip of
+    nothing above them — while the menu bar ran the whole width with four
+    entries on it."""
+    from PySide6.QtCore import Qt
+
+    corner = window.menuBar().cornerWidget(Qt.Corner.TopRightCorner)
+    assert corner is not None
+    for name, lamp in window.lamps.items():
+        assert corner.isAncestorOf(lamp), name
+
+
 def test_the_panels_sit_where_the_layout_file_says(window):
     """The arrangement comes out of a text file, not out of the window."""
     layout = window.tabs.widget(0).layout()

@@ -41,6 +41,21 @@ class PhaseType(IntEnum):
     EXPONENTIAL_FEED = 5
 
 
+#: What a phase of this type works from, `{n}` standing for its reservoir.
+#: Kept next to the handlers that read them so the two cannot drift: the
+#: exponential feed computes FRj from the first four and is then limited by
+#: FRmax, the pulse feed multiplies the two it names. A parameter update
+#: takes anything, and the other types take nothing.
+#:
+#: Not in it: t{n}j, cXL{n}j and FR{n}j. Those are results — the phase writes
+#: them when it starts, and offering them for editing would be offering to
+#: overwrite its own record.
+PHASE_PARAMETERS: dict[int, tuple[str, ...]] = {
+    PhaseType.EXPONENTIAL_FEED: ("qXpX{n}w", "qS{n}pXm", "yXpS{n}gr", "cS{n}R{n}", "FR{n}max"),
+    PhaseType.PULSE_FEED: ("kR{n}", "FR{n}max"),
+}
+
+
 class StartCondition(IntEnum):
     """process_conditiontypeTab rows with start_end = 1."""
 

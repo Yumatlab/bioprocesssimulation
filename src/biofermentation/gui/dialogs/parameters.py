@@ -22,6 +22,8 @@ first step everything visible is editable; afterwards only the cyclic ones.
 That is why no new column was added to the database.
 """
 
+import math
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -40,6 +42,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ...control import PHASE_PARAMETERS, PhaseType
 from ..widgets.tex import tex_label, tex_to_html
 
 #: reading_rate values that stay editable once the simulation has started.
@@ -48,9 +51,22 @@ CYCLIC = "cyclic"
 INVISIBLE = "invisible"
 
 
-def _spin(value: float, decimals: int = 4) -> QDoubleSpinBox:
+def _decimals_for(value: float, floor: int = 4, cap: int = 12) -> int:
+    """Enough places to show this value, at least `floor`.
+
+    A box with four decimals holds 1e-05 as 0.0000 and hands that back on the
+    next read: KD_gasmix appeared as "1e-05 → 0" in every phase, untouched,
+    because the field could not represent what was put into it.
+    """
+    if not value or not math.isfinite(value):
+        return floor
+    magnitude = math.floor(math.log10(abs(value)))
+    return min(cap, max(floor, 3 - magnitude))
+
+
+def _spin(value: float, decimals: int | None = None) -> QDoubleSpinBox:
     box = QDoubleSpinBox()
-    box.setDecimals(decimals)
+    box.setDecimals(_decimals_for(float(value)) if decimals is None else decimals)
     box.setRange(-1e12, 1e12)
     box.setValue(float(value))
     box.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
@@ -90,12 +106,22 @@ class _EditorBase(QDialog):
         buttons.rejected.connect(self.reject)
         return buttons
 
+    def _differs(self, name: str) -> bool:
+        """Whether the field was moved — measured in what the field can show.
+
+        A box rounds to its own decimals and hands the rounded number back.
+        Comparing that against the unrounded original made every parameter too
+        small for its field look like a change nobody made.
+        """
+        box = self._boxes[name]
+        return abs(box.value() - self._original[name]) > 0.5 * 10 ** -box.decimals()
+
     def accept(self) -> None:
         """Only what actually moved. An untouched field is not a change."""
         self.changes = {
             name: box.value()
             for name, box in self._boxes.items()
-            if box.isEnabled() and abs(box.value() - self._original[name]) > 1e-15
+            if box.isEnabled() and self._differs(name)
         }
         super().accept()
 
@@ -245,14 +271,38 @@ class ParameterDialog(_EditorBase):
             )
 
 
-class PhaseParameterDialog(_EditorBase):
-    """The parameters an "Update Parameter Set" phase applies when it starts.
+def offered_parameters(phase, p_meta: list[dict]) -> list[dict]:
+    """Which parameters a phase of this type may set, in display order.
 
-    PhaseParameterEditor.mlapp: the project's parameters with a field each, a
-    reset button next to every one that has been changed, and a running list
-    of what the phase will do. Only `cyclic` parameters are offered — the
-    phase applies them mid-run, and one that is read at the first step could
-    not take effect.
+    An **Update Parameter Set** phase exists to change parameters, so it gets
+    all of them — the `cyclic` ones, which are the ones a running process can
+    take. The two feed phases get the handful their own handler reads, for
+    their own reservoir and no other, from `PHASE_PARAMETERS`. Every other
+    type gets nothing: a manual phase does not apply parameters, and a list of
+    fields that do nothing is worse than no list.
+    """
+    type_id = phase.typeID
+    if type_id == PhaseType.PARAMETER_UPDATE:
+        return [meta for meta in p_meta if meta.get("reading_rate") == CYCLIC]
+
+    templates = PHASE_PARAMETERS.get(type_id, ())
+    if not templates:
+        return []
+    # The feed parameters belong to one reservoir. reading_rate does not come
+    # into it: these are read by the phase handler when the phase starts, not
+    # at the first step of the run.
+    wanted = [template.replace("{n}", str(phase.reservoirID or 1)) for template in templates]
+    by_name = {meta["parametername"]: meta for meta in p_meta}
+    return [by_name[name] for name in wanted if name in by_name]
+
+
+class PhaseParameterDialog(_EditorBase):
+    """The parameters a phase applies when it starts.
+
+    PhaseParameterEditor.mlapp: the parameters with a field each, a reset
+    button next to every one that has been changed, and a running list of what
+    the phase will do. Which parameters are offered depends on the phase type;
+    see `offered_parameters`.
 
     What the phase stores is the *difference* from the project value. An
     untouched field means "leave it as it is", which is not the same as
@@ -265,10 +315,18 @@ class PhaseParameterDialog(_EditorBase):
         self._phase = phase
         layout = QVBoxLayout(self)
 
-        heading = QLabel(
+        offered = offered_parameters(phase, p_meta)
+        reservoir = phase.reservoirID or 1
+        note = (
             "These values are applied when the phase starts. Everything not "
             "touched here keeps whatever the process has at that moment."
         )
+        if phase.typeID in PHASE_PARAMETERS:
+            note = (
+                f"The feed of reservoir R{reservoir} is computed from these when "
+                "the phase starts. Everything else the phase leaves alone."
+            )
+        heading = QLabel(note)
         heading.setWordWrap(True)
         layout.addWidget(heading)
 
@@ -280,6 +338,9 @@ class PhaseParameterDialog(_EditorBase):
         row.addWidget(QLabel("Search:"))
         row.addWidget(self.search, 1)
         layout.addLayout(row)
+        # Five fields need no search box; two hundred do.
+        self.search.setVisible(len(offered) > 12)
+        row.itemAt(0).widget().setVisible(len(offered) > 12)
 
         area = QScrollArea()
         area.setWidgetResizable(True)
@@ -292,8 +353,7 @@ class PhaseParameterDialog(_EditorBase):
         self._groups: list[QGroupBox] = []
         self._resets: dict[str, QPushButton] = {}
 
-        cyclic = [meta for meta in p_meta if meta.get("reading_rate") == CYCLIC]
-        for (section, category), entries in _by_category(cyclic).items():
+        for (section, category), entries in _by_category(offered).items():
             group = QGroupBox(f"{section} — {category}")
             form = QFormLayout(group)
             form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.FieldsStayAtSizeHint)
@@ -323,9 +383,11 @@ class PhaseParameterDialog(_EditorBase):
         #: The value to fall back to — the project's, not the phase's.
         self._original[name] = project_value
 
-        reset = QPushButton("↺")
-        reset.setFixedWidth(28)
-        reset.setToolTip("Drop this parameter from the phase")
+        reset = QPushButton("↺ Drop")
+        # Sized to its own text: a fixed 28 px left the stylesheet's 10 px of
+        # padding on either side and clipped what was between them.
+        reset.setFixedWidth(reset.sizeHint().width())
+        reset.setToolTip("Drop this parameter from the phase — it keeps the project value")
         reset.clicked.connect(lambda _=False, key=name: self._reset(key))
         self._resets[name] = reset
 
@@ -357,9 +419,6 @@ class PhaseParameterDialog(_EditorBase):
         box.blockSignals(False)
         self._mark(name)
         self._update_summary()
-
-    def _differs(self, name: str) -> bool:
-        return abs(self._boxes[name].value() - self._original[name]) > 1e-15
 
     def _mark(self, name: str) -> None:
         """A changed field looks changed, and only then can be reset."""
