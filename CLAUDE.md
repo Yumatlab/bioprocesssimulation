@@ -294,6 +294,31 @@ abbrechen.
   zu zeigen. `confirm_leave()` läuft dabei wirklich; ein modaler Dialog in
   einer Fixture ist ein hängender Testlauf, und das ist zweimal passiert.
 
+### Der Reglertab
+
+Die Anwendung rechnet jeden Anteil jedes Reglers in jedem Schritt — und zeigte
+davon nichts. Wer pO2 schwingen sah, sah nicht den I-Anteil auflaufen, und das
+ist das Einzige, was es erklärt. Der Tab „Controllers" zeigt je Regelkreis
+Sollwert, Messwert, Abweichung, die drei Anteile als vorzeichenbehaftete Balken
+auf gemeinsamer Skala, die zugehörige Verstärkung und die Stellgrößen.
+
+- **Der Organismus sagt, welche Kreise er fährt**, nicht die Oberfläche:
+  `OrganismModel.control_loops`, eine Liste von `ControlLoop`. Darin stehen nur
+  Namen — Schlüssel in `p`, `v` und `a` —, aufgelöst gegen den laufenden
+  Zustand. Ein Modell, das seine Kreise nicht beschreibt, bekommt einen leeren
+  Tab statt eines falschen. Beide mitgelieferten Organismen teilen sich
+  `shared.CONTROL_LOOPS`; sie greifen dieselben Signale ab.
+- **Zwei Anteile lagen nur in lokalen Variablen** — der P-Anteil des
+  pH-Masters und P und D der Füllstandsregelung. Sie stehen jetzt zusätzlich in
+  `a`. Das ändert keine Zahl: `a` wird vom Modell nicht zurückgelesen und nicht
+  gespeichert. Nachgemessen ist es trotzdem — der E.-coli-Referenzlauf ist nach
+  der Änderung unverändert.
+- **Eine `numpy.float64` ist ein nulldimensionales Array** und antwortet auf
+  `size` mit 1. Wer Skalare und Zeitreihen daran unterscheidet, hält jeden
+  skalaren Anteil für eine Reihe mit einem Element und liest ab dem zweiten
+  Schritt nichts mehr. `ndim` ist das richtige Merkmal.
+- **Nur der sichtbare Tab wird neu gezeichnet**, wie bei Variable Pool auch.
+
 ### Was eine Phase an Parametern anbietet
 
 `PHASE_PARAMETERS` in `control/phases.py` sagt, womit eine Phase arbeitet —

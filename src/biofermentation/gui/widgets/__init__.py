@@ -1,6 +1,7 @@
 """Reusable pieces of the control surface — phase 5."""
 
 from .control_panel import ControlPanel, FieldSpec, PanelSpec, SwitchSpec
+from .controller_view import ControllerView, LoopPanel
 from .indicators import (
     RotarySelector,
     SegmentedControl,
@@ -18,7 +19,9 @@ __all__ = [
     "CONTROL_PANELS",
     "ArrowButton",
     "ControlPanel",
+    "ControllerView",
     "FieldSpec",
+    "LoopPanel",
     "PanelSpec",
     "PhaseGrid",
     "PhasePanel",

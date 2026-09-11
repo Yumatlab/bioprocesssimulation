@@ -29,10 +29,69 @@ class OrganismMetadata:
     version: str = "1.0"
 
 
+@dataclass(frozen=True)
+class ControlLoop:
+    """One control loop, as the surface has to show it.
+
+    The application computes every share of every controller at every step —
+    and until now displayed none of them. A student saw pO2 oscillate without
+    seeing the integral winding up, which is the one thing that explains it.
+
+    This is what the organism declares about its loops so the surface can show
+    them. Everything here is a *name*: `a` and `v` keys and parameter names,
+    resolved against the running state. `{n}` stands for a reservoir.
+
+    Empty strings mean "this loop has no such part" — the pH master is a pure
+    P controller, the temperature master a PI one.
+    """
+
+    name: str
+    #: Which mode parameter has to hold which value for this loop to run.
+    mode_parameter: str
+    mode_value: int
+    setpoint: str  # parameter name
+    measurement: str  # variable name
+    unit: str = ""
+    #: The normalised error, and the three shares — keys in `a`.
+    error: str = ""
+    p_share: str = ""
+    i_share: str = ""
+    d_share: str = ""
+    #: What the loop moves — the pH master has two pumps, the aeration loop
+    #: air and oxygen — and the gains behind the three shares.
+    outputs: tuple[str, ...] = ()
+    output_unit: str = ""
+    gains: tuple[str, ...] = ()
+
+    def resolve(self, reservoir: int) -> "ControlLoop":
+        """The same loop with `{n}` filled in."""
+        if "{n}" not in self.name:
+            return self
+        fill = lambda text: text.replace("{n}", str(reservoir))  # noqa: E731
+        return ControlLoop(
+            name=fill(self.name),
+            mode_parameter=fill(self.mode_parameter),
+            mode_value=self.mode_value,
+            setpoint=fill(self.setpoint),
+            measurement=fill(self.measurement),
+            unit=self.unit,
+            error=fill(self.error),
+            p_share=fill(self.p_share),
+            i_share=fill(self.i_share),
+            d_share=fill(self.d_share),
+            outputs=tuple(fill(name) for name in self.outputs),
+            output_unit=self.output_unit,
+            gains=tuple(fill(gain) for gain in self.gains),
+        )
+
+
 class OrganismModel(ABC):
     """One organism. Stateless — all state lives in the SimulationState."""
 
     metadata: OrganismMetadata
+    #: The control loops this model runs, for the Controllers tab. Empty means
+    #: the model does not describe them and the tab stays empty for it.
+    control_loops: tuple[ControlLoop, ...] = ()
 
     # ------------------------------------------------------------ setup --
 

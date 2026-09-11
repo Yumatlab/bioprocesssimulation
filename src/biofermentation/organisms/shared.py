@@ -12,6 +12,7 @@ declared as series here, the rest as scalars.
 import numpy as np
 
 from ..core.state import SimulationState
+from .base import ControlLoop
 
 # Controller signals read at idx - 1 and written at idx. In MATLAB these start
 # out as scalars and silently become vectors on the first indexed assignment.
@@ -311,3 +312,128 @@ def pt1_filter(error: float, previous: float, dt: float, T: float = 0.001) -> fl
 def positive(values: np.ndarray) -> np.ndarray:
     """Clip an ODE result at zero — no concentration may go negative."""
     return np.where(values < 0, 0.0, values)
+
+
+#: The control loops both organisms run, in the order the panels stand in.
+#:
+#: The names are the same in both models — Pichia is a later revision with a
+#: different D term and anti-windup, but it taps the same signals. A model
+#: whose internals differ declares its own; this is a default, not a rule.
+CONTROL_LOOPS = (
+    ControlLoop(
+        name="pH",
+        mode_parameter="Mode_pH",
+        mode_value=1,
+        setpoint="pHw",
+        measurement="pHL",
+        error="ce_pH",
+        p_share="cP_pH",
+        outputs=("FT1", "FT2"),
+        output_unit="l/h",
+        gains=("KP_pH",),
+    ),
+    ControlLoop(
+        name="Temperature",
+        mode_parameter="Mode_temp",
+        mode_value=1,
+        setpoint="thetaLw",
+        measurement="thetaL",
+        unit="°C",
+        error="ce",
+        p_share="cP_Part",
+        i_share="cI_Part",
+        outputs=("thetaDJ",),
+        output_unit="°C",
+        gains=("KP_temp1", "KI_temp1"),
+    ),
+    ControlLoop(
+        name="pO2 — agitation",
+        mode_parameter="Mode_pO2",
+        mode_value=1,
+        setpoint="pO2w",
+        measurement="pO2",
+        unit="%",
+        error="ce_agi",
+        p_share="cP_agi",
+        i_share="cI_agi",
+        d_share="cD_agi",
+        outputs=("NSt",),
+        output_unit="rpm",
+        gains=("KP_agi", "KI_agi", "KD_agi"),
+    ),
+    ControlLoop(
+        name="pO2 — aeration",
+        mode_parameter="Mode_pO2",
+        mode_value=2,
+        setpoint="pO2w",
+        measurement="pO2",
+        unit="%",
+        error="ce_aeration",
+        p_share="cP_aeration",
+        i_share="cI_aeration",
+        d_share="cD_aeration",
+        outputs=("FnAIR", "FnO2"),
+        output_unit="l/min",
+        gains=("KP_aeration", "KI_aeration", "KD_aeration"),
+    ),
+    ControlLoop(
+        name="pO2 — gas mixing",
+        mode_parameter="Mode_pO2",
+        mode_value=3,
+        setpoint="pO2w",
+        measurement="pO2",
+        unit="%",
+        error="ce_gasmix",
+        p_share="cP_gasmix",
+        i_share="cI_gasmix",
+        d_share="cD_gasmix",
+        outputs=("FnAIR", "FnO2", "xOGin"),
+        output_unit="",
+        gains=("KP_gasmix", "KI_gasmix", "KD_gasmix"),
+    ),
+    ControlLoop(
+        name="pO2 — feed",
+        mode_parameter="Mode_pO2",
+        mode_value=4,
+        setpoint="pO2w",
+        measurement="pO2",
+        unit="%",
+        error="ce_feedpO2",
+        p_share="cP_feedpO2",
+        i_share="cI_feedpO2",
+        d_share="cD_feedpO2",
+        outputs=("FR1",),
+        output_unit="l/h",
+        gains=("KP_feedpO2", "KI_feedpO2", "KD_feedpO2"),
+    ),
+    ControlLoop(
+        name="Liquid weight",
+        mode_parameter="Mode_harvest",
+        mode_value=1,
+        setpoint="LWw",
+        measurement="VL",
+        unit="kg",
+        error="ce_LW",
+        p_share="cP_LW",
+        i_share="cI_LW",
+        d_share="cD_LW",
+        outputs=("FH",),
+        output_unit="l/h",
+        gains=("KP_LW", "KI_LW", "KD_LW"),
+    ),
+    ControlLoop(
+        name="Feed R{n}",
+        mode_parameter="Mode_feed",
+        mode_value=1,
+        setpoint="cS{n}Lw",
+        measurement="cS{n}L",
+        unit="g/l",
+        error="ce_feedR{n}",
+        p_share="cP_feedR{n}",
+        i_share="cI_feedR{n}",
+        d_share="cD_feedR{n}",
+        outputs=("FR{n}",),
+        output_unit="l/h",
+        gains=("KP_feedR{n}", "KI_feedR{n}", "KD_feedR{n}"),
+    ),
+)

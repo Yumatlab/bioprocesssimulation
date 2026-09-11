@@ -27,6 +27,7 @@ from ...core.state import SimulationState
 from ..base import OrganismMetadata, OrganismModel
 from ..registry import register
 from ..shared import (
+    CONTROL_LOOPS,
     clamp,
     henry_co2,
     henry_o2,
@@ -52,6 +53,9 @@ class PichiaPastoris(OrganismModel):
         ),
         version="2.2",
     )
+
+    #: Both models tap the same controller signals; see shared.py.
+    control_loops = CONTROL_LOOPS
 
     # ------------------------------------------------------------ setup --
 
@@ -494,8 +498,10 @@ class PichiaPastoris(OrganismModel):
             a.ce_LW[i] = a.cE_LW / (p.VLmax * p.rhoL - p.VLmin * p.rhoL)
 
             cP_LW = a.ce_LW[i] * p.KP_LW
+            a.cP_LW = cP_LW
             a.cI_LW[i] = a.cI_LW[prev] + (a.ce_LW[i] + a.ce_LW[prev]) / 2 * dt * p.KI_LW
             cD_LW = (a.ce_LW[i] - a.ce_LW[prev]) / dt * p.KD_LW
+            a.cD_LW = cD_LW
 
             yLW = clamp((cP_LW + a.cI_LW[i] + cD_LW) * 100, 0.0, 100.0)
             v.FH[i] = yLW / 100 * p.FHmax
@@ -521,6 +527,11 @@ class PichiaPastoris(OrganismModel):
             return
 
         if abs(p.pHw - v.pHL[prev]) < 0.1:
+            # Inside the dead band the controller does nothing, and the
+            # Controllers tab has to be able to say so rather than show the
+            # last values from before it.
+            a.ce_pH = 0.0
+            a.cP_pH = 0.0
             v.FT1[i] = 0.0
             v.FT2[i] = 0.0
             return
@@ -528,6 +539,10 @@ class PichiaPastoris(OrganismModel):
         epH = p.pHw - v.pHL[prev]
         a.cEpH = pt1_filter(epH, a.cEpH, dt)
         cepH = a.cEpH / (p.pHLmaxgr - p.pHLmingr)
+        # Kept for the Controllers tab; nothing in the model reads them.
+        a.ce_pH = cepH
+        a.cP_pH = cepH * p.KP_pH * 100
+
         ypH = clamp(cepH * p.KP_pH * 100, -100.0, 100.0)
 
         cEypH = p.ypH_SET - (ypH / 100)

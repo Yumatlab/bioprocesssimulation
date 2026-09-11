@@ -52,11 +52,12 @@ from biofermentation.gui.widgets import (
     select_data,
 )
 from biofermentation.gui.widgets.control_panel import MANUAL_MODE
+from biofermentation.gui.widgets.controller_view import SHARE_COLORS
 from biofermentation.gui.widgets.indicators import GREEN, RED
 from biofermentation.gui.widgets.tex import tex_label, tex_to_html
 from biofermentation.gui.windows import ControlWindow
 from biofermentation.gui.windows.control_app import PANEL_SPACING
-from biofermentation.organisms import discover_organisms
+from biofermentation.organisms import discover_organisms, get_organism
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_DB = REPO_ROOT / "src" / "biofermentation" / "resources" / "SimulationAppDB_template.db"
@@ -455,7 +456,7 @@ def test_the_log_can_hide_parameter_updates(window):
 
 def test_the_variable_pool_lists_the_current_values(window):
     window.runner._on_tick()
-    window.tabs.setCurrentIndex(1)
+    window.tabs.setCurrentWidget(window.variable_pool)
     window.refresh()
 
     pool = window.variable_pool
@@ -1071,3 +1072,98 @@ def test_the_fallback_needs_no_file_at_all():
     places = fallback(TITLES)
     assert [p.column for p in places.values()] == list(range(len(TITLES)))
     assert {p.row for p in places.values()} == {0}
+
+
+# ------------------------------------------------------ the control loops --
+
+
+def test_both_organisms_declare_their_loops():
+    """The tab draws what the model says it runs, not what the GUI guesses."""
+    discover_organisms()
+    for name in ("escherichia_coli", "pichia_pastoris"):
+        loops = get_organism(name).control_loops
+        assert len(loops) == 8, name
+        assert [loop.name for loop in loops][:3] == ["pH", "Temperature", "pO2 — agitation"]
+
+
+def test_a_loop_with_a_reservoir_resolves_its_names():
+    loop = next(
+        loop for loop in get_organism("escherichia_coli").control_loops if "{n}" in loop.name
+    )
+    second = loop.resolve(2)
+    assert second.name == "Feed R2"
+    assert second.setpoint == "cS2Lw"
+    assert second.p_share == "cP_feedR2"
+    assert second.outputs == ("FR2",)
+    assert loop.resolve(1).name == "Feed R1", "the template itself is untouched"
+
+
+def test_the_tab_has_a_panel_per_loop_and_per_reservoir(qapp):
+    from biofermentation.gui.widgets import ControllerView
+
+    loops = get_organism("escherichia_coli").control_loops
+    view = ControllerView(loops, reservoirs=3)
+    # Seven loops without a reservoir, one with — three times.
+    assert len(view.panels) == len(loops) + 2
+    assert [panel.loop.name for panel in view.panels][-3:] == ["Feed R1", "Feed R2", "Feed R3"]
+
+
+def test_a_loop_that_is_not_running_shows_nothing(window):
+    """`a` keeps the last values of a loop that has been switched off, and
+    showing them would be showing the past as the present."""
+    view = window.controller_view
+    state = window.runner.state
+    state.p["Mode_pO2"] = 0.0
+    view.refresh(state)
+
+    panel = next(p for p in view.panels if p.loop.name == "pO2 — agitation")
+    assert panel.state_label.text() == "off"
+    assert panel.values["setpoint"].text() == "—"
+    assert all(panel.share_values[letter].text() == "—" for letter in "PID")
+
+
+def test_a_running_loop_shows_every_share(window):
+    """The regression this tab was built on: a numpy float64 is a
+    0-dimensional array and answers size == 1, so every scalar share looked
+    like a one-element series and read as empty at any later index."""
+    from biofermentation.core.runner import run_steps
+
+    state = window.runner.state
+    state.p["Mode_pO2"] = 1.0
+    state.p["f_Inoc"] = 1.0
+    state.p["f_InocStart"] = 1.0
+    run_steps(state, window.runner.organism, 40)
+    window.controller_view.refresh(state)
+
+    panel = next(p for p in window.controller_view.panels if p.loop.name == "pO2 — agitation")
+    assert panel.state_label.text() == "controlling"
+    for letter in "PID":
+        assert panel.share_values[letter].text() not in ("—", ""), letter
+    assert "NSt" in panel.output_label.text()
+    assert "K<sub>P</sub>" in panel.gain_labels["P"].text()
+
+
+def test_the_shares_the_model_only_kept_locally_are_there_now(window):
+    """The pH master and the liquid weight held P and D in local variables;
+    nothing outside the function could see them."""
+    from biofermentation.core.runner import run_steps
+
+    state = window.runner.state
+    state.p["Mode_pH"] = 1.0
+    state.p["Mode_harvest"] = 1.0
+    run_steps(state, window.runner.organism, 40)
+    for key in ("ce_pH", "cP_pH", "cP_LW", "cD_LW", "cI_LW"):
+        assert state.a.get(key) is not None, key
+
+
+def test_the_bars_of_one_loop_share_a_scale(qapp):
+    """Their lengths are only comparable if they are measured against the
+    same number — which is the whole reason for drawing them."""
+    from biofermentation.gui.widgets.controller_view import ShareBar
+
+    bar = ShareBar(SHARE_COLORS["I"])
+    bar.set_value(0.5, 2.0)
+    assert bar._value == 0.5
+    assert bar._scale == 2.0
+    bar.set_value(1.0, 0.0)
+    assert bar._scale == 1.0, "a zero scale would divide by zero on the next paint"

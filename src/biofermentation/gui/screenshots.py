@@ -57,11 +57,14 @@ def render(out_dir: Path, db_path: Path | None = None) -> list[Path]:
     control = _control_window(db_path)
     if control is not None:
         shoot(control, "04_control_app.png", (1290, 690))
-        control.tabs.setCurrentIndex(1)
+        control.tabs.setCurrentWidget(control.controller_view)
         control.refresh()
-        shoot(control, "05_variable_pool.png", (1290, 690))
-        control.tabs.setCurrentIndex(2)
-        shoot(control, "06_process_manager.png", (1290, 690))
+        shoot(control, "05_controllers.png", (1290, 690))
+        control.tabs.setCurrentWidget(control.variable_pool)
+        control.refresh()
+        shoot(control, "06_variable_pool.png", (1290, 690))
+        control.tabs.setCurrentIndex(control.tabs.indexOf(control.variable_pool) + 1)
+        shoot(control, "07_process_manager.png", (1290, 690))
 
         figure = control.open_plot()
         figure.resize(1500, 815)

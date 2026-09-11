@@ -39,7 +39,7 @@ from ...core.simulation_runner import SimulationRunner
 from ...db import load_project_log, save_project_with_backup
 from ...db.models import ProjectSetup
 from ...resources import app_icon_path
-from ..widgets import CONTROL_PANELS, ControlPanel, PhaseGrid, StatusLamp
+from ..widgets import CONTROL_PANELS, ControllerView, ControlPanel, PhaseGrid, StatusLamp
 from ..widgets.log_view import LogView
 from ..widgets.variable_pool import VariablePool
 
@@ -115,6 +115,7 @@ class ControlWindow(QMainWindow):
 
         self.panels: dict[str, ControlPanel] = {}
         self.tabs.addTab(self._build_control_options(), "Control Options")
+        self.tabs.addTab(self._build_controllers(), "Controllers")
         self.tabs.addTab(self._build_variable_pool(), "Variable Pool")
         self.tabs.addTab(self._build_process_manager(), "Process Manager")
         self.tabs.addTab(self._build_log(), "Log")
@@ -385,6 +386,19 @@ class ControlWindow(QMainWindow):
         layout.addWidget(self.exit_button)
         return column
 
+    def _build_controllers(self) -> QWidget:
+        """What every loop is doing — the tab the control panels lead to.
+
+        The loops come from the organism, not from here: which signals a
+        controller taps is the model's business, and a model that does not
+        describe them gets an empty tab rather than a wrong one.
+        """
+        self.controller_view = ControllerView(
+            getattr(self.runner.organism, "control_loops", ()),
+            self.setup.info.reservoirs or 1,
+        )
+        return self.controller_view
+
     def _build_variable_pool(self) -> QWidget:
         self.variable_pool = VariablePool(
             self.setup.lookups.variable, self.setup.info.reservoirs or 1
@@ -508,6 +522,8 @@ class ControlWindow(QMainWindow):
         # Only the visible tab is redrawn, as the original's timerFcn does.
         if self.tabs.currentWidget() is self.variable_pool:
             self.variable_pool.refresh(state)
+        elif self.tabs.currentWidget() is self.controller_view:
+            self.controller_view.refresh(state)
 
         for table in list(self.data_tables):
             table.refresh()
