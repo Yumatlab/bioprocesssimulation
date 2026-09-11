@@ -319,18 +319,13 @@ diesem Panel — das Feld mit der Beschriftung `F_T1` liest `v.FT2`.
 
 ### Offen aus Phase 6
 
-- **Drei Templateeinstellungen wirken noch nicht.** `graphvlinewidth` (es gibt
-  keine senkrechten Phasenmarkierungen), `axisyoffset` (der Abstand der
-  gestapelten Y-Achsen ergibt sich aus der Breite ihrer Beschriftungen) und
-  `axisylabeloffsetabove`/`-below`. Alles andere im Settings-Dialog erreicht
-  die Zeichnung.
+- **Zwei Templateeinstellungen wirken noch nicht.** `axisyoffset` (der Abstand
+  der gestapelten Y-Achsen ergibt sich aus der Breite ihrer Beschriftungen)
+  und `axisylabeloffsetabove`/`-below`. Alles andere im Settings-Dialog
+  erreicht die Zeichnung.
 - **Kein `TemplateManager`.** Templates lassen sich laden, ändern und
   speichern, aber nicht anlegen, kopieren oder löschen
   (`FigureAppTemplateManager.mlapp`).
-- **Keine vertikalen Phasenmarkierungen.** Die MATLAB-Version zeichnet die
-  Phasengrenzen als senkrechte Linien (`graphvlinewidth`); dafür gibt es in
-  pyqtgraph `InfiniteLine`. `graphvlinewidth` ist im Settings-Dialog
-  einstellbar, wird aber noch von nichts gelesen.
 
 ### Offen aus Phase 5
 
@@ -399,6 +394,41 @@ tunen.
   `license`-Feld.
 
 ---
+
+## Projekte, Organismen und Bioreaktoren übertragen
+
+Drei Pakete, alle über **Namen** verschlüsselt, nie über IDs — die
+unterscheiden sich zwischen Installationen, und ein Paket mit IDs ließe sich
+nur dort wieder einlesen, wo es herkommt.
+
+| Paket | Modul | Enthält |
+|---|---|---|
+| Organismus | `db/definitions.py` | `organismTab`, `categoryTab`, `parameterTab`, `variableTab`, `variable_handlingTab`, `default_modelTab`, `process_variableTab` **und `modelTab`/`model_parameterTab`** |
+| Bioreaktor | `db/bioreactors.py` | `bioreactorTab` und `default_bioreactorTab` |
+| Projekt | `db/transfer.py` | Manifest `project.yaml` neben den lesbaren Tabellen des Exports |
+
+Drei Dinge, die dabei gelernt wurden:
+
+1. **Ein Organismus ohne Modell ist ein halber Organismus.** `create_project`
+   liest den Parametersatz aus `model_parameterTab`; ein Import ohne
+   `modelTab` sieht erfolgreich aus und scheitert beim ersten Projekt.
+2. **`modelTab.name` ist tabellenweit `UNIQUE`, nicht je Organismus.** Ein
+   neben seiner Vorlage importierter Organismus kollidiert auf dem Modell;
+   `_free_model_name` hängt den Organismus in Klammern an.
+3. **Ein Modell setzt Parameter, die der Organismus nicht definiert.** Der
+   Kessel steuert seine eigenen bei, der Parametersatz eines Projekts ist die
+   Vereinigung beider. Modellparameter werden deshalb gegen die ganze
+   `parameterTab` aufgelöst, nicht nur gegen den Organismus.
+
+**Der Export ist beides.** Die CSVs sind für Menschen — Phasentyp, Status,
+Bedingung und Einheit ausgeschrieben statt als ID —, das Manifest ist die
+Maschinenkopie davon und die einzige Datei, die der Importer liest. Prosa
+zurückzuparsen wäre der falsche Weg.
+
+**Pichia lässt sich zurzeit nicht als Organismus exportieren.** Die doppelten
+Zeilen in `default_modelTab` (siehe Altlasten, Phase 2) machen es unmöglich zu
+sagen, welcher Wert gilt; `export_definition` verweigert die Auskunft, statt
+zu raten. Festgehalten als `xfail(strict=True)` in `test_transfer.py`.
 
 ## Projekt anlegen und löschen — in Phase 4 erledigt
 

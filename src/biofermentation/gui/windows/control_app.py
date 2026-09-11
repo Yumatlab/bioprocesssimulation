@@ -93,8 +93,8 @@ class ControlWindow(QMainWindow):
         self.tabs.currentChanged.connect(lambda _: self.refresh())
 
         runner.block_completed.connect(self.refresh)
-        runner.phase_started.connect(self._phase_started)
-        runner.phase_ended.connect(self._phase_ended)
+        runner.phase_started.connect(self._phase_changed)
+        runner.phase_ended.connect(self._phase_changed)
         runner.stopped.connect(self._on_stopped)
         runner.failed.connect(self._on_failed)
 
@@ -361,6 +361,7 @@ class ControlWindow(QMainWindow):
 
     def refresh(self, *_) -> None:
         """Everything the running simulation changes. One place, one moment."""
+        self._drain_phase_log()
         state = self.runner.state
         index = state.idx
         self.time_label.setText(f"{float(state.v.t[index]):.3f}")
@@ -528,22 +529,29 @@ class ControlWindow(QMainWindow):
             panel.load(self.runner.state.p)
         self.refresh()
 
-    def _phase_started(self, index: int) -> None:
-        self._log_phase(index, "started")
+    def _drain_phase_log(self) -> None:
+        """What the automaton wrote — feed summaries, parameter updates.
 
-    def _phase_ended(self, index: int) -> None:
-        self._log_phase(index, "ended")
+        It cannot emit a signal of its own; core/ stays free of Qt.
+        """
+        if self.runner.phases is None:
+            return
+        for message in self.runner.phases.drain_log():
+            kind = (
+                "Phase Event"
+                if "] started" in message or "] ended" in message
+                else ("Phase Information")
+            )
+            self.note(message, kind)
 
-    def _log_phase(self, index: int, what: str) -> None:
-        state = self.runner.state
-        try:
-            name = self.setup.phases[index].name
-        except IndexError:  # a phase deleted between signal and slot
-            name = f"Phase {index + 1}"
-        self.note(
-            f"{name} [Phase {index + 1}] {what} at t = {float(state.v.t[state.idx]):.3f} h.",
-            "Phase Event",
-        )
+    def _phase_changed(self, _index: int) -> None:
+        """A phase started or ended: take the automaton's notes and redraw.
+
+        The window used to write its own "X started at t = …" next to the
+        automaton's, which says the same thing from the place that knows. One
+        of the two had to go, and it was this one.
+        """
+        self._drain_phase_log()
         self.refresh_phases()
 
     def force_start(self, index: int) -> None:

@@ -72,6 +72,22 @@ class VariableDefinition:
 
 
 @dataclass
+class ModelDefinition:
+    """One row of modelTab with the parameter set it hands to a new project.
+
+    An organism without a model cannot be the basis of a project —
+    create_project reads its parameters out of model_parameterTab. A
+    definition that carries no model is therefore only half an organism, and
+    an import of it would look successful and then fail at the first project.
+    """
+
+    name: str
+    description: str | None = None
+    #: parameter name -> value. Names, not ids: see the module docstring.
+    parameters: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass
 class OrganismDefinition:
     """Everything about an organism that is data rather than kinetics."""
 
@@ -85,6 +101,7 @@ class OrganismDefinition:
     categories: list[CategoryDefinition] = field(default_factory=list)
     parameters: list[ParameterDefinition] = field(default_factory=list)
     variables: list[VariableDefinition] = field(default_factory=list)
+    models: list[ModelDefinition] = field(default_factory=list)
 
     def validate(self) -> list[str]:
         """Problems that would make an import fail or silently lose data."""
@@ -109,6 +126,15 @@ class OrganismDefinition:
 
         if self.n_reservoirs < 1:
             problems.append(f"n_reservoirs is {self.n_reservoirs}, must be at least 1")
+
+        # A model legitimately sets parameters the organism does not define —
+        # the bioreactor contributes its own, and a project's parameter set is
+        # the union of both. Only a name that exists nowhere is a problem, and
+        # that can only be decided against a database, not here.
+        names = [m.name for m in self.models]
+        duplicates = sorted({n for n in names if names.count(n) > 1})
+        if duplicates:
+            problems.append(f"duplicate models: {', '.join(duplicates)}")
 
         return problems
 
@@ -149,6 +175,7 @@ def load_definition(path: Path | str) -> OrganismDefinition:
         categories=[CategoryDefinition(**c) for c in raw.get("categories", [])],
         parameters=[ParameterDefinition(**p) for p in raw.get("parameters", [])],
         variables=[VariableDefinition(**v) for v in raw.get("variables", [])],
+        models=[ModelDefinition(**m) for m in raw.get("models", [])],
     )
 
     problems = definition.validate()

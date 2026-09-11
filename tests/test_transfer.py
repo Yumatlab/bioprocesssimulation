@@ -1,0 +1,317 @@
+"""Moving organisms, bioreactors and projects between installations.
+
+Every identity here is a name. Ids differ between databases, so a package
+that carried them could only be read back into the one it came from — the
+tests import into a database whose ids were deliberately moved.
+"""
+
+import shutil
+import sqlite3
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from biofermentation.db import (
+    create_project,
+    export_bioreactor,
+    import_bioreactor,
+    import_package,
+    list_bioreactors,
+    load_bioreactor,
+    load_phases,
+    read_package,
+    write_bioreactor,
+    write_manifest,
+)
+from biofermentation.db.definitions import export_definition, import_definition
+from biofermentation.db.transfer import MANIFEST, MissingPrerequisiteError
+from biofermentation.organisms.definition import load_definition, write_definition
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+TEMPLATE_DB = REPO_ROOT / "src" / "biofermentation" / "resources" / "SimulationAppDB_template.db"
+ECOLI_PROJECT = 716
+PICHIA_PROJECT = 519
+
+
+@pytest.fixture
+def db(tmp_path: Path) -> Path:
+    target = tmp_path / "SimulationAppDB.db"
+    shutil.copy(TEMPLATE_DB, target)
+    return target
+
+
+# -------------------------------------------------------- bioreactors --
+
+
+def test_a_bioreactor_round_trips_through_yaml(db, tmp_path):
+    definition = export_bioreactor(db, "BIOSTAT ED")
+    assert definition.manufacturer == "B. Braun Stedim"
+    assert len(definition.parameters) > 50
+    assert definition.parameters["VLmax"] == 11.0
+
+    path = write_bioreactor(definition, tmp_path / "ed.yaml")
+    again = load_bioreactor(path)
+    assert again.parameters == definition.parameters
+    assert again.manufacturer == definition.manufacturer
+
+
+def test_importing_a_bioreactor_under_a_new_name_adds_one(db, tmp_path):
+    definition = export_bioreactor(db, "BIOSTAT ED")
+    definition.name = "BIOSTAT ED (lab 2)"
+    counts = import_bioreactor(db, definition)
+
+    assert counts["parameters"] == len(definition.parameters)
+    assert counts["unknown_parameters"] == 0
+    names = [row["name"] for row in list_bioreactors(db)]
+    assert names == ["BIOSTAT ED", "BIOSTAT B", "BIOSTAT ED (lab 2)"]
+
+
+def test_an_existing_bioreactor_is_not_overwritten_by_accident(db):
+    definition = export_bioreactor(db, "BIOSTAT ED")
+    with pytest.raises(ValueError, match="already exists"):
+        import_bioreactor(db, definition)
+
+    definition.parameters["VLmax"] = 99.0
+    import_bioreactor(db, definition, replace=True)
+    assert export_bioreactor(db, "BIOSTAT ED").parameters["VLmax"] == 99.0
+
+
+def test_a_parameter_this_installation_does_not_know_is_reported(db, tmp_path):
+    definition = export_bioreactor(db, "BIOSTAT ED")
+    definition.name = "Imaginary vessel"
+    definition.parameters["not_a_parameter"] = 1.0
+
+    counts = import_bioreactor(db, definition)
+    assert counts["unknown_parameters"] == 1
+    assert counts["unknown"] == ["not_a_parameter"]
+    # And nothing was invented in parameterTab for it.
+    with sqlite3.connect(db) as conn:
+        assert not conn.execute(
+            "SELECT COUNT(*) FROM parameterTab WHERE name = 'not_a_parameter'"
+        ).fetchone()[0]
+
+
+# ----------------------------------------------------------- organisms --
+
+
+def test_an_organism_carries_its_models(db, tmp_path):
+    """Without one, create_project has nothing to build a parameter set from."""
+    definition = export_definition(db, "Escherichia coli")
+    assert [model.name for model in definition.models] == ["Escherichia model"]
+    assert len(definition.models[0].parameters) == 250
+
+    path = write_definition(definition, tmp_path / "ecoli.yaml")
+    again = load_definition(path)
+    assert again.models[0].parameters == definition.models[0].parameters
+
+
+def test_an_imported_organism_can_carry_a_project(db):
+    definition = export_definition(db, "Escherichia coli")
+    definition.display_name = "E. coli (lab strain)"
+    counts = import_definition(db, definition)
+    assert counts["models"] == 1
+    assert counts["model_parameters"] == 250
+
+    with sqlite3.connect(db) as conn:
+        conn.row_factory = sqlite3.Row
+        model = conn.execute(
+            "SELECT m.modelID, m.name FROM modelTab m JOIN organismTab o "
+            "ON o.organismID = m.organismID WHERE o.name = ?",
+            ("E. coli (lab strain)",),
+        ).fetchone()
+    # modelTab.name is unique across the table, not per organism.
+    assert model["name"] != "Escherichia model"
+    assert "E. coli (lab strain)" in model["name"]
+
+    project_id = create_project(db, "From the import", model["modelID"])
+    setup = load_phases(db, project_id)
+    assert setup.info.organism_name == "E. coli (lab strain)"
+    assert len(setup.p) == 250
+
+
+def test_a_model_may_set_parameters_the_organism_does_not_define(db):
+    """The vessel contributes its own; a project's set is the union."""
+    definition = export_definition(db, "Escherichia coli")
+    organism_parameters = {p.name for p in definition.parameters}
+    model_parameters = set(definition.models[0].parameters)
+    assert model_parameters - organism_parameters, "the fixture proves nothing otherwise"
+    assert definition.validate() == []
+
+
+# ------------------------------------------------------------ projects --
+
+
+def _export(db, project_id, folder: Path, name: str = "package") -> Path:
+    """What the export dialog writes, without the dialog."""
+    from biofermentation.core.runner import DEFAULT_DT, load_project_state
+
+    setup = load_phases(db, project_id)
+    state, _ = load_project_state(db, project_id, dt=DEFAULT_DT)
+    target = folder / name
+    target.mkdir(parents=True, exist_ok=True)
+
+    stop = state.idx + 1
+    names = ["t", *sorted(n for n in state.v if n != "t" and hasattr(state.v[n], "size"))]
+    with (target / "variables.csv").open("w", encoding="utf-8") as handle:
+        handle.write(",".join(f"{n} [-]" for n in names) + "\n")
+        for row in range(stop):
+            handle.write(",".join(f"{float(state.v[n][row]):.10g}" for n in names) + "\n")
+
+    write_manifest(target, setup, state, files={"variables": "variables.csv"})
+    return target
+
+
+def test_a_project_package_names_everything_it_needs(db, tmp_path):
+    folder = _export(db, PICHIA_PROJECT, tmp_path)
+    package = read_package(folder)
+
+    assert package.organism == "Pichia pastoris"
+    assert package.bioreactor == "BIOSTAT ED"
+    assert package.model == "Pichia pastoris"
+    assert package.parameters["cS1L0"] == pytest.approx(load_phases(db, PICHIA_PROJECT).p["cS1L0"])
+    assert len(package.phases) == 5
+
+
+def test_a_project_survives_an_export_and_an_import(db, tmp_path):
+    before = load_phases(db, PICHIA_PROJECT)
+    folder = _export(db, PICHIA_PROJECT, tmp_path)
+
+    result = import_package(db, folder)
+    after = load_phases(db, result["projectID"])
+
+    assert after.info.organism_name == before.info.organism_name
+    assert after.info.bioreactor_name == before.info.bioreactor_name
+    # Every value the export carried is back. The new project may hold more:
+    # it is created from the model first, and a parameter the export does not
+    # mention keeps the model default rather than ending up empty. Project 519
+    # predates four of its model's parameters.
+    assert set(before.p) <= set(after.p)
+    for name, value in before.p.items():
+        assert after.p[name] == pytest.approx(value), name
+
+    assert len(after.phases) == len(before.phases)
+    for old, new in zip(before.phases, after.phases, strict=True):
+        assert (new.name, new.typeID, new.statusID) == (old.name, old.typeID, old.statusID)
+        assert new.start.typeID == old.start.typeID
+        assert new.end.value == pytest.approx(old.end.value)
+        assert new.parameters == pytest.approx(old.parameters)
+
+
+def test_an_import_does_not_take_the_name_of_the_project_it_came_from(db, tmp_path):
+    folder = _export(db, PICHIA_PROJECT, tmp_path)
+    first = import_package(db, folder)
+    second = import_package(db, folder)
+    assert first["name"] != second["name"]
+    assert first["projectID"] != second["projectID"]
+
+
+def test_the_time_series_comes_back(db, tmp_path):
+    from biofermentation.core.runner import DEFAULT_DT, load_project_state, run_steps
+    from biofermentation.organisms import discover_organisms
+
+    discover_organisms()
+    setup = load_phases(db, ECOLI_PROJECT)
+    state, organism = load_project_state(db, ECOLI_PROJECT, dt=DEFAULT_DT)
+    state.p["f_Inoc"] = 1.0
+    state.p["f_InocStart"] = 1.0
+    run_steps(state, organism, 40)
+
+    folder = tmp_path / "run"
+    folder.mkdir()
+    stop = state.idx + 1
+    names = ["t", "cXL", "pO2"]
+    with (folder / "variables.csv").open("w", encoding="utf-8") as handle:
+        handle.write("t [h],cXL [g/l],pO2 [%]\n")
+        for row in range(stop):
+            handle.write(",".join(f"{float(state.v[n][row]):.10g}" for n in names) + "\n")
+    write_manifest(folder, setup, state, files={"variables": "variables.csv"})
+
+    result = import_package(db, folder)
+    assert result["times"] == stop
+
+    from biofermentation.db import load_project_variables
+
+    series = load_project_variables(db, result["projectID"])
+    assert series.n == stop
+    assert series.v["cXL"][-1] == pytest.approx(float(state.v.cXL[state.idx]))
+
+
+def test_a_missing_organism_says_which_one(db, tmp_path):
+    folder = _export(db, PICHIA_PROJECT, tmp_path)
+    with sqlite3.connect(db) as conn:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("DELETE FROM organismTab WHERE name = 'Pichia pastoris'")
+
+    with pytest.raises(MissingPrerequisiteError) as raised:
+        import_package(db, folder)
+    assert raised.value.kind == "organism"
+    assert raised.value.name == "Pichia pastoris"
+    assert "Import the organism first" in str(raised.value)
+
+
+def test_a_missing_bioreactor_says_which_one(db, tmp_path):
+    folder = _export(db, PICHIA_PROJECT, tmp_path)
+    with sqlite3.connect(db) as conn:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("DELETE FROM bioreactorTab WHERE name = 'BIOSTAT ED'")
+
+    with pytest.raises(MissingPrerequisiteError) as raised:
+        import_package(db, folder)
+    assert raised.value.kind == "bioreactor"
+    assert raised.value.name == "BIOSTAT ED"
+
+
+def test_importing_after_supplying_the_organism_works(db, tmp_path):
+    """The path the window walks: refuse, take the package, try again."""
+    definition = export_definition(db, "Escherichia coli")
+    yaml_path = write_definition(definition, tmp_path / "ecoli.yaml")
+    folder = _export(db, ECOLI_PROJECT, tmp_path)
+
+    with sqlite3.connect(db) as conn:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("DELETE FROM organismTab WHERE name = 'Escherichia coli'")
+        conn.execute("DELETE FROM modelTab WHERE name = 'Escherichia model'")
+
+    with pytest.raises(MissingPrerequisiteError):
+        import_package(db, folder)
+
+    import_definition(db, load_definition(yaml_path))
+    result = import_package(db, folder)
+    assert load_phases(db, result["projectID"]).info.organism_name == "Escherichia coli"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="default_modelTab holds two rows for three Pichia parameters, so a "
+    "definition cannot say which value counts; see CLAUDE.md, known defects",
+)
+def test_pichia_can_be_exported_as_an_organism(db):
+    """Until the duplicates are fixed, a Pichia project cannot be moved to an
+    installation that does not already have the organism."""
+    export_definition(db, "Pichia pastoris")
+
+
+def test_a_folder_that_is_not_an_export_says_so(db, tmp_path):
+    empty = tmp_path / "nothing"
+    empty.mkdir()
+    with pytest.raises(FileNotFoundError, match=MANIFEST):
+        read_package(empty)
+
+
+def test_a_manifest_of_another_format_is_refused(db, tmp_path):
+    folder = _export(db, PICHIA_PROJECT, tmp_path)
+    path = folder / MANIFEST
+    path.write_text(path.read_text().replace("biofermentation-project/1", "something/9"))
+    with pytest.raises(ValueError, match="something/9"):
+        read_package(folder)
+
+
+def test_the_manifest_holds_no_numpy_scalars(db, tmp_path):
+    """safe_dump refuses them, and a failed export is worse than a slow one."""
+    import yaml
+
+    folder = _export(db, ECOLI_PROJECT, tmp_path)
+    raw = yaml.safe_load((folder / MANIFEST).read_text())
+    for name, value in raw["parameters"].items():
+        assert not isinstance(value, np.generic), name

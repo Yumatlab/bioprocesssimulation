@@ -56,6 +56,7 @@ class SimulationApp(QApplication):
         self.starting_screen.load_project_requested.connect(self.show_select_project)
         self.starting_screen.new_project_requested.connect(self.show_create_project)
         self.starting_screen.exit_requested.connect(self.quit)
+        self.starting_screen.library_requested.connect(self.library_action)
 
         # The model configurator is not ported. A button that emits into
         # nothing is worse than one that says so.
@@ -77,6 +78,7 @@ class SimulationApp(QApplication):
             self.select_window.project_selected.connect(self.open_project)
             self.select_window.create_requested.connect(self.show_create_project)
             self.select_window.return_requested.connect(self._back_to_start)
+            self.select_window.import_requested.connect(self.import_project)
         self.select_window.refresh()
         self.starting_screen.hide()
         self.select_window.show()
@@ -88,6 +90,45 @@ class SimulationApp(QApplication):
             self.create_window.return_requested.connect(self._back_from_create)
         self.starting_screen.hide()
         self.create_window.show()
+
+    # ------------------------------------------------------- library --
+
+    def library_action(self, name: str) -> None:
+        """One entry of the starting screen's Library menu.
+
+        The windows name what the user asked for; this class decides what
+        happens — the same split as everywhere else here.
+        """
+        from .dialogs.library import (
+            export_bioreactor_file,
+            export_organism_file,
+            import_bioreactor_file,
+            import_organism_file,
+        )
+
+        window = self.starting_screen
+        if name == "Import organism…":
+            import_organism_file(window, self.db_path)
+        elif name == "Export organism…":
+            export_organism_file(window, self.db_path)
+        elif name == "Import bioreactor…":
+            import_bioreactor_file(window, self.db_path)
+        elif name == "Export bioreactor…":
+            export_bioreactor_file(window, self.db_path)
+        elif name == "Import project…":
+            self.import_project()
+
+    def import_project(self) -> int | None:
+        """Read an export back in and open what it produced."""
+        from .dialogs.library import import_project_folder
+
+        parent = self.select_window or self.starting_screen
+        project_id = import_project_folder(parent, self.db_path)
+        if project_id is None:
+            return None
+        if self.select_window is not None:
+            self.select_window.refresh()
+        return project_id
 
     def _back_to_start(self) -> None:
         if self.select_window is not None:

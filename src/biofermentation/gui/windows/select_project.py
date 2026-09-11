@@ -102,6 +102,7 @@ class SelectProjectWindow(QWidget):
     project_selected = Signal(int)
     create_requested = Signal()
     return_requested = Signal()
+    import_requested = Signal()
 
     def __init__(self, db_path: Path | str, parent: QWidget | None = None):
         super().__init__(parent)
@@ -138,16 +139,22 @@ class SelectProjectWindow(QWidget):
         self.return_button = QPushButton("Return")
         self.delete_button = QPushButton("Delete Selected Project")
         self.create_button = QPushButton("Create New Project")
+        self.import_button = QPushButton("Import Project…")
+        self.import_button.setToolTip(
+            "Read an exported folder back in and carry on from where it left off"
+        )
         self.select_button = QPushButton("Select")
         buttons.addWidget(self.return_button)
         buttons.addWidget(self.delete_button)
         buttons.addStretch()
+        buttons.addWidget(self.import_button)
         buttons.addWidget(self.create_button)
         buttons.addWidget(self.select_button)
         layout.addLayout(buttons)
 
         self.return_button.clicked.connect(self.return_requested.emit)
         self.create_button.clicked.connect(self.create_requested.emit)
+        self.import_button.clicked.connect(self.import_requested.emit)
         self.select_button.clicked.connect(self._select)
         self.delete_button.clicked.connect(self._delete)
 

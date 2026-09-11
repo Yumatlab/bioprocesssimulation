@@ -6,8 +6,10 @@ reproduced — it is the university's image asset, not part of this port.
 """
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QLabel,
+    QMenuBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -27,6 +29,8 @@ class StartingScreen(QWidget):
     load_project_requested = Signal()
     model_configurator_requested = Signal()
     exit_requested = Signal()
+    #: An entry of the Library menu, by the name it carries.
+    library_requested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -36,6 +40,7 @@ class StartingScreen(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 30, 40, 24)
         layout.setSpacing(12)
+        layout.setMenuBar(self._build_menu())
 
         title = QLabel("Biofermentation\nSimulation")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -72,6 +77,34 @@ class StartingScreen(QWidget):
         layout.addSpacing(8)
         self.exit_button = self._button("Exit", self.exit_requested)
         layout.addWidget(self.exit_button)
+
+    def _build_menu(self) -> QMenuBar:
+        """Organisms and vessels, which outlive any one project.
+
+        They are what an installation is made of: a project can only be moved
+        between two of them if both know its organism and its bioreactor.
+        """
+        bar = QMenuBar(self)
+        bar.setNativeMenuBar(False)
+        library = bar.addMenu("Library")
+        self.library_actions: dict[str, QAction] = {}
+        for text in (
+            "Import organism…",
+            "Export organism…",
+            None,
+            "Import bioreactor…",
+            "Export bioreactor…",
+            None,
+            "Import project…",
+        ):
+            if text is None:
+                library.addSeparator()
+                continue
+            action = QAction(text, self)
+            action.triggered.connect(lambda _=False, name=text: self.library_requested.emit(name))
+            library.addAction(action)
+            self.library_actions[text] = action
+        return bar
 
     def _button(self, text: str, signal: Signal) -> QPushButton:
         button = QPushButton(text, self)

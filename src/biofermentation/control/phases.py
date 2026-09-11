@@ -96,6 +96,7 @@ class PhaseAutomaton:
         self.current: int | None = None
         self.stop_requested = False
         self.log: list[str] = []
+        self._drained = 0
         self.detector = detector or BatchEndDetector()
 
         # variableID -> name and operatorID -> symbol, from the lookup tables
@@ -358,10 +359,36 @@ class PhaseAutomaton:
         self.phases[index].parameters[f"cXL{n}j"] = cXL_start
         self.phases[index].parameters[f"FR{n}j"] = FRj
 
+        # The whole parameter set the open loop rests on, as the MATLAB
+        # version writes it: without it there is no telling afterwards what
+        # the feed profile was computed from.
         self._note(
-            f"exponential feed R{n}: qXpX{n}w = {qXpXw:.3f} 1/h, cXLj = {cXL_start:.3g} g/l, "
-            f"t{n}j = {t_start:.3f} h, FR{n}j = {FRj:.3f} l/h"
+            "\n".join(
+                (
+                    f"Open loop feed R{n}",
+                    f"  qXpX{n}w  = {qXpXw:.4g} 1/h     (growth rate setpoint)",
+                    f"  qS{n}pXm  = {qSpXm:.4g} 1/h     (maintenance)",
+                    f"  yXpS{n}gr = {yXpSgr:.4g}         (yield)",
+                    f"  cS{n}R{n}   = {cSR:.4g} g/l     (reservoir)",
+                    f"  VLj      = {float(state.v.VL[state.idx]):.4g} l",
+                    f"  cXLj     = {cXL_start:.4g} g/l",
+                    f"  t{n}j      = {t_start:.4g} h",
+                    f"  FR{n}j     = {FRj:.4g} l/h      (initial feed rate)",
+                )
+            )
         )
+
+    def drain_log(self) -> list[str]:
+        """The notes written since the last call.
+
+        The automaton knows things the window cannot reconstruct — which
+        reservoir a feed drew from, what the open loop was parameterised
+        with. It cannot emit a Qt signal, so it collects and the window
+        collects from it after every block.
+        """
+        fresh = self.log[self._drained :]
+        self._drained = len(self.log)
+        return fresh
 
     def _note(self, message: str) -> None:
         self.log.append(message)

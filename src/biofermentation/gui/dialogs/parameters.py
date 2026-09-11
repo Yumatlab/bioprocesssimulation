@@ -24,6 +24,7 @@ That is why no new column was added to the database.
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QCheckBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
@@ -167,9 +168,17 @@ class ParameterDialog(_EditorBase):
         self.search.setPlaceholderText("Filter by name or category…")
         self.search.setClearButtonEnabled(True)
         self.search.textChanged.connect(self._filter)
+        self.editable_only = QCheckBox("Only editable")
+        self.editable_only.setToolTip(
+            "Hide the parameters that are read once at the first step and "
+            "cannot be changed while the simulation runs."
+        )
+        self.editable_only.toggled.connect(self._filter)
+
         row = QHBoxLayout()
         row.addWidget(QLabel("Search:"))
         row.addWidget(self.search, 1)
+        row.addWidget(self.editable_only)
         layout.addLayout(row)
 
         area = QScrollArea()
@@ -179,7 +188,8 @@ class ParameterDialog(_EditorBase):
         area.setWidget(inner)
         layout.addWidget(area, 1)
 
-        self._rows: list[tuple[QWidget, str]] = []
+        #: (widget, haystack, editable) — the filter needs all three.
+        self._rows: list[tuple[QWidget, str, bool]] = []
         self._groups: list[QGroupBox] = []
 
         for (section, category), entries in _by_category(p_meta, sections).items():
@@ -202,9 +212,11 @@ class ParameterDialog(_EditorBase):
                 label = _rich(tex_label(meta.get("tex") or name, meta.get("unit")) + ":")
                 label.setToolTip(f"{name}\n{meta.get('description') or ''}".strip())
                 form.addRow(label, widget)
-                self._rows.append((widget, f"{name} {category} {section}".lower()))
+                haystack = f"{name} {category} {section}".lower()
+                editable = widget.isEnabled()
                 # A form row hides as a pair, so the label has to follow.
-                self._rows.append((label, f"{name} {category} {section}".lower()))
+                self._rows.append((widget, haystack, editable))
+                self._rows.append((label, haystack, editable))
             if form.rowCount():
                 self._inner_layout.addWidget(group)
                 self._groups.append(group)
@@ -214,15 +226,21 @@ class ParameterDialog(_EditorBase):
             layout.addWidget(_locked_hint(partial=True))
         layout.addWidget(self._button_box())
 
-    def _filter(self, text: str) -> None:
-        needle = text.strip().lower()
-        for widget, haystack in self._rows:
-            widget.setVisible(not needle or needle in haystack)
+    def _filter(self, *_) -> None:
+        """Search text and the editable-only tick, together."""
+        needle = self.search.text().strip().lower()
+        only_editable = self.editable_only.isChecked()
+        for widget, haystack, editable in self._rows:
+            matches = not needle or needle in haystack
+            widget.setVisible(matches and (editable or not only_editable))
         for group in self._groups:
-            visible = any(
-                widget.isVisibleTo(group) for widget, _ in self._rows if widget.parent() is group
+            group.setVisible(
+                any(
+                    widget.isVisibleTo(group)
+                    for widget, _, _ in self._rows
+                    if widget.parent() is group
+                )
             )
-            group.setVisible(visible)
 
 
 def _locked_hint(*, partial: bool = False) -> QLabel:

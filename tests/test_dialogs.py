@@ -162,9 +162,9 @@ def test_a_locked_parameter_cannot_smuggle_a_change_through(window):
 def test_the_search_narrows_the_list(window):
     dialog = ParameterDialog(window.setup.p_meta, window.runner.state.p, started=False)
     dialog.search.setText("KP_pH")
-    visible = [widget for widget, hay in dialog._rows if "kp_ph" in hay]
+    visible = [widget for widget, hay, _ in dialog._rows if "kp_ph" in hay]
     assert visible and all(widget.isVisibleTo(dialog) for widget in visible)
-    others = [widget for widget, hay in dialog._rows if "cs1l0" in hay]
+    others = [widget for widget, hay, _ in dialog._rows if "cs1l0" in hay]
     assert others and not any(widget.isVisibleTo(dialog) for widget in others)
 
 
@@ -219,6 +219,8 @@ def test_the_export_dialog_writes_the_selected_parts(window, tmp_path):
         "phases.csv",
         "log.txt",
         "Project_Information.txt",
+        # Always written: without it the folder is a record, not a package.
+        "project.yaml",
     }
     assert "one log line" in (folder / "log.txt").read_text()
     assert "cXL" in (folder / "variables.csv").read_text().splitlines()[0]
@@ -230,7 +232,7 @@ def test_the_export_dialog_honours_the_checkboxes(window, tmp_path):
     for key, box in dialog.checkboxes.items():
         box.setChecked(key == "phases")
     dialog.accept()
-    assert [path.name for path in dialog.written] == ["phases.csv"]
+    assert [path.name for path in dialog.written] == ["phases.csv", "project.yaml"]
 
 
 # ----------------------------------------------------------- data table --

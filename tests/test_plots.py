@@ -708,3 +708,72 @@ def test_the_caption_does_not_sit_on_the_first_tick(qapp):
     for caption, axis in zip(plot._captions, plot._axes, strict=True):
         gap = axis.geometry().top() - caption.geometry().bottom()
         assert gap >= CAPTION_GAP - 1
+
+
+# ------------------------------------------------------ phase markers --
+
+
+def _phase(name: str, start_time):
+    from biofermentation.db.models import Condition, Phase
+
+    return Phase(
+        processID=1,
+        projectID=1,
+        name=name,
+        start=Condition(time=start_time),
+        end=Condition(),
+    )
+
+
+def test_a_phase_shows_as_a_vertical_line(qapp):
+    plot = _probe_plot(qapp, count=1)
+    plot.set_phase_markers([_phase("Batch", 0.0), _phase("Fed Batch", 3.5)])
+
+    assert len(plot._markers) == 2
+    assert [marker.value() for marker in plot._markers] == [0.0, 3.5]
+    assert all(marker.isVisible() for marker in plot._markers)
+
+
+def test_a_phase_that_has_not_started_gets_no_line(qapp):
+    plot = _probe_plot(qapp, count=1)
+    plot.set_phase_markers([_phase("Batch", 0.0), _phase("Later", None)])
+    assert len(plot._markers) == 1
+
+
+def test_the_markers_can_be_switched_off(qapp):
+    """Six scales are busy enough."""
+    plot = _probe_plot(qapp, count=1)
+    plot.set_phase_markers([_phase("Batch", 1.0)])
+
+    plot.set_markers_visible(False)
+    assert not any(marker.isVisible() for marker in plot._markers)
+
+    # And a marker drawn while they are off stays off.
+    plot.set_phase_markers([_phase("Batch", 1.0), _phase("Fed Batch", 2.0)])
+    assert not any(marker.isVisible() for marker in plot._markers)
+
+    plot.set_markers_visible(True)
+    assert all(marker.isVisible() for marker in plot._markers)
+
+
+def test_a_marker_takes_its_width_from_the_template(qapp):
+    """graphvlinewidth has been in the database since MATLAB with nothing
+    reading it."""
+    plot = _probe_plot(qapp, count=1)
+    plot.template.graphvlinewidth = 4.0
+    plot.set_phase_markers([_phase("Batch", 1.0)])
+    assert plot._markers[0].pen.widthF() == 4.0
+
+
+def test_markers_do_not_stretch_the_time_axis(qapp):
+    plot = _probe_plot(qapp, count=1)
+    before = plot.main_view.viewRange()[0]
+    plot.set_phase_markers([_phase("Far away", 500.0)])
+    assert plot.main_view.viewRange()[0] == pytest.approx(before)
+
+
+def test_rebuilding_the_plot_forgets_the_old_markers(qapp):
+    plot = _probe_plot(qapp, count=1)
+    plot.set_phase_markers([_phase("Batch", 1.0)])
+    plot.set_template(plot.template)
+    assert plot._markers == []

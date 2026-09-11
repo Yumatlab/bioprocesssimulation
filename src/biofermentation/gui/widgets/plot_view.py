@@ -64,6 +64,12 @@ CAPTION_FONT_SCALE = 0.85
 #: caption does not sit on the first tick number.
 CAPTION_GAP = 10
 
+#: Phase markers are grey: they are an annotation, not a measurement, and must
+#: not be mistaken for one of the curves.
+MARKER_COLOR = "#707070"
+#: How far up the line its name is written, 0 at the bottom.
+MARKER_LABEL_POSITION = 0.97
+
 
 class EndLabelledAxis(pg.AxisItem):
     """An axis that always prints the two ends of its range.
@@ -192,6 +198,8 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         self._curves: list[pg.PlotDataItem] = []
         self._labels: list[pg.TextItem] = []
         self._stubs: list[pg.PlotCurveItem] = []
+        self._markers: list[pg.InfiniteLine] = []
+        self._show_markers = True
         self._variables: list[PlotVariable] = []
 
     # ------------------------------------------------------------ build --
@@ -390,6 +398,7 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         self._curves.clear()
         self._labels.clear()
         self._stubs.clear()
+        self._markers.clear()
         self._variables.clear()
         self.main_view = None
         self.bottom_axis = None
@@ -460,6 +469,59 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
 
         label.setPos(x0 + dx, y0 + dy)
         label.show()
+
+    # ------------------------------------------------------- markers --
+
+    def set_phase_markers(self, phases) -> None:
+        """A vertical line where each phase started, labelled with its name.
+
+        The line width is the template's graphvlinewidth — the setting has
+        been in the database since the MATLAB version and had nothing reading
+        it. They live in the main ViewBox with ignoreBounds, like the flags:
+        a marker must not drag the time axis.
+        """
+        if self.main_view is None:
+            return
+        for marker in self._markers:
+            self.main_view.removeItem(marker)
+        self._markers.clear()
+
+        width = self.template.graphvlinewidth if self.template else 2.0
+        size = self.template.flagfontsize * 0.8 if self.template else 9.0
+        for index, phase in enumerate(phases or ()):
+            time = getattr(phase.start, "time", None)
+            if time is None:
+                continue
+            pen = QPen(QColor(MARKER_COLOR))
+            pen.setWidthF(width)
+            pen.setCosmetic(True)
+            pen.setStyle(pg.QtCore.Qt.PenStyle.DashLine)
+            marker = pg.InfiniteLine(
+                pos=float(time),
+                angle=90,
+                pen=pen,
+                label=phase.name or f"Phase {index + 1}",
+                labelOpts={
+                    # Near the top, hanging to the right of the line: at the
+                    # bottom the x-axis cuts it off, and the first marker of a
+                    # run sits on t = 0, where anything to the left is gone.
+                    "position": MARKER_LABEL_POSITION,
+                    "color": MARKER_COLOR,
+                    "movable": False,
+                    "fill": (255, 255, 255, 200),
+                    "anchors": [(0, 0), (0, 0)],
+                },
+            )
+            marker.label.setFont(_tick_font(size / TICK_FONT_SCALE))
+            marker.setVisible(self._show_markers)
+            self.main_view.addItem(marker, ignoreBounds=True)
+            self._markers.append(marker)
+
+    def set_markers_visible(self, visible: bool) -> None:
+        """Six scales are busy enough; the markers have to be switchable."""
+        self._show_markers = bool(visible)
+        for marker in self._markers:
+            marker.setVisible(self._show_markers)
 
     def set_x_range(self, start: float, end: float) -> None:
         """Set the time range and give it axisxtick divisions.

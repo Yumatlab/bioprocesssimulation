@@ -210,9 +210,15 @@ class LogView(QWidget):
 
 
 def _escape(text: str) -> str:
+    """HTML, keeping the layout: a log entry may be a whole block of lines."""
     import html
 
-    return html.escape(str(text)).replace(" ", "&nbsp;")
+    return (
+        html.escape(str(text))
+        .replace(" ", "&nbsp;")
+        .replace("\t", "&nbsp;" * 4)
+        .replace("\n", "<br>")
+    )
 
 
 def _monospace() -> str:

@@ -29,6 +29,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from ...control import EndCondition, StartCondition
+from ...db.transfer import write_manifest
+
 FORMATS = (".xlsx", ".csv", ".txt")
 #: The column separator each format uses.
 SEPARATORS = {".csv": ",", ".txt": "\t"}
@@ -204,7 +207,10 @@ class ExportDialog(QDialog):
                 ),
             ]
             columns = [np.asarray(self.state.v[name][:stop], dtype=float) for name in names]
-            written.append(write_table(base / f"variables{suffix}", names, columns))
+            units = dict(self.setup.lookups.variable_units)
+            units.setdefault("t", "h")
+            headers = [f"{name} [{units.get(name) or '-'}]" for name in names]
+            written.append(write_table(base / f"variables{suffix}", headers, columns))
 
         if self.checkboxes["parameters"].isChecked():
             rows = [
@@ -227,22 +233,35 @@ class ExportDialog(QDialog):
             )
 
         if self.checkboxes["phases"].isChecked():
+            names = _Names(self.setup.lookups)
             rows = [
                 [
                     str(phase.processID),
                     phase.name or "",
-                    str(phase.typeID),
-                    str(phase.statusID),
-                    str(phase.reservoirID or ""),
-                    _condition(phase.start),
-                    _condition(phase.end),
+                    names.phase_type(phase.typeID),
+                    names.status(phase.statusID),
+                    f"R{phase.reservoirID}" if phase.reservoirID else "",
+                    names.condition(phase.start, "start"),
+                    _time(phase.start.time),
+                    names.condition(phase.end, "end"),
+                    _time(phase.end.time),
                 ]
                 for phase in self.setup.phases
             ]
             written.append(
                 write_text_table(
                     base / f"phases{suffix}",
-                    ["processID", "name", "typeID", "statusID", "reservoir", "start", "end"],
+                    [
+                        "processID",
+                        "name",
+                        "type",
+                        "status",
+                        "reservoir",
+                        "start condition",
+                        "start time [h]",
+                        "end condition",
+                        "end time [h]",
+                    ],
                     rows,
                 )
             )
@@ -254,7 +273,27 @@ class ExportDialog(QDialog):
 
         if self.checkboxes["information"].isChecked():
             written.append(self._write_information(base))
+
+        # The machine-readable copy, so the export can be imported again.
+        # Written unconditionally: without it the folder is a record, not a
+        # package, and there is no way to tell afterwards which it was.
+        written.append(
+            write_manifest(base, self.setup, self.state, files=self._files(written, base))
+        )
         return written
+
+    def _files(self, written: list[Path], base: Path) -> dict[str, str]:
+        """Which table went into which file, for the importer to find."""
+        return {
+            key: path.name
+            for key, path in (
+                ("variables", next((p for p in written if p.stem == "variables"), None)),
+                ("parameters", next((p for p in written if p.stem == "parameters"), None)),
+                ("phases", next((p for p in written if p.stem == "phases"), None)),
+                ("log", next((p for p in written if p.name == "log.txt"), None)),
+            )
+            if path is not None
+        }
 
     def _write_information(self, base: Path) -> Path:
         info = self.setup.info
@@ -279,15 +318,68 @@ class ExportDialog(QDialog):
         return path
 
 
-def _condition(condition) -> str:
-    parts = [str(condition.typeID)]
-    if condition.variableID is not None:
-        parts.append(f"var {condition.variableID}")
-    if condition.operatorID is not None:
-        parts.append(f"op {condition.operatorID}")
-    if condition.value is not None:
-        parts.append(f"= {condition.value:g}")
-    return " ".join(parts)
+class _Names:
+    """The lookup tables, keyed for reading.
+
+    An export used to carry "typeID 5" and "6 var 1 op 1 = 5" — the numbers
+    the database joins on, which say nothing to whoever opens the file. Every
+    one of them has a description one join away.
+    """
+
+    def __init__(self, lookups):
+        self.types = {row["process_typeID"]: row["type"] for row in lookups.process_type}
+        self.statuses = {row["process_statusID"]: row["status"] for row in lookups.process_status}
+        self.operators = {
+            row["process_operatorID"]: row["operator"] for row in lookups.process_operator
+        }
+        self.conditions = {
+            row["process_conditiontypeID"]: row["conditiontype"]
+            for row in (*lookups.start_conditiontype, *lookups.end_conditiontype)
+        }
+        self.variables = {row["variableID"]: row for row in lookups.process_variable}
+        self.units = {row["variableID"]: row for row in lookups.variable}
+
+    def phase_type(self, type_id) -> str:
+        return self.types.get(type_id, "" if type_id is None else f"type {type_id}")
+
+    def status(self, status_id) -> str:
+        return self.statuses.get(status_id, "" if status_id is None else f"status {status_id}")
+
+    def variable(self, variable_id) -> str:
+        row = self.variables.get(variable_id) or self.units.get(variable_id)
+        if row is None:
+            return "" if variable_id is None else f"variable {variable_id}"
+        unit = (self.units.get(variable_id) or {}).get("unit") or ""
+        return f"{row['name']} [{unit}]" if unit else str(row["name"])
+
+    def condition(self, condition, kind: str) -> str:
+        """One condition as a sentence: what it waits for, and for what value.
+
+        Only what the type actually uses. A phase that starts when the one
+        before it ended still carries a variableID and an operator in
+        processTab — left over from an earlier edit, read by nothing — and
+        printing them would invent a condition that is not there.
+        """
+        if condition.typeID is None:
+            return "none" if kind == "end" else ""
+        text = self.conditions.get(condition.typeID, f"condition {condition.typeID}")
+
+        if condition.typeID in (StartCondition.VARIABLE, EndCondition.VARIABLE):
+            return " ".join(
+                (
+                    text + ":",
+                    self.variable(condition.variableID),
+                    self.operators.get(condition.operatorID, "?"),
+                    f"{condition.value:g}" if condition.value is not None else "?",
+                )
+            )
+        if condition.typeID == EndCondition.TIMER:
+            return f"{text}: {condition.value:g} h" if condition.value is not None else text
+        return text
+
+
+def _time(value) -> str:
+    return "" if value is None else f"{value:.4f}"
 
 
 def _slug(text: str) -> str:

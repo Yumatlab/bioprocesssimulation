@@ -68,6 +68,9 @@ class ProjectInfo:
     bioreactorID: int | None
     bioreactor_name: str | None
     modelID: int | None
+    #: The model the project was created from — an export names it, so an
+    #: import can pick the same one instead of the first that fits.
+    model_name: str | None = None
 
 
 @dataclass
@@ -85,6 +88,10 @@ class Lookups:
     #: MATLAB calls this v_prop and builds the variable pool and the data
     #: table from it.
     variable: list[dict]
+    #: name -> unit for *every* row of variableTab, displayed or not. An
+    #: export writes columns the pool never shows, and a column without its
+    #: unit is half a column.
+    variable_units: dict[str, str]
     process_operator: list[dict]
     start_conditiontype: list[dict]
     end_conditiontype: list[dict]

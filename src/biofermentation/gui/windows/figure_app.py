@@ -52,12 +52,16 @@ class FigureWindow(QMainWindow):
         db_path: Path | str,
         parent: QWidget | None = None,
         control=None,
+        phases=None,
     ):
         super().__init__(parent)
         self.template = template
         self.runner = runner
         self.db_path = Path(db_path)
         self.control = control
+        #: The list the control window owns, not a copy — a phase that starts
+        #: while this window is open has to show up on its own.
+        self.phases = phases if phases is not None else []
         self.auto_update = True
 
         self.setWindowTitle(f"Figure - {template.name}")
@@ -122,6 +126,13 @@ class FigureWindow(QMainWindow):
         self.fullscreen_action.setShortcut(QKeySequence("F11"))
         self.fullscreen_action.toggled.connect(self.set_plot_only)
         options.addAction(self.fullscreen_action)
+
+        options.addSeparator()
+        self.markers_action = QAction("Show phase markers", self, checkable=True)
+        self.markers_action.setChecked(True)
+        self.markers_action.setShortcut(QKeySequence("Ctrl+M"))
+        self.markers_action.toggled.connect(self.plot.set_markers_visible)
+        options.addAction(self.markers_action)
 
     # ------------------------------------------------------------ build --
 
@@ -284,6 +295,7 @@ class FigureWindow(QMainWindow):
         if time is None:
             return
         self.plot.update_data(time, trimmed)
+        self.plot.set_phase_markers(self.phases)
         self._sync_limit_rows()
 
     def _sync_limit_rows(self) -> None:
@@ -412,5 +424,16 @@ class FigureWindow(QMainWindow):
 
 
 def open_figure(db_path: Path | str, runner, template_id: int = 1, control=None) -> FigureWindow:
-    """The Open Plot button of the control window."""
-    return FigureWindow(load_plot_template(db_path, template_id), runner, db_path, control=control)
+    """The Open Plot button of the control window.
+
+    The phase list is handed over, not copied: a phase that starts while this
+    window is open has to bring its marker with it.
+    """
+    setup = getattr(control, "setup", None)
+    return FigureWindow(
+        load_plot_template(db_path, template_id),
+        runner,
+        db_path,
+        control=control,
+        phases=getattr(setup, "phases", None),
+    )

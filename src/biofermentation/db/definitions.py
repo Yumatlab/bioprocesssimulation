@@ -16,6 +16,7 @@ from pathlib import Path
 
 from ..organisms.definition import (
     CategoryDefinition,
+    ModelDefinition,
     OrganismDefinition,
     ParameterDefinition,
     VariableDefinition,
@@ -100,6 +101,30 @@ def export_definition(db_path: Path | str, organism_name: str) -> OrganismDefini
             )
         ]
 
+        models = [
+            ModelDefinition(
+                name=row["name"],
+                description=row["description"],
+                parameters={
+                    entry["name"]: entry["value"]
+                    for entry in conn.execute(
+                        """
+                        SELECT p.name, mp.value
+                          FROM model_parameterTab mp
+                          JOIN parameterTab p ON p.parameterID = mp.parameterID
+                         WHERE mp.modelID = ?
+                        """,
+                        (row["modelID"],),
+                    )
+                },
+            )
+            for row in conn.execute(
+                "SELECT modelID, name, description FROM modelTab WHERE organismID = ? "
+                "ORDER BY modelID",
+                (organism_id,),
+            )
+        ]
+
     duplicates = sorted(
         {p.name for p in parameters if [q.name for q in parameters].count(p.name) > 1}
     )
@@ -121,6 +146,7 @@ def export_definition(db_path: Path | str, organism_name: str) -> OrganismDefini
         categories=categories,
         parameters=parameters,
         variables=variables,
+        models=models,
     )
 
 
@@ -144,7 +170,18 @@ def import_definition(
         raise ValueError(f"definition {definition.name!r} is not usable:\n  {listing}")
 
     counts = dict.fromkeys(
-        ("categories", "parameters", "variables", "defaults", "handling", "process_variables"), 0
+        (
+            "categories",
+            "parameters",
+            "variables",
+            "defaults",
+            "handling",
+            "process_variables",
+            "models",
+            "model_parameters",
+            "unknown_parameters",
+        ),
+        0,
     )
 
     with get_connection(db_path) as conn:
@@ -214,8 +251,86 @@ def import_definition(
             ],
         )
         counts["process_variables"] = len(selected)
+        _upsert_models(conn, definition, organism_id, parameter_ids, counts)
 
     return counts
+
+
+def _free_model_name(conn: sqlite3.Connection, name: str, organism: str) -> str:
+    """A model name no other organism has already taken.
+
+    modelTab.name is UNIQUE across the whole table, not per organism, so
+    importing an organism next to one it was copied from collides on the
+    model. The organism is put in brackets behind it, and a counter after
+    that if even the pair is taken.
+    """
+    taken = {row[0] for row in conn.execute("SELECT name FROM modelTab")}
+    if name not in taken:
+        return name
+    candidate = f"{name} ({organism})"
+    suffix = 2
+    while candidate in taken:
+        candidate = f"{name} ({organism}) {suffix}"
+        suffix += 1
+    return candidate
+
+
+def _upsert_models(
+    conn: sqlite3.Connection,
+    definition: OrganismDefinition,
+    organism_id: int,
+    parameter_ids: dict[str, int],
+    counts: dict,
+) -> None:
+    """The models of this organism, replaced wholesale like its other rows.
+
+    A project is created from a model, not from an organism: create_project
+    reads model_parameterTab. An organism imported without one looks fine and
+    then refuses the first project made from it.
+
+    Names are resolved against the whole of parameterTab, not only against
+    what this organism defines: a model's parameter set is the union of the
+    organism's and the bioreactor's, and dropping the latter would leave every
+    project made from it short of its vessel.
+    """
+    known = {
+        row["name"]: row["parameterID"]
+        for row in conn.execute("SELECT parameterID, name FROM parameterTab")
+    } | parameter_ids
+    existing = {
+        row["name"]: row["modelID"]
+        for row in conn.execute(
+            "SELECT modelID, name FROM modelTab WHERE organismID = ?", (organism_id,)
+        )
+    }
+    for model in definition.models:
+        model_id = existing.get(model.name)
+        if model_id is None:
+            name = _free_model_name(conn, model.name, definition.display_name)
+            model_id = conn.execute(
+                "INSERT INTO modelTab (organismID, name, description) VALUES (?, ?, ?)",
+                (organism_id, name, model.description),
+            ).lastrowid
+        else:
+            conn.execute(
+                "UPDATE modelTab SET description = ? WHERE modelID = ?",
+                (model.description, model_id),
+            )
+        counts["models"] += 1
+
+        conn.execute("DELETE FROM model_parameterTab WHERE modelID = ?", (model_id,))
+        payload = [
+            (model_id, known[name], value, None)
+            for name, value in model.parameters.items()
+            if name in known
+        ]
+        counts["unknown_parameters"] += len(model.parameters) - len(payload)
+        conn.executemany(
+            "INSERT INTO model_parameterTab (modelID, parameterID, value, description) "
+            "VALUES (?, ?, ?, ?)",
+            payload,
+        )
+        counts["model_parameters"] += len(payload)
 
 
 def _upsert_categories(

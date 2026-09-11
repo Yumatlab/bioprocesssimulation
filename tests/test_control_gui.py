@@ -534,3 +534,77 @@ def test_pressing_inoculate_during_a_run_disables_it_at_once(window):
     state.a["inoc_occ"] = 1
     window.refresh()
     assert window.inoculate_button.isEnabled() is False
+
+
+def test_the_open_loop_parameters_go_into_the_log(window):
+    """Point 2: without them there is no telling afterwards what the feed
+    profile was computed from."""
+    from biofermentation.control import PhaseType
+
+    state = window.runner.state
+    phase = next(p for p in window.setup.phases if p.typeID == PhaseType.EXPONENTIAL_FEED)
+    index = window.setup.phases.index(phase)
+
+    window.runner.phases._exponential_feed(state, index)
+    window._drain_phase_log()
+
+    entry = next(e for e in window.log_view.entries if e.message.startswith("Open loop feed"))
+    assert entry.event_type == "Phase Information"
+    for name in ("qXpX1w", "qS1pXm", "yXpS1gr", "cS1R1", "VLj", "cXLj", "t1j", "FR1j"):
+        assert name in entry.message, name
+    # And it reaches the view as more than one line.
+    assert entry.message.count("\n") >= 8
+
+
+def test_the_parameters_dialog_can_hide_what_cannot_be_edited(window):
+    """Point 5 of the third round."""
+    from biofermentation.gui.dialogs import ParameterDialog
+
+    dialog = ParameterDialog(window.setup.p_meta, window.runner.state.p, started=True)
+    locked = [w for w, _, editable in dialog._rows if not editable]
+    live = [w for w, _, editable in dialog._rows if editable]
+    assert locked and live
+
+    dialog.editable_only.setChecked(True)
+    assert not any(w.isVisibleTo(dialog) for w in locked)
+    assert all(w.isVisibleTo(dialog) for w in live)
+
+    dialog.editable_only.setChecked(False)
+    assert all(w.isVisibleTo(dialog) for w in locked)
+
+
+def test_the_filter_and_the_tick_box_work_together(window):
+    from biofermentation.gui.dialogs import ParameterDialog
+
+    dialog = ParameterDialog(window.setup.p_meta, window.runner.state.p, started=True)
+    dialog.editable_only.setChecked(True)
+    dialog.search.setText("cS1L0")
+    assert not any(w.isVisibleTo(dialog) for w, hay, _ in dialog._rows if "cs1l0" in hay), (
+        "cS1L0 is read once and must stay hidden whatever is searched for"
+    )
+
+
+def test_a_phase_transition_is_logged_once(window):
+    """The window used to write its own line next to the automaton's."""
+    automaton = window.runner.phases
+    automaton.log.clear()
+    automaton._drained = 0
+    window.log_view.entries.clear()
+
+    automaton._note("Batch Phase [Phase 1] started at t = 0.000 h")
+    window._phase_changed(0)
+
+    started = [e for e in window.log_view.entries if "started at t" in e.message]
+    assert len(started) == 1
+    assert started[0].event_type == "Phase Event"
+
+
+def test_a_feed_summary_is_information_not_an_event(window):
+    automaton = window.runner.phases
+    automaton.log.clear()
+    automaton._drained = 0
+    window.log_view.entries.clear()
+
+    automaton._note("Open loop feed R1\n  qXpX1w = 0.1 1/h")
+    window._drain_phase_log()
+    assert window.log_view.entries[-1].event_type == "Phase Information"

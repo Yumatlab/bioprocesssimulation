@@ -72,10 +72,11 @@ def load_project_info(db_path: Path | str, project_id: int) -> ProjectInfo:
             SELECT p.projectID, p.name, p.description, p.author, p.created_on,
                    p.recent_use, p.organismID, p.bioreactorID, p.modelID,
                    o.name AS organism_name, o.function_file, o.initialization_file,
-                   o.reservoirs, b.name AS bioreactor_name
+                   o.reservoirs, b.name AS bioreactor_name, m.name AS model_name
               FROM projectTab p
               LEFT JOIN organismTab o ON o.organismID = p.organismID
               LEFT JOIN bioreactorTab b ON b.bioreactorID = p.bioreactorID
+              LEFT JOIN modelTab m ON m.modelID = p.modelID
              WHERE p.projectID = ?
             """,
             (project_id,),
@@ -97,6 +98,7 @@ def load_project_info(db_path: Path | str, project_id: int) -> ProjectInfo:
         bioreactorID=row["bioreactorID"],
         bioreactor_name=row["bioreactor_name"],
         modelID=row["modelID"],
+        model_name=row["model_name"],
     )
 
 
@@ -128,6 +130,10 @@ def load_phases(db_path: Path | str, project_id: int) -> ProjectSetup:
                 """,
                 (info.organismID,),
             ),
+            variable_units={
+                row["name"]: row["unit"] or ""
+                for row in _rows(conn, "SELECT name, unit FROM variableTab")
+            },
             process_operator=_rows(conn, "SELECT * FROM process_operatorTab"),
             start_conditiontype=_rows(
                 conn, "SELECT * FROM process_conditiontypeTab WHERE start_end = 1"
