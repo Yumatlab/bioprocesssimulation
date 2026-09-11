@@ -166,7 +166,12 @@ QTextEdit:disabled {
     color: #9a9a9a;
 }
 
-QLineEdit[readOnly="true"] {
+/* A field the surface reports rather than sets — the measured value beside a
+ * setpoint, or F_Rmax, which belongs to the reservoir and not to the moment.
+ * It has to look different from one that can be typed into. */
+QLineEdit[readOnly="true"],
+QDoubleSpinBox[readOnly="true"],
+QSpinBox[readOnly="true"] {
     background: #f4f4f4;
     color: #303030;
 }

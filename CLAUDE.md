@@ -192,6 +192,18 @@ Deshalb stehen sie als `LOG_COLUMNS` in `migrate.py`.
    speichert und nie einen Log geladen hat. Jetzt trägt jeder Eintrag seine
    `logID`, und geschrieben wird, was noch keine hat.
 
+6. **`processTab.processID` gehört der ganzen Tabelle, nicht dem Projekt.**
+   Der Schlüssel ist tabellenweit `UNIQUE`, nummeriert wurde aber je Projekt:
+   jedes neue Projekt fing bei 1 an, und das zweite, das gespeichert wurde,
+   lief in die Phasen des ersten — `UNIQUE constraint failed`, und weil
+   Parameter, Zeitreihen, Phasen und Log **eine** Transaktion sind, nahm der
+   Einfügefehler die ganze Sitzung mit. `load_phases` fragt jetzt die ganze
+   Tabelle, und `_claim_free_process_ids` heilt beim Speichern, was vorher
+   falsch nummeriert wurde: eine Phase auf einer fremden Nummer bekommt eine
+   freie und trägt sie in ihr Objekt zurück, damit `process_parameterTab`,
+   Phasenraster und Plotmarkierungen dieselbe kennen. Zwei Phasen derselben
+   Liste auf derselben Nummer bleiben ein Fehler und scheitern weiter laut.
+
 Die produktive DB hatte zusätzlich eine inkonsistente Freelist
 (`integrity_check` meldete vier nie benutzte Seiten). Das Template ist über
 `VACUUM INTO` erzeugt und dadurch bereinigt.
@@ -259,6 +271,29 @@ gelten über den Anlass hinaus:
    Bedingung selbst, so wie `PhaseEditor.accept()` den Phasentyp liest statt
    den Reservoir-Dropdown zu fragen.
 
+### Ein Projekt zur Zeit
+
+Jeder Weg aus einem Projekt heraus geht durch `ControlWindow.confirm_leave()`:
+das Schließkreuz, Exit, und die beiden Menüeinträge, die ein anderes Projekt
+öffnen. Gefragt wird mit `ClosingDialog` nach `ClosingScreen.mlapp` — Name,
+Autor und Beschreibung, dann speichern, verwerfen, löschen, exportieren oder
+abbrechen.
+
+- **Vorher blieb das Control-Fenster stehen**, wenn man "Start new project"
+  wählte, und ein zweites ging daneben auf. Wer das zweite und danach den
+  Startbildschirm schloss, nahm das erste ungefragt und ungespeichert mit.
+  `SimulationApp.release_current_project()` steht jetzt vor
+  `show_create_project`, `show_select_project` und `open_project`.
+- **Der Export schließt den Dialog nicht.** Exportieren ist keine Entscheidung
+  über das Projekt, und eine ist noch fällig.
+- **Die drei Textfelder werden mit dem Speichern geschrieben**, nicht beim
+  Tippen. Im Original feuert jedes Feld sein eigenes `UPDATE` — auch auf dem
+  Weg zum Löschen.
+- **Löschen fragt ein zweites Mal.** Es ist nicht zurückzunehmen.
+- **In Tests beantwortet `conftest.py` den Dialog** mit "verwerfen", ohne ihn
+  zu zeigen. `confirm_leave()` läuft dabei wirklich; ein modaler Dialog in
+  einer Fixture ist ein hängender Testlauf, und das ist zweimal passiert.
+
 ### Die Bedienelemente der Control Options
 
 Nach dem zweiten Anwendertest sind die Schalter und die Modusauswahl neu.
@@ -277,18 +312,40 @@ Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
 - **`SegmentedControl`** ersetzt das Modus-Dropdown. Es beantwortet
   `addItem`/`findData`/`setCurrentIndex`/`currentData` und heißt sein Signal
   `currentIndexChanged` — damit tragen `select_data()` und `ControlPanel`
-  beide Varianten, ohne zu wissen, welche sie halten.
+  beide Varianten, ohne zu wissen, welche sie halten. Passen die Tasten nicht
+  nebeneinander, kommen sie in eine zweite Reihe statt zu verschwinden; die
+  Höhe setzt `resizeEvent` selbst, weil `heightForWidth` in einem
+  `QHBoxLayout` nicht beachtet wird und eine Tastenreihe außerhalb des Widgets
+  eine ist, die niemand drücken kann.
 - **Die pO2-Modi heißen ohne Präfix.** „pO2-agitation" in einem Panel namens
   pO2-Control wiederholt nur den Titel und kostete 170 px auf einer Zeile, die
   alle fünf gleichzeitig zeigen muss. Die gespeicherten Modusnummern sind
   unverändert.
-- **Die Anordnung steht in `PANEL_PLACES`**, nicht im Aufbaucode: pO2 über
-  zwei Spalten oben links, darunter pH und Temperatur, rechts Liquid Weight
-  und Feed. Alle drei Spalten haben dieselbe Mindestbreite, also sind die vier
-  kleinen Panels gleich breit und pO2 genau zwei davon. Die Panels sind
-  **oben ausgerichtet**: sonst wird ein kurzes Panel auf die Höhe des
-  längsten in seiner Zeile gezogen und trägt 130 px Leere zwischen seinem
-  letzten Feld und seinem Schalter.
+- **Die Anordnung steht in `PANEL_PLACES`**, nicht im Aufbaucode: sechs
+  gleich große Abschnitte, fünf davon belegt — pO2 oben links, darunter pH und
+  Temperatur, rechts Liquid Weight und Feed. Der sechste bleibt absichtlich
+  frei; freie Fläche neben einem Panel liest sich besser als Felder, die auf
+  eine Breite gezogen sind, die niemand braucht. Die Panels sind **oben
+  ausgerichtet**: sonst wird ein kurzes Panel auf die Höhe des längsten in
+  seiner Zeile gezogen und trägt 130 px Leere zwischen seinem letzten Feld und
+  seinem Schalter.
+- **`content_width()` fragt das Minimum, nicht den Wunsch.** Eine
+  `QDoubleSpinBox` wünscht sich die breiteste Zahl ihres Wertebereichs und die
+  Modustasten wünschen sich eine Reihe. Beides muss nicht gewährt werden: die
+  Felder haben eine lesbare Untergrenze, und die Tasten brechen um.
+- **Eine `ValueRow` hat immer zwei Spalten**, auch ohne Messwert daneben.
+  Sonst nahm ein alleinstehender Sollwert die ganze Panelbreite und die Felder
+  einer Spalte kamen in zwei verschiedenen Breiten heraus.
+- **Das Feed-Panel arbeitet auf einem Reservoir.** `R_feed` sagt auf welchem,
+  und eine Phase kann es unter dem Panel wechseln. Deshalb tragen seine
+  `FieldSpec`s ein `{n}` im Parameternamen und im Label (`cS{n}Lw`, `FR{n}w`,
+  `FR{n}max`), und `ControlPanel.rows` ist nach der **Vorlage** verschlüsselt,
+  nicht nach dem aufgelösten Namen — sonst wandern die Schlüssel beim Wechsel.
+  Bei einem Reservoir gibt es keinen Wähler; eine Auswahl aus einem ist keine.
+- **`cS{n}Lw` ist der Sinn des Closed-Loop-Modus** und fehlte im Panel. Der
+  Regler lief gegen einen Sollwert, der nur über die Datenbank erreichbar war.
+  `FR{n}max` steht daneben, nur lesbar — es gehört dem Reservoir, nicht dem
+  Augenblick, genau wie im Original.
 
 **Abweichung vom Original, bewusst:** Der Variable Pool zeigt `FT1` als
 Säurepumpe und `FT2` als Laugenpumpe (so steht es in
@@ -374,9 +431,6 @@ diesem Panel — das Feld mit der Beschriftung `F_T1` liest `v.FT2`.
 
 - **`PhaseFeedEditor` fehlt noch.** `PhaseEditor` und `PhaseParameterEditor`
   sind übersetzt; der Feed-Editor des Originals nicht.
-- **Der Reservoir-Wähler des Feed-Panels fehlt.** Das Panel zeigt fest R1;
-  bei Pichia mit zwei Reservoirs braucht es die Auswahl aus dem Screenshot.
-  Der Parameterdialog des Panels kennt beide Reservoirs bereits.
 
 ### Reglereinstellung
 

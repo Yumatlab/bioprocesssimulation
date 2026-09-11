@@ -12,6 +12,7 @@ and the accessibility tree come from Qt, and only the drawing is ours.
 from PySide6.QtCore import (
     Property,
     QEasingCurve,
+    QPointF,
     QPropertyAnimation,
     QRectF,
     QSize,
@@ -251,14 +252,21 @@ class SegmentedControl(QWidget):
     Carries the same (text, value) pairs a QComboBox would, and answers to
     the same four calls, so `select_data` and the panels do not care which of
     the two they are holding.
+
+    What it does that a dropdown cannot: when the keys do not fit side by
+    side it puts them on a second row instead of hiding them. pO2 has five
+    modes and a panel a third of the window wide; a control that showed all
+    of them only in a wide window would be no better than the dropdown.
     """
 
     #: Emitted on a change, with the new index — the QComboBox signal name,
     #: because the panels connect to it without knowing what they have.
     currentIndexChanged = Signal(int)
 
-    PADDING = 14
+    PADDING = 12
     HEIGHT = 28
+    #: Between two rows of keys, when they do not fit on one.
+    ROW_GAP = 4
 
     def __init__(self, parent: QWidget | None = None, *, accent: QColor = ACCENT):
         super().__init__(parent)
@@ -270,7 +278,9 @@ class SegmentedControl(QWidget):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setMinimumHeight(self.HEIGHT)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        policy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        policy.setHeightForWidth(True)
+        self.setSizePolicy(policy)
 
     # ------------------------------------------------ the QComboBox part --
 
@@ -311,39 +321,86 @@ class SegmentedControl(QWidget):
 
     # ------------------------------------------------------------ layout --
 
-    def _widths(self) -> list[float]:
-        """Segment widths: each as wide as its text, the rest shared out."""
+    def _natural(self) -> list[float]:
+        """How wide each key would like to be."""
         metrics = self.fontMetrics()
-        natural = [metrics.horizontalAdvance(text) + 2 * self.PADDING for text, _ in self._items]
-        if not natural:
+        return [metrics.horizontalAdvance(text) + 2 * self.PADDING for text, _ in self._items]
+
+    def _rows(self, width: float | None = None) -> list[list[int]]:
+        """The keys, grouped into the rows they fit on."""
+        if not self._items:
             return []
-        spare = (self.width() - sum(natural)) / len(natural)
-        return [width + spare for width in natural]
+        width = self.width() if width is None else width
+        natural = self._natural()
+        rows: list[list[int]] = [[]]
+        used = 0.0
+        for index, own in enumerate(natural):
+            if rows[-1] and used + own > width:
+                rows.append([])
+                used = 0.0
+            rows[-1].append(index)
+            used += own
+        return rows
+
+    def _cells(self, width: float | None = None) -> dict[int, QRectF]:
+        """Where every key sits. One pass, used by both painting and hit test."""
+        width = self.width() if width is None else width
+        natural = self._natural()
+        cells: dict[int, QRectF] = {}
+        for row, indices in enumerate(self._rows(width)):
+            spare = (width - sum(natural[i] for i in indices)) / len(indices)
+            left = 0.0
+            top = row * (self.HEIGHT + self.ROW_GAP)
+            for index in indices:
+                own = natural[index] + spare
+                cells[index] = QRectF(left, top, own, self.HEIGHT)
+                left += own
+        return cells
 
     def sizeHint(self) -> QSize:  # noqa: N802 - Qt API
-        metrics = self.fontMetrics()
-        width = sum(metrics.horizontalAdvance(text) + 2 * self.PADDING for text, _ in self._items)
-        return QSize(max(width, 60), self.HEIGHT)
+        return QSize(max(sum(self._natural()), 60), self.heightForWidth(self.width()))
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt API
-        return self.sizeHint()
+        # One key wide. Below that there is nothing left to wrap.
+        return QSize(int(max(self._natural(), default=60)), self.HEIGHT)
 
-    def _segment_at(self, x: float) -> int:
-        left = 0.0
-        for index, width in enumerate(self._widths()):
-            if x < left + width:
+    def hasHeightForWidth(self) -> bool:  # noqa: N802 - Qt API
+        return True
+
+    def heightForWidth(self, width: int) -> int:  # noqa: N802 - Qt API
+        rows = max(1, len(self._rows(width)))
+        return rows * self.HEIGHT + (rows - 1) * self.ROW_GAP
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt API
+        super().resizeEvent(event)
+        # heightForWidth is not honoured inside a QHBoxLayout, and a second
+        # row of keys drawn outside the widget is a row nobody can press. So
+        # the height is set from the width, here, where the width is known.
+        wanted = self.heightForWidth(self.width())
+        if self.height() != wanted:
+            self.setFixedHeight(wanted)
+
+    def _segment_at(self, x: float, y: float) -> int:
+        for index, cell in self._cells().items():
+            if cell.contains(x, y):
                 return index
-            left += width
-        return len(self._items) - 1
+        # Past the end of a row: the nearest key on that row.
+        row = int(y // (self.HEIGHT + self.ROW_GAP))
+        rows = self._rows()
+        if 0 <= row < len(rows):
+            return rows[row][-1] if x > 0 else rows[row][0]
+        return self._index
 
     # ------------------------------------------------------------- input --
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt API
         if self._items:
-            self.setCurrentIndex(self._segment_at(event.position().x()))
+            position = event.position()
+            self.setCurrentIndex(self._segment_at(position.x(), position.y()))
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802 - Qt API
-        hover = self._segment_at(event.position().x()) if self._items else -1
+        position = event.position()
+        hover = self._segment_at(position.x(), position.y()) if self._items else -1
         if hover != self._hover:
             self._hover = hover
             self.update()
@@ -366,64 +423,66 @@ class SegmentedControl(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         live = self.isEnabled()
+        ground = QColor(0xF4, 0xF4, 0xF4) if live else QColor(0xF8, 0xF8, 0xF8)
+        border = QPen(QColor(0xAD, 0xAD, 0xAD) if live else QColor(0xD8, 0xD8, 0xD8), 1)
 
-        outer = QRectF(0.5, 0.5, self.width() - 1, self.height() - 1)
-        painter.setBrush(QColor(0xF4, 0xF4, 0xF4) if live else QColor(0xF8, 0xF8, 0xF8))
-        painter.setPen(QPen(QColor(0xAD, 0xAD, 0xAD) if live else QColor(0xD8, 0xD8, 0xD8), 1))
-        painter.drawRoundedRect(outer, 4, 4)
+        cells = self._cells()
+        for row, indices in enumerate(self._rows()):
+            top = row * (self.HEIGHT + self.ROW_GAP)
+            outer = QRectF(0.5, top + 0.5, self.width() - 1, self.HEIGHT - 1)
+            painter.setBrush(ground)
+            painter.setPen(border)
+            painter.drawRoundedRect(outer, 4, 4)
 
-        widths = self._widths()
-        last = len(self._items) - 1
-        left = 0.0
-        for index, (text, _) in enumerate(self._items):
-            cell = QRectF(left, 0, widths[index], self.height())
-            left += widths[index]
+            last = indices[-1]
+            for index in indices:
+                cell = cells[index]
+                text = self._items[index][0]
+                if index == self._index:
+                    path = QPainterPath()
+                    path.addRoundedRect(
+                        cell.adjusted(
+                            2 if index == indices[0] else 1.5,
+                            2,
+                            -2 if index == last else -1.5,
+                            -2,
+                        ),
+                        3,
+                        3,
+                    )
+                    painter.setBrush(self.accent if live else QColor(0xDD, 0xDD, 0xDD))
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.drawPath(path)
+                elif index == self._hover and live:
+                    path = QPainterPath()
+                    path.addRoundedRect(cell.adjusted(2, 2, -2, -2), 3, 3)
+                    painter.setBrush(QColor(0xE3, 0xEF, 0xFF))
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.drawPath(path)
+                elif index != indices[0] and index - 1 != self._index:
+                    # A hairline between two unlit keys, so they read as separate.
+                    painter.setPen(QPen(QColor(0xCB, 0xCB, 0xCB), 1))
+                    edge = cell.height() * 0.22
+                    painter.drawLine(
+                        QPointF(cell.left(), cell.top() + edge),
+                        QPointF(cell.left(), cell.bottom() - edge),
+                    )
 
-            if index == self._index:
-                path = QPainterPath()
-                path.addRoundedRect(
-                    cell.adjusted(
-                        2 if index == 0 else 1.5,
-                        2,
-                        -2 if index == last else -1.5,
-                        -2,
-                    ),
-                    3,
-                    3,
-                )
-                painter.setBrush(self.accent if live else QColor(0xDD, 0xDD, 0xDD))
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.drawPath(path)
-            elif index == self._hover and live:
-                path = QPainterPath()
-                path.addRoundedRect(cell.adjusted(2, 2, -2, -2), 3, 3)
-                painter.setBrush(QColor(0xE3, 0xEF, 0xFF))
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.drawPath(path)
-            elif index and index - 1 != self._index:
-                # A hairline between two unlit keys, so they read as separate.
-                painter.setPen(QPen(QColor(0xCB, 0xCB, 0xCB), 1))
-                top = cell.top() + cell.height() * 0.22
-                painter.drawLine(
-                    QRectF(cell.left(), top, 0, cell.height() * 0.56).topLeft(),
-                    QRectF(cell.left(), top, 0, cell.height() * 0.56).bottomLeft(),
-                )
+                font = QFont(self.font())
+                font.setBold(index == self._index)
+                painter.setFont(font)
+                if not live:
+                    painter.setPen(MUTED)
+                elif index == self._index:
+                    painter.setPen(QColor(0xFF, 0xFF, 0xFF))
+                else:
+                    painter.setPen(TEXT)
+                painter.drawText(cell, Qt.AlignmentFlag.AlignCenter, text)
 
-            font = QFont(self.font())
-            font.setBold(index == self._index)
-            painter.setFont(font)
-            if not live:
-                painter.setPen(MUTED)
-            elif index == self._index:
-                painter.setPen(QColor(0xFF, 0xFF, 0xFF))
-            else:
-                painter.setPen(TEXT)
-            painter.drawText(cell, Qt.AlignmentFlag.AlignCenter, text)
-
-        if self.hasFocus() and live:
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.setPen(QPen(ACCENT, 1.5))
-            painter.drawRoundedRect(outer.adjusted(0.5, 0.5, -0.5, -0.5), 4, 4)
+            if self.hasFocus() and live:
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.setPen(QPen(ACCENT, 1.5))
+                painter.drawRoundedRect(outer.adjusted(0.5, 0.5, -0.5, -0.5), 4, 4)
 
 
 #: How narrow a value field may become before it stops being readable.
@@ -469,11 +528,17 @@ class ValueRow(QWidget):
         layout = QGridLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
+        # Two columns, always — the setpoint keeps the width of the left one
+        # whether or not there is a measured value beside it. Without this a
+        # lone setpoint took the whole panel and the fields of one panel came
+        # out in two different widths.
+        layout.setColumnStretch(0, 1)
+        layout.setColumnStretch(1, 1)
 
-        left = QLabel(tex_to_html(setpoint_label))
-        left.setTextFormat(Qt.TextFormat.RichText)
-        left.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(left, 0, 0)
+        self.setpoint_caption = QLabel(tex_to_html(setpoint_label))
+        self.setpoint_caption.setTextFormat(Qt.TextFormat.RichText)
+        self.setpoint_caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.setpoint_caption, 0, 0)
 
         self.setpoint = QDoubleSpinBox()
         self.setpoint.setDecimals(decimals)
@@ -485,17 +550,24 @@ class ValueRow(QWidget):
         layout.addWidget(self.setpoint, 1, 0)
 
         self.actual: QLineEdit | None = None
+        self.actual_caption: QLabel | None = None
         if actual_label:
-            right = QLabel(tex_to_html(actual_label))
-            right.setTextFormat(Qt.TextFormat.RichText)
-            right.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            layout.addWidget(right, 0, 1)
+            self.actual_caption = QLabel(tex_to_html(actual_label))
+            self.actual_caption.setTextFormat(Qt.TextFormat.RichText)
+            self.actual_caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(self.actual_caption, 0, 1)
 
             self.actual = QLineEdit()
             self.actual.setReadOnly(True)
             self.actual.setAlignment(Qt.AlignmentFlag.AlignRight)
             _take_what_you_get(self.actual)
             layout.addWidget(self.actual, 1, 1)
+
+    def set_labels(self, setpoint_label: str, actual_label: str = "") -> None:
+        """Rename the row. The feed panel does this when the reservoir changes."""
+        self.setpoint_caption.setText(tex_to_html(setpoint_label))
+        if self.actual_caption is not None:
+            self.actual_caption.setText(tex_to_html(actual_label))
 
     def set_actual(self, value: float) -> None:
         if self.actual is not None:

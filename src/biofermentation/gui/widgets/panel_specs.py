@@ -121,9 +121,25 @@ FEED_PANEL = PanelSpec(
     title="Feed Control",
     mode_parameter="Mode_feed",
     modes={0: "Manual", 1: "Closed loop"},
+    # Every field of this panel belongs to one reservoir; R_feed says which,
+    # and a phase can change it under the panel.
+    reservoir_parameter="R_feed",
     fields=[
-        FieldSpec("FR1w", "F_{R1w} [l/h]", decimals=4),
-        FieldSpec("FR1max", "F_{R1max} [l/h]", decimals=4),
+        # Closed loop holds the substrate concentration at this setpoint. It
+        # is the whole point of the mode and it was missing here: the loop ran
+        # against a cS{n}Lw that could only be reached through the database.
+        FieldSpec(
+            "cS{n}Lw",
+            "c_{S{n}Lw} [g/l]",
+            actual="cS{n}L",
+            actual_label="c_{S{n}L} [g/l]",
+            decimals=4,
+            modes=(1,),
+        ),
+        FieldSpec("FR{n}w", "F_{R{n}w} [l/h]", decimals=4, modes=(0,)),
+        # Read-only, as in the original: the maximum belongs to the reservoir,
+        # not to the moment. It is set in Parameters or by a phase.
+        FieldSpec("FR{n}max", "F_{R{n}max} [l/h]", decimals=4, read_only=True),
     ],
     switches=[SwitchSpec("f_feed", "Feed", lamp=True)],
     # One block per reservoir; the project says how many there are.

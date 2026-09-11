@@ -41,7 +41,7 @@ from biofermentation.gui.widgets import (
 from biofermentation.gui.widgets.indicators import GREEN, RED
 from biofermentation.gui.widgets.tex import tex_label, tex_to_html
 from biofermentation.gui.windows import ControlWindow
-from biofermentation.gui.windows.control_app import PANEL_PLACES, PANEL_SPACING
+from biofermentation.gui.windows.control_app import PANEL_PLACES
 from biofermentation.organisms import discover_organisms
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -180,6 +180,60 @@ def test_the_mode_greys_out_what_it_does_not_use(qapp):
 
     select_data(panel.mode_selector, 0)  # manual
     assert panel.rows["NStw"].isEnabled() is True
+
+
+def test_the_feed_panel_holds_the_substrate_concentration(qapp):
+    """Closed loop feeds against cS{n}Lw — the reason the mode exists.
+
+    The panel had FR1w and FR1max and nothing to aim at; the setpoint the
+    controller actually reads could only be reached through the database.
+    """
+    panel = ControlPanel(next(s for s in CONTROL_PANELS if s.title == "Feed Control"))
+    assert "cS{n}Lw" in panel.rows
+
+    seen = []
+    panel.parameter_changed.connect(lambda name, value: seen.append((name, value)))
+    panel.rows["cS{n}Lw"].setpoint.setValue(2.5)
+    assert seen == [("cS1Lw", 2.5)], "the reservoir number belongs in the name"
+
+    select_data(panel.mode_selector, 1)  # closed loop
+    assert panel.rows["cS{n}Lw"].isEnabled() is True
+    assert panel.rows["FR{n}w"].isEnabled() is False
+    select_data(panel.mode_selector, 0)  # manual
+    assert panel.rows["cS{n}Lw"].isEnabled() is False
+    assert panel.rows["FR{n}w"].isEnabled() is True
+
+
+def test_the_feed_maximum_is_shown_but_not_typed_into(qapp):
+    """It belongs to the reservoir, not to the moment — as in the original."""
+    panel = ControlPanel(next(s for s in CONTROL_PANELS if s.title == "Feed Control"))
+    assert panel.rows["FR{n}max"].setpoint.isReadOnly() is True
+    assert panel.rows["FR{n}w"].setpoint.isReadOnly() is False
+
+
+def test_the_feed_panel_follows_its_reservoir(qapp):
+    """Every field of the panel belongs to one reservoir; R_feed says which."""
+    spec = next(s for s in CONTROL_PANELS if s.title == "Feed Control")
+    panel = ControlPanel(spec, reservoirs=3)
+    assert panel.reservoir_selector is not None
+
+    panel.load({"Mode_feed": 1, "R_feed": 2, "cS2Lw": 1.5, "FR2w": 0.2, "FR2max": 0.9})
+    assert panel.reservoir == 2
+    assert panel.rows["cS{n}Lw"].setpoint.value() == pytest.approx(1.5)
+    assert "S2Lw" in panel.rows["cS{n}Lw"].setpoint_caption.text()
+
+    seen = []
+    panel.parameter_changed.connect(lambda name, value: seen.append((name, value)))
+    panel.rows["FR{n}w"].setpoint.setValue(0.3)
+    assert seen == [("FR2w", 0.3)]
+
+
+def test_one_reservoir_needs_no_selector(qapp):
+    """A choice of one is not a choice; the original shows R1 and gets on."""
+    spec = next(s for s in CONTROL_PANELS if s.title == "Feed Control")
+    panel = ControlPanel(spec, reservoirs=1)
+    assert panel.reservoir_selector is None
+    assert panel.reservoir == 1
 
 
 def test_loading_a_panel_emits_nothing(qapp):
@@ -574,11 +628,19 @@ def test_the_mode_selector_fills_its_row(window):
 
 
 def test_the_mode_selector_shows_every_mode_at_once(window):
-    """That is the point of it: no mode hides behind a click."""
+    """That is the point of it: no mode hides behind a click.
+
+    Not necessarily on one row — pO2 has five modes and a panel a third of the
+    window wide, so they wrap. Wrapped is still shown; hidden is not.
+    """
     for title, panel in window.panels.items():
         selector = panel.mode_selector
         assert selector.count() == len(panel.spec.modes), title
-        assert sum(selector._widths()) <= selector.width() + 1, title
+        cells = selector._cells()
+        assert len(cells) == selector.count(), title
+        for index, cell in cells.items():
+            assert cell.right() <= selector.width() + 1, f"{title}: key {index} runs off"
+            assert cell.bottom() <= selector.height() + 1, f"{title}: key {index} is cut off"
 
 
 def test_clicking_a_mode_key_reports_the_mode_behind_it(qapp):
@@ -601,14 +663,24 @@ def test_the_panels_sit_where_the_layout_table_says(window):
         assert layout.getItemPosition(index) == (row, column, 1, span), title
 
 
-def test_pO2_is_exactly_two_columns_wide(window):  # noqa: N802 - the name of the panel
-    """Equal columns are what make the four small panels look like a set."""
-    panels = window.panels
-    single = [panels[t] for t, (_, _, span) in PANEL_PLACES.items() if span == 1]
-    widest = max(panel.width() for panel in single)
-    narrowest = min(panel.width() for panel in single)
-    assert widest - narrowest <= 1
-    assert abs(panels["pO2-Control"].width() - (2 * widest + PANEL_SPACING)) <= 2
+def test_the_tab_is_six_equal_sections(window):
+    """Five panels of the same width, and one section left free on purpose."""
+    widths = [panel.width() for panel in window.panels.values()]
+    assert max(widths) - min(widths) <= 1
+
+    page = window.tabs.widget(0)
+    layout = page.layout()
+    assert (layout.rowCount(), layout.columnCount()) == (2, 3)
+    assert len(PANEL_PLACES) == 5, "one of the six sections stays empty"
+    assert all(span == 1 for _, _, span in PANEL_PLACES.values())
+
+
+def test_every_setpoint_field_of_a_panel_is_the_same_width(window):
+    """A lone setpoint used to take the whole panel, one with a measured value
+    beside it half of it — two widths in one column of fields."""
+    for title, panel in window.panels.items():
+        widths = {row.setpoint.width() for row in panel.rows.values()}
+        assert len(widths) == 1, f"{title}: {sorted(widths)}"
 
 
 def test_the_control_window_fits_a_normal_screen(window):

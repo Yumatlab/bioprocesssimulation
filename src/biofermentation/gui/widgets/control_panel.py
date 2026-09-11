@@ -23,7 +23,12 @@ from .indicators import SegmentedControl, StatusLamp, ToggleSwitch, ValueRow, se
 
 @dataclass
 class FieldSpec:
-    """One editable setpoint, and the parameter behind it."""
+    """One editable setpoint, and the parameter behind it.
+
+    `parameter`, `label` and `actual` may carry `{n}`: the feed panel works on
+    one reservoir at a time, and FR1w, FR2w and FR3w are the same field with a
+    different number in it. The panel fills it in from its reservoir selector.
+    """
 
     parameter: str
     label: str
@@ -32,6 +37,8 @@ class FieldSpec:
     decimals: int = 2
     # Modes in which the field is live. Empty means always.
     modes: tuple[int, ...] = ()
+    #: Shown but not typed into — a value this panel reports rather than sets.
+    read_only: bool = False
 
 
 @dataclass
@@ -62,6 +69,9 @@ class PanelSpec:
     title: str
     mode_parameter: str | None
     modes: dict[int, str] = field(default_factory=dict)
+    #: The parameter holding the reservoir this panel works on (R_feed). Set
+    #: it and the panel gets a reservoir selector and fills in every `{n}`.
+    reservoir_parameter: str | None = None
     fields: list[FieldSpec] = field(default_factory=list)
     switches: list[SwitchSpec] = field(default_factory=list)
     has_parameters_button: bool = True
@@ -82,11 +92,20 @@ class ControlPanel(QGroupBox):
     parameter_changed = Signal(str, float)
     parameters_requested = Signal(str)
 
-    def __init__(self, spec: PanelSpec, parent: QWidget | None = None):
+    def __init__(
+        self, spec: PanelSpec, parent: QWidget | None = None, *, reservoirs: int = 1
+    ):
         super().__init__(spec.title, parent)
         self.spec = spec
+        # Keyed by the *template* name — "FR{n}w", not "FR1w" — so the keys
+        # stay put when the reservoir changes.
         self.rows: dict[str, ValueRow] = {}
         self.switches: dict[str, ToggleSwitch] = {}
+        self.reservoirs = max(1, int(reservoirs or 1))
+        self.reservoir = 1
+        #: The parameter set the panel was last filled from, so a reservoir
+        #: change can refill without asking the window for it.
+        self._p: dict | None = None
 
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
@@ -108,15 +127,35 @@ class ControlPanel(QGroupBox):
             row.addWidget(self.lamp)
             layout.addLayout(row)
 
+        self.reservoir_selector: SegmentedControl | None = None
+        if spec.reservoir_parameter and self.reservoirs > 1:
+            # Only worth the row when there is a choice. With one reservoir
+            # the panel simply works on R1, as the original does.
+            row = QHBoxLayout()
+            row.addWidget(QLabel("Reservoir:"))
+            self.reservoir_selector = SegmentedControl()
+            for number in range(1, self.reservoirs + 1):
+                self.reservoir_selector.addItem(f"R{number}", number)
+            self.reservoir_selector.currentIndexChanged.connect(self._reservoir_changed)
+            row.addWidget(self.reservoir_selector, 1)
+            layout.addLayout(row)
+
         for spec_field in spec.fields:
             widget = ValueRow(
-                spec_field.label,
-                spec_field.actual_label,
+                self._resolve(spec_field.label),
+                self._resolve(spec_field.actual_label),
                 decimals=spec_field.decimals,
             )
-            widget.setpoint_changed.connect(
-                lambda value, name=spec_field.parameter: self.parameter_changed.emit(name, value)
-            )
+            if spec_field.read_only:
+                # Set elsewhere — by the feed dialog or by a phase — and shown
+                # here so the operator can see what the loop is working with.
+                widget.setpoint.setReadOnly(True)
+            else:
+                widget.setpoint_changed.connect(
+                    lambda value, template=spec_field.parameter: self.parameter_changed.emit(
+                        self._resolve(template), value
+                    )
+                )
             self.rows[spec_field.parameter] = widget
             layout.addWidget(widget)
 
@@ -141,13 +180,50 @@ class ControlPanel(QGroupBox):
 
     # ------------------------------------------------------------ state --
 
+    def _resolve(self, text: str) -> str:
+        """Fill in the reservoir number: FR{n}w becomes FR1w."""
+        return text.replace("{n}", str(self.reservoir)) if text else text
+
+    def set_reservoir(self, number: int) -> None:
+        """Work on another reservoir: new labels, new values, same widgets."""
+        number = max(1, min(int(number), self.reservoirs))
+        if number == self.reservoir:
+            return
+        self.reservoir = number
+        if self.reservoir_selector is not None:
+            self.reservoir_selector.blockSignals(True)
+            select_data(self.reservoir_selector, number)
+            self.reservoir_selector.blockSignals(False)
+        for spec_field in self.spec.fields:
+            row = self.rows[spec_field.parameter]
+            row.set_labels(
+                self._resolve(spec_field.label), self._resolve(spec_field.actual_label)
+            )
+        if self._p is not None:
+            self.load(self._p)
+
+    def _reservoir_changed(self) -> None:
+        selector = self.reservoir_selector
+        if selector is None:
+            return
+        self.set_reservoir(int(selector.currentData()))
+        if self.spec.reservoir_parameter:
+            self.parameter_changed.emit(
+                self.spec.reservoir_parameter, float(self.reservoir)
+            )
+
     def content_width(self) -> int:
-        """How wide this panel has to be for nothing in it to be cut off."""
-        width = self.sizeHint().width()
+        """How wide this panel has to be for nothing in it to be cut off.
+
+        The minimum, not the wish: a QDoubleSpinBox asks for the widest number
+        its range allows, and the mode keys ask to stand side by side. Neither
+        has to be granted — the fields have a readable floor of their own and
+        the keys wrap onto a second row.
+        """
+        width = self.minimumSizeHint().width()
         if self.mode_selector is not None:
-            # All the keys side by side, plus the "Mode:" caption, the lamp
-            # and the layout margins.
-            width = max(width, self.mode_selector.sizeHint().width() + 90)
+            # One key, plus the "Mode:" caption, the lamp and the margins.
+            width = max(width, self.mode_selector.minimumSizeHint().width() + 90)
         return width
 
     def current_mode(self) -> int | None:
@@ -155,6 +231,11 @@ class ControlPanel(QGroupBox):
 
     def load(self, p) -> None:
         """Fill every widget from the parameter set, without emitting."""
+        self._p = p
+        if self.spec.reservoir_parameter and self.spec.reservoir_parameter in p:
+            # A phase can switch the reservoir under the panel; the selector
+            # follows the parameter, never the other way round.
+            self.set_reservoir(int(p[self.spec.reservoir_parameter] or 1))
         if self.mode_selector is not None and self.spec.mode_parameter in p:
             self.mode_selector.blockSignals(True)
             select_data(self.mode_selector, p[self.spec.mode_parameter])
@@ -162,9 +243,10 @@ class ControlPanel(QGroupBox):
 
         for spec_field in self.spec.fields:
             row = self.rows[spec_field.parameter]
-            if spec_field.parameter in p:
+            name = self._resolve(spec_field.parameter)
+            if name in p:
                 row.setpoint.blockSignals(True)
-                row.setpoint.setValue(float(p[spec_field.parameter]))
+                row.setpoint.setValue(float(p[name]))
                 row.setpoint.blockSignals(False)
 
         for switch_spec in self.spec.switches:
@@ -180,7 +262,7 @@ class ControlPanel(QGroupBox):
         for spec_field in self.spec.fields:
             if not spec_field.actual:
                 continue
-            series = v.get(spec_field.actual)
+            series = v.get(self._resolve(spec_field.actual))
             if series is not None and index < series.size:
                 self.rows[spec_field.parameter].set_actual(float(series[index]))
 

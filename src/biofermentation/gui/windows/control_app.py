@@ -66,10 +66,11 @@ port.</p>
 
 
 #: Where each panel of Control Options sits: row, column, how many columns it
-#: spans. pO2 is the panel with five setpoints and five modes and gets the room
-#: for it; the other four are one column each.
+#: spans. Six equal sections, five of them taken — the sixth stays empty on
+#: purpose. Free space next to a panel reads better than fields stretched to
+#: fill a width nobody needs.
 PANEL_PLACES = {
-    "pO2-Control": (0, 0, 2),
+    "pO2-Control": (0, 0, 1),
     "Liquid Weight": (0, 2, 1),
     "pH-Control": (1, 0, 1),
     "Temperature-Control": (1, 1, 1),
@@ -106,9 +107,10 @@ class ControlWindow(QMainWindow):
         self.setWindowTitle(
             f"Control App - {info.name} - {info.organism_name} - {info.bioreactor_name}"
         )
-        # The five controller panels and the run column need this much;
-        # see ControlPanel.content_width and indicators.FIELD_MIN_WIDTH.
-        self.resize(1340, 700)
+        # The five controller panels and the run column need this much; see
+        # ControlPanel.content_width and indicators.FIELD_MIN_WIDTH. The
+        # height carries the two rows of panels — pO2 is the tall one.
+        self.resize(1340, 800)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -239,8 +241,9 @@ class ControlWindow(QMainWindow):
         page = QWidget()
         layout = QGridLayout(page)
         layout.setSpacing(PANEL_SPACING)
+        reservoirs = int(self.setup.info.reservoirs or 1)
         for spec in CONTROL_PANELS:
-            panel = ControlPanel(spec)
+            panel = ControlPanel(spec, reservoirs=reservoirs)
             panel.setObjectName("controlPanel")
             panel.parameter_changed.connect(self._set_parameter)
             panel.parameters_requested.connect(self.open_controller_parameters)
