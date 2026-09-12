@@ -146,6 +146,98 @@ def import_bioreactor(
     return counts
 
 
+def bioreactor_parameters(db_path: Path | str, name: str) -> list[dict]:
+    """The vessel's parameters with what an editor needs to show them.
+
+    `export_bioreactor` is the transfer contract and carries values only; a
+    form needs the symbol, the unit and the category as well. Ordered the way
+    the other parameter dialogs order things: by section, category and the
+    order the parameter carries itself.
+    """
+    with get_connection(db_path, readonly=True) as conn:
+        row = conn.execute(
+            "SELECT bioreactorID FROM bioreactorTab WHERE name = ?", (name,)
+        ).fetchone()
+        if row is None:
+            raise LookupError(f"no bioreactor named {name!r} in the database")
+        return [
+            dict(entry)
+            for entry in conn.execute(
+                """
+                SELECT p.name AS parametername, p.tex, p.unit, p.type,
+                       c.name AS categoryname, c.section AS categorysection,
+                       d.value, d.description
+                  FROM default_bioreactorTab d
+                  JOIN parameterTab p ON p.parameterID = d.parameterID
+                  JOIN categoryTab c ON c.categoryID = p.categoryID
+                 WHERE d.bioreactorID = ?
+                 ORDER BY c.section, c.name, p.internal_order, p.parameterID
+                """,
+                (row["bioreactorID"],),
+            )
+        ]
+
+
+def bioreactor_usage(db_path: Path | str, name: str) -> dict[str, int]:
+    """How many models and projects stand on this vessel.
+
+    Asked before deleting one: a project keeps its own copy of the parameter
+    values, but its row still points here, and a dangling reference is not
+    something to find out about later.
+    """
+    with get_connection(db_path, readonly=True) as conn:
+        row = conn.execute(
+            "SELECT bioreactorID FROM bioreactorTab WHERE name = ?", (name,)
+        ).fetchone()
+        if row is None:
+            raise LookupError(f"no bioreactor named {name!r} in the database")
+        bioreactor_id = row["bioreactorID"]
+        return {
+            "models": conn.execute(
+                "SELECT COUNT(*) FROM modelTab WHERE bioreactorID = ?", (bioreactor_id,)
+            ).fetchone()[0],
+            "projects": conn.execute(
+                "SELECT COUNT(*) FROM projectTab WHERE bioreactorID = ?", (bioreactor_id,)
+            ).fetchone()[0],
+        }
+
+
+def delete_bioreactor(db_path: Path | str, name: str) -> dict[str, int]:
+    """Remove a vessel and its parameter values. One transaction.
+
+    Refuses while anything stands on it. The alternative — letting the cascade
+    take the models and their parameter sets with it — is how the MATLAB
+    version lost projects, and it is not on offer here.
+    """
+    usage = bioreactor_usage(db_path, name)
+    if usage["models"] or usage["projects"]:
+        raise ValueError(
+            f"bioreactor {name!r} is still used by {usage['models']} model(s) and "
+            f"{usage['projects']} project(s); delete those first"
+        )
+
+    with get_connection(db_path) as conn:
+        bioreactor_id = conn.execute(
+            "SELECT bioreactorID FROM bioreactorTab WHERE name = ?", (name,)
+        ).fetchone()["bioreactorID"]
+        values = conn.execute(
+            "DELETE FROM default_bioreactorTab WHERE bioreactorID = ?", (bioreactor_id,)
+        ).rowcount
+        conn.execute("DELETE FROM bioreactorTab WHERE bioreactorID = ?", (bioreactor_id,))
+    return {"parameters": values}
+
+
+def free_bioreactor_name(db_path: Path | str, name: str) -> str:
+    """`name`, or the first "name (2)" that is not taken."""
+    taken = {row["name"] for row in list_bioreactors(db_path)}
+    if name not in taken:
+        return name
+    number = 2
+    while f"{name} ({number})" in taken:
+        number += 1
+    return f"{name} ({number})"
+
+
 def write_bioreactor(definition: BioreactorDefinition, path: Path | str) -> Path:
     path = Path(path)
     payload = {k: v for k, v in asdict(definition).items() if v not in (None, {}, [])}

@@ -580,6 +580,37 @@ tunen.
 
 ---
 
+## Einen Bioreaktor anlegen — ohne Python
+
+**Library → Bioreactors…** auf dem Startbildschirm. Liste links, Kessel rechts,
+vier Handlungen: auswählen, aus einem bestehenden einen neuen machen,
+bearbeiten, löschen.
+
+- **Neu heißt kopieren.** Welche Parameter einen Kessel ausmachen, ist nichts,
+  wonach ein Formular fragen sollte — der Kessel daneben weiß es. Ein leeres
+  Formular hieße, den Anwender das Modell auswendig können zu lassen.
+- **Eine Änderung erreicht nur neue Projekte.** `create_project` kopiert die
+  Werte in `project_parameterTab`, ein laufendes Projekt trägt seine eigene
+  Kopie — genau das macht einen gespeicherten Lauf reproduzierbar. Der Dialog
+  sagt es in der Kopfzeile, sonst würde es jemand anders herum erwarten.
+- **Ein Kessel, auf dem etwas steht, wird nicht gelöscht.** Die Kaskade die
+  Modelle mitnehmen zu lassen ist der Weg, auf dem die MATLAB-Version Projekte
+  verloren hat; `delete_bioreactor` fragt vorher `bioreactor_usage`.
+
+**Ein neuer Kessel allein ist nicht auswählbar.** Ein Projekt entsteht aus
+einem **Modell** — Organismus × Kessel —, und `create_project` liest nichts
+außer `model_parameterTab`. Bis dahin konnte niemand ein Modell anlegen: der
+Import schreibt `modelTab`-Zeilen ohne `bioreactorID`, und MATLABs
+ModelCreator ist nicht portiert. `create_model()` macht die drei Schritte in
+**einer** Transaktion, und der Knopf „Make selectable…" steht neben dem Kessel,
+den er betrifft.
+
+**Der Kessel gewinnt, wenn beide Seiten denselben Parameter nennen.** Er darf
+nur einmal vorkommen: `project_parameterTab` ist `UNIQUE (projectID,
+parameterID)`, ein Modell mit einem doppelten Parameter ergäbe ein Projekt,
+das sich nicht anlegen lässt. MATLAB hängt die beiden Tabellen aneinander und
+merkt es nicht.
+
 ## Projekte, Organismen und Bioreaktoren übertragen
 
 Drei Pakete, alle über **Namen** verschlüsselt, nie über IDs — die

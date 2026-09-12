@@ -51,7 +51,7 @@ CYCLIC = "cyclic"
 INVISIBLE = "invisible"
 
 
-def _decimals_for(value: float, floor: int = 4, cap: int = 12) -> int:
+def decimals_for(value: float, floor: int = 4, cap: int = 12) -> int:
     """Enough places to show this value, at least `floor`.
 
     A box with four decimals holds 1e-05 as 0.0000 and hands that back on the
@@ -66,7 +66,7 @@ def _decimals_for(value: float, floor: int = 4, cap: int = 12) -> int:
 
 def _spin(value: float, decimals: int | None = None) -> QDoubleSpinBox:
     box = QDoubleSpinBox()
-    box.setDecimals(_decimals_for(float(value)) if decimals is None else decimals)
+    box.setDecimals(decimals_for(float(value)) if decimals is None else decimals)
     box.setRange(-1e12, 1e12)
     box.setValue(float(value))
     box.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)

@@ -56,6 +56,62 @@ def test_a_bioreactor_round_trips_through_yaml(db, tmp_path):
     assert again.manufacturer == definition.manufacturer
 
 
+def test_a_vessel_reports_what_its_parameters_mean(db):
+    """The transfer package carries values; a form needs the labels too."""
+    from biofermentation.db import bioreactor_parameters
+
+    rows = bioreactor_parameters(db, "BIOSTAT ED")
+    assert len(rows) == 60
+    first = rows[0]
+    assert {"parametername", "tex", "unit", "categoryname", "categorysection", "value"} <= set(
+        first
+    )
+    # Grouped the way the dialogs group things, and every row belongs to the
+    # vessel rather than the organism.
+    sections = [row["categorysection"] for row in rows]
+    assert sections == sorted(sections)
+
+
+def test_a_vessel_says_what_stands_on_it(db):
+    from biofermentation.db import bioreactor_usage
+
+    assert bioreactor_usage(db, "BIOSTAT ED") == {"models": 3, "projects": 14}
+    assert bioreactor_usage(db, "BIOSTAT B") == {"models": 0, "projects": 0}
+    with pytest.raises(LookupError, match="Nonsense"):
+        bioreactor_usage(db, "Nonsense")
+
+
+def test_a_vessel_in_use_cannot_be_deleted(db):
+    """Letting the cascade take the models with it is how the MATLAB version
+    lost projects. It is not on offer."""
+    from biofermentation.db import delete_bioreactor
+
+    with pytest.raises(ValueError, match="still used"):
+        delete_bioreactor(db, "BIOSTAT ED")
+    assert "BIOSTAT ED" in {row["name"] for row in list_bioreactors(db)}
+
+
+def test_an_unused_vessel_goes_with_its_values(db):
+    from biofermentation.db import delete_bioreactor
+
+    result = delete_bioreactor(db, "BIOSTAT B")
+    assert result["parameters"] == 60
+    assert "BIOSTAT B" not in {row["name"] for row in list_bioreactors(db)}
+    with sqlite3.connect(db) as conn:
+        left = conn.execute(
+            "SELECT COUNT(*) FROM default_bioreactorTab WHERE bioreactorID NOT IN "
+            "(SELECT bioreactorID FROM bioreactorTab)"
+        ).fetchone()[0]
+    assert left == 0, "parameter values without a vessel"
+
+
+def test_a_free_name_is_offered_rather_than_a_collision(db):
+    from biofermentation.db import free_bioreactor_name
+
+    assert free_bioreactor_name(db, "Wubbelbrew") == "Wubbelbrew"
+    assert free_bioreactor_name(db, "BIOSTAT B") == "BIOSTAT B (2)"
+
+
 def test_importing_a_bioreactor_under_a_new_name_adds_one(db, tmp_path):
     definition = export_bioreactor(db, "BIOSTAT ED")
     definition.name = "BIOSTAT ED (lab 2)"

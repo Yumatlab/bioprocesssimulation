@@ -12,6 +12,9 @@ a little raw is better than one that silently drops a symbol.
 import html
 import re
 
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QLabel
+
 # \alpha and friends, as they appear in parameterTab.tex.
 GREEK = {
     "alpha": "α",
@@ -77,3 +80,14 @@ def tex_label(text: str | None, unit: str | None = None) -> str:
     if unit:
         return f"{body} [{tex_to_html(unit)}]"
     return body
+
+
+def rich_label(text: str) -> QLabel:
+    """A QLabel that renders what tex_to_html produced.
+
+    A plain QLabel shows the markup; every dialog that lays out parameters
+    needs this one line, so it lives here rather than three times over.
+    """
+    label = QLabel(text)
+    label.setTextFormat(Qt.TextFormat.RichText)
+    return label

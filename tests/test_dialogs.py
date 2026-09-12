@@ -829,13 +829,13 @@ def test_a_value_the_field_cannot_show_is_not_a_change(window):
 
 
 def test_a_field_gets_enough_places_for_what_is_put_into_it():
-    from biofermentation.gui.dialogs.parameters import _decimals_for
+    from biofermentation.gui.dialogs.parameters import decimals_for
 
-    assert _decimals_for(1.0) == 4, "the ordinary case keeps four"
-    assert _decimals_for(0.0) == 4
-    assert _decimals_for(1234.5) == 4
-    assert _decimals_for(1e-05) == 8, "0.0000 is not 1e-05"
-    assert _decimals_for(1e-30) == 12, "and there is an end to it"
+    assert decimals_for(1.0) == 4, "the ordinary case keeps four"
+    assert decimals_for(0.0) == 4
+    assert decimals_for(1234.5) == 4
+    assert decimals_for(1e-05) == 8, "0.0000 is not 1e-05"
+    assert decimals_for(1e-30) == 12, "and there is an end to it"
 
 
 def test_the_drop_button_is_wide_enough_to_read(window):
@@ -1000,3 +1000,121 @@ def test_the_export_button_leaves_the_dialog_open(qapp):
     dialog.export_button.click()
     assert seen == [True]
     assert dialog.choice is Choice.CANCEL, "no decision has been made yet"
+
+
+# ------------------------------------------------------ the bioreactors --
+
+
+@pytest.fixture
+def reactors(db, qapp):
+    from biofermentation.gui.dialogs.bioreactors import BioreactorManager
+
+    return BioreactorManager(db)
+
+
+def test_the_dialog_shows_a_vessel_with_all_its_parameters(reactors):
+    assert reactors.list.count() == 2
+    assert reactors._current == "BIOSTAT ED"
+    assert len(reactors._boxes) == 60
+    assert reactors.name_edit.text() == "BIOSTAT ED"
+    assert reactors.manufacturer_edit.text() == "B. Braun Stedim"
+
+
+def test_a_vessel_something_stands_on_cannot_be_deleted_from_here(reactors):
+    assert reactors.delete_button.isEnabled() is False
+    reactors.list.setCurrentRow(1)  # BIOSTAT B, used by nothing
+    assert reactors._current == "BIOSTAT B"
+    assert reactors.delete_button.isEnabled() is True
+
+
+def test_a_new_vessel_is_a_copy_of_the_one_it_was_made_from(reactors, db):
+    """Which parameters make up a vessel is not something a form should ask."""
+    from biofermentation.db import export_bioreactor
+
+    assert reactors.create_from_selected("Wubbelbrew 5 l") == "Wubbelbrew 5 l"
+    assert reactors._current == "Wubbelbrew 5 l"
+
+    made = export_bioreactor(db, "Wubbelbrew 5 l")
+    source = export_bioreactor(db, "BIOSTAT ED")
+    assert made.parameters == source.parameters
+    assert made.manufacturer == source.manufacturer
+
+
+def test_a_name_that_is_taken_is_refused(reactors, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args, **kwargs: None)
+    assert reactors.create_from_selected("BIOSTAT B") is None
+    assert reactors.list.count() == 2
+
+
+def test_a_new_vessel_reaches_a_project_through_a_model(reactors, db, monkeypatch):
+    """The whole chain, because each link alone is useless: a vessel, a model
+    on it, and a project that carries its values."""
+    from PySide6.QtWidgets import QMessageBox
+
+    from biofermentation.db import create_project, export_bioreactor, load_phases
+
+    monkeypatch.setattr(QMessageBox, "information", lambda *args, **kwargs: None)
+    reactors.create_from_selected("Wubbelbrew 5 l")
+    reactors._boxes["VLmax"].setValue(4.5)
+    assert reactors.save() is True
+    assert export_bioreactor(db, "Wubbelbrew 5 l").parameters["VLmax"] == pytest.approx(4.5)
+
+    model_id = reactors.create_model_for_selected(organism_id=1, name="E. coli in Wubbelbrew")
+    assert model_id is not None
+
+    project = create_project(db, "On the new vessel", model_id)
+    assert load_phases(db, project).p["VLmax"] == pytest.approx(4.5)
+    # And the organism's own parameters came along.
+    assert load_phases(db, project).p["cS1L0"] > 0
+
+
+def test_a_rename_moves_the_vessel_rather_than_copying_it(reactors, db, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    from biofermentation.db import list_bioreactors
+
+    monkeypatch.setattr(QMessageBox, "information", lambda *args, **kwargs: None)
+    reactors.list.setCurrentRow(1)  # BIOSTAT B — nothing stands on it
+    reactors.name_edit.setText("BIOSTAT B mk II")
+    assert reactors.save() is True
+
+    names = {row["name"] for row in list_bioreactors(db)}
+    assert "BIOSTAT B mk II" in names
+    assert "BIOSTAT B" not in names
+    assert len(names) == 2
+
+
+def test_a_vessel_without_a_model_cannot_be_chosen_anywhere(reactors, db):
+    """Which is why the dialog has a button for it: create_project reads
+    nothing but model_parameterTab."""
+    from biofermentation.db import list_models
+
+    reactors.create_from_selected("Wubbelbrew 5 l")
+    assert all(row["bioreactor_name"] != "Wubbelbrew 5 l" for row in list_models(db))
+
+
+def test_a_model_carries_each_parameter_once(db):
+    """project_parameterTab is UNIQUE on (projectID, parameterID): a model
+    that named a parameter twice would make a project that cannot be created."""
+    import sqlite3
+
+    from biofermentation.db import create_model
+
+    model_id = create_model(db, "Twice over", 1, 1)
+    with sqlite3.connect(db) as conn:
+        rows, distinct = conn.execute(
+            "SELECT COUNT(*), COUNT(DISTINCT parameterID) FROM model_parameterTab "
+            "WHERE modelID = ?",
+            (model_id,),
+        ).fetchone()
+    assert rows == distinct
+
+
+def test_deleting_from_the_dialog_takes_the_values_with_it(reactors, db):
+    from biofermentation.db import list_bioreactors
+
+    reactors.list.setCurrentRow(1)
+    assert reactors.delete_selected(confirmed=True) is True
+    assert {row["name"] for row in list_bioreactors(db)} == {"BIOSTAT ED"}

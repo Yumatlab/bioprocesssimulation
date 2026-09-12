@@ -758,6 +758,84 @@ def list_models(db_path: Path | str) -> list[dict]:
         )
 
 
+def free_model_name(db_path: Path | str, name: str) -> str:
+    """`name`, or the first "name (2)" that is free. modelTab.name is UNIQUE."""
+    with get_connection(db_path, readonly=True) as conn:
+        taken = {row[0] for row in conn.execute("SELECT name FROM modelTab")}
+    if name not in taken:
+        return name
+    number = 2
+    while f"{name} ({number})" in taken:
+        number += 1
+    return f"{name} ({number})"
+
+
+def create_model(
+    db_path: Path | str,
+    name: str,
+    organism_id: int,
+    bioreactor_id: int,
+    *,
+    description: str = "",
+) -> int:
+    """An organism in a vessel, with the parameter set of both. One transaction.
+
+    This is what a project is created from: `create_project` reads nothing but
+    `model_parameterTab`, so a bioreactor nobody has built a model on cannot
+    be selected anywhere. MATLAB's ModelCreator does the same three steps —
+    row, organism defaults, vessel defaults — without a transaction and
+    without noticing when both sides name the same parameter.
+
+    Here the vessel wins that tie and the parameter appears once. It has to:
+    `project_parameterTab` is UNIQUE on (projectID, parameterID), so a model
+    carrying a parameter twice would produce a project that cannot be created.
+    """
+    if not name.strip():
+        raise ValueError("a model needs a name")
+
+    with get_connection(db_path) as conn:
+        for table, key, value in (
+            ("organismTab", "organismID", organism_id),
+            ("bioreactorTab", "bioreactorID", bioreactor_id),
+        ):
+            if (
+                conn.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE {key} = ?",
+                    (value,),
+                ).fetchone()[0]
+                == 0
+            ):
+                raise LookupError(f"no row in {table} with {key} {value}")
+        if conn.execute("SELECT COUNT(*) FROM modelTab WHERE name = ?", (name,)).fetchone()[0]:
+            raise ValueError(f"a model named {name!r} already exists")
+
+        model_id = conn.execute(
+            "INSERT INTO modelTab (organismID, bioreactorID, name, description) "
+            "VALUES (?, ?, ?, ?)",
+            (organism_id, bioreactor_id, name, description or None),
+        ).lastrowid
+
+        values: dict[int, tuple[float, str | None]] = {}
+        for query, key in (
+            ("SELECT parameterID, value, description FROM default_modelTab WHERE organismID = ?",
+             organism_id),
+            ("SELECT parameterID, value, description FROM default_bioreactorTab "
+             "WHERE bioreactorID = ?", bioreactor_id),
+        ):
+            for row in conn.execute(query, (key,)):
+                values[row["parameterID"]] = (row["value"], row["description"])
+
+        conn.executemany(
+            "INSERT INTO model_parameterTab (modelID, parameterID, value, description) "
+            "VALUES (?, ?, ?, ?)",
+            [
+                (model_id, parameter_id, value, description)
+                for parameter_id, (value, description) in values.items()
+            ],
+        )
+    return model_id
+
+
 def unique_project_name(db_path: Path | str, name: str) -> str:
     """A free name, appending _1, _2 … the way uniqueProjectname does."""
     with get_connection(db_path, readonly=True) as conn:

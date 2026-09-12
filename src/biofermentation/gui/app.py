@@ -135,7 +135,9 @@ class SimulationApp(QApplication):
         )
 
         window = self.starting_screen
-        if name == "Import organism…":
+        if name == "Bioreactors…":
+            self.manage_bioreactors()
+        elif name == "Import organism…":
             import_organism_file(window, self.db_path)
         elif name == "Export organism…":
             export_organism_file(window, self.db_path)
@@ -145,6 +147,17 @@ class SimulationApp(QApplication):
             export_bioreactor_file(window, self.db_path)
         elif name == "Import project…":
             self.import_project()
+
+    def manage_bioreactors(self) -> None:
+        """Create and edit vessels without a YAML file and without SQL.
+
+        A bioreactor is a name and sixty values; adding one should not need
+        an editor and an import menu.
+        """
+        from .dialogs.bioreactors import BioreactorManager
+
+        dialog = BioreactorManager(self.db_path, parent=self.starting_screen)
+        dialog.exec()
 
     def import_project(self) -> int | None:
         """Read an export back in and open what it produced."""

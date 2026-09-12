@@ -24,6 +24,17 @@ from ..organisms.definition import (
 from .connection import get_connection
 
 
+def list_organisms(db_path: Path | str) -> list[dict]:
+    """The organisms this database knows, for a chooser."""
+    with get_connection(db_path, readonly=True) as conn:
+        return [
+            dict(row)
+            for row in conn.execute(
+                "SELECT organismID, name, reservoirs FROM organismTab ORDER BY organismID"
+            )
+        ]
+
+
 def export_definition(db_path: Path | str, organism_name: str) -> OrganismDefinition:
     """Read an organism out of the database as a definition."""
     with get_connection(db_path, readonly=True) as conn:

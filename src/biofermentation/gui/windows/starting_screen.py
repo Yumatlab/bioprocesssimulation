@@ -99,6 +99,7 @@ class StartingScreen(QWidget):
         "Import organism…",
         "Export organism…",
         None,
+        "Bioreactors…",
         "Import bioreactor…",
         "Export bioreactor…",
         None,
