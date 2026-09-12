@@ -51,3 +51,24 @@ def get_connection(db_path: Path | str, *, readonly: bool = False) -> Iterator[s
         if conn.in_transaction:
             conn.execute("COMMIT")
         conn.close()
+
+
+def backup_database(db_path: Path | str, suffix: str = ".backup.db") -> Path:
+    """A consistent copy beside the database, through SQLite's own backup API.
+
+    Not shutil.copy: in WAL mode a committed transaction can still live only
+    in the write-ahead log, and a file copy taken without it loses whatever is
+    there. Four orphaned .db-wal files in the MATLAB project folder are what
+    that looks like afterwards.
+    """
+    db_path = Path(db_path)
+    target_path = db_path.with_suffix(suffix)
+    target_path.unlink(missing_ok=True)
+    source = sqlite3.connect(db_path)
+    target = sqlite3.connect(target_path)
+    try:
+        source.backup(target)
+    finally:
+        target.close()
+        source.close()
+    return target_path

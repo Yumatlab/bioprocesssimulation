@@ -187,7 +187,6 @@ default_modelparameterID,organismID,parameterID,value,description
 186,1,228,9.0,Maximum pH required for growth
 187,1,229,2.0,Calculation interval
 188,1,230,1.0,Speed factor of simulation
-189,1,231,5.0,Time limit for cultivation
 190,1,232,0.0,Inoculation flag
 191,2,1,400.0,Setpoint for agitation speed
 192,2,2,4.8,Value of pH Setpoint
@@ -388,7 +387,6 @@ default_modelparameterID,organismID,parameterID,value,description
 390,2,228,9.0,Maximum pH required for growth
 391,2,229,2.0,Calculation interval
 392,2,230,1.0,Speed factor of simulation
-393,2,231,5.0,Time limit for cultivation
 394,2,232,0.0,Inoculation flag
 395,2,233,104.0,
 396,2,234,15.04,

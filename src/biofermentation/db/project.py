@@ -27,7 +27,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .connection import get_connection
+from .connection import backup_database, get_connection
 from .migrate import LOG_COLUMNS
 from .models import (
     Condition,
@@ -689,21 +689,7 @@ def save_project_with_backup(db_path: Path | str, project_id: int, **state) -> t
     """
     result = save_project(db_path, project_id, **state)
 
-    db_path = Path(db_path)
-    backup_path = db_path.with_suffix(".backup.db")
-    # sqlite3's own backup API rather than a file copy: it goes through SQLite,
-    # so the WAL is included and the copy is consistent even while the database
-    # is open elsewhere. VACUUM INTO would do as well but cannot run inside the
-    # transaction get_connection() holds.
-    backup_path.unlink(missing_ok=True)
-    source = sqlite3.connect(db_path)
-    target = sqlite3.connect(backup_path)
-    try:
-        source.backup(target)
-    finally:
-        target.close()
-        source.close()
-    return result, backup_path
+    return result, backup_database(db_path)
 
 
 # ------------------------------------------------- projects, plan 5 --

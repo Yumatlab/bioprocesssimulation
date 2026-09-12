@@ -1943,16 +1943,6 @@ parameters:
   internal_order: 2
   external_order: 1502
   description: Speed factor of simulation
-- name: tmax
-  category: Settings
-  default: 5.0
-  tex: t_{max}
-  unit: h
-  tex_unit: h
-  type: editfield
-  internal_order: 3
-  external_order: 1503
-  description: Time limit for cultivation
 - name: f_Inoc
   category: Settings
   default: 0.0

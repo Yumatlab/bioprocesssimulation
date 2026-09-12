@@ -116,6 +116,89 @@ def find_corrupted_project_parameters(db_path: Path | str) -> list[dict]:
         ]
 
 
+#: Parameters the database defines and nothing reads.
+#:
+#: `tmax` ("Time limit for cultivation") is one: no organism model touches it,
+#: neither here nor in the MATLAB sources, and its category is `invisible`, so
+#: no dialog ever showed it either. It sat in parameterTab, in both organisms'
+#: defaults, in three models and in five projects, carrying a number that
+#: decided nothing. The two occurrences in FigureApp.mlapp are a local
+#: variable for the x-range of the plot and a tooltip about it — a different
+#: thing with the same name.
+#:
+#: Nothing else in this list yet. A parameter belongs here only once it has
+#: been shown to be unread, not because it looks unused.
+DEAD_PARAMETERS = ("tmax",)
+
+
+def find_dead_parameters(
+    db_path: Path | str, names: tuple[str, ...] = DEAD_PARAMETERS
+) -> list[dict]:
+    """Where each of `names` still sits, with the rows it occupies."""
+    found = []
+    with get_connection(db_path, readonly=True) as conn:
+        for name in names:
+            row = conn.execute(
+                "SELECT parameterID FROM parameterTab WHERE name = ?", (name,)
+            ).fetchone()
+            if row is None:
+                continue
+            parameter_id = row["parameterID"]
+            counts = {
+                table: conn.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE parameterID = ?",
+                    (parameter_id,),
+                ).fetchone()[0]
+                for table in (
+                    "default_modelTab",
+                    "model_parameterTab",
+                    "project_parameterTab",
+                    "default_bioreactorTab",
+                    "process_parameterTab",
+                    "parameter_controlmodesTab",
+                )
+            }
+            found.append({"name": name, "parameterID": parameter_id, **counts})
+    return found
+
+
+def remove_dead_parameters(
+    db_path: Path | str, names: tuple[str, ...] = DEAD_PARAMETERS, *, dry_run: bool = True
+) -> dict:
+    """Drop a parameter and every value of it. One transaction.
+
+    Separate from `repair()` on purpose: that function fixes what is wrong,
+    this one removes what is merely pointless, and the two should not be one
+    switch. Idempotent — a parameter that is already gone is not an error.
+    """
+    found = find_dead_parameters(db_path, names)
+    report = {"parameters": found, "applied": not dry_run, "rows": 0}
+    if dry_run or not found:
+        return report
+
+    with get_connection(db_path) as conn:
+        for entry in found:
+            for table in (
+                "default_modelTab",
+                "model_parameterTab",
+                "project_parameterTab",
+                "default_bioreactorTab",
+                "process_parameterTab",
+                "parameter_controlmodesTab",
+            ):
+                report["rows"] += conn.execute(
+                    f"DELETE FROM {table} WHERE parameterID = ?",
+                    (entry["parameterID"],),
+                ).rowcount
+            report["rows"] += conn.execute(
+                "DELETE FROM parameterTab WHERE parameterID = ?", (entry["parameterID"],)
+            ).rowcount
+        violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        raise RuntimeError(f"removing dead parameters left foreign key violations: {violations}")
+    return report
+
+
 def repair(
     db_path: Path | str,
     *,

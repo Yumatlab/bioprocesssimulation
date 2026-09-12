@@ -377,7 +377,8 @@ def test_load_project_info_rejects_unknown_project(db_copy: Path):
 
 def test_load_phases_reads_everything_in_one_go(db_copy: Path):
     setup = load_phases(db_copy, PROJECT_WITH_PHASES)
-    assert len(setup.p) == 280
+    # 279 since tmax was dropped; it was 280 while the database carried it.
+    assert len(setup.p) == 279
     assert setup.p["NStw"] == 1000.0
     assert len(setup.phases) == 5
     # Free table-wide, not only inside the project — processID is the

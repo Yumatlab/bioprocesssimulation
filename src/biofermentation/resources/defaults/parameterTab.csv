@@ -229,7 +229,6 @@ parameterID,categoryID,name,tex,unit,tex_unit,type,internal_order,external_order
 228,14,pHLmaxgr,pH_{Lmaxgr},-,-,editfield,7,1407
 229,15,deltatsec,\Deltat_{sec},s,s,editfield,1,1501
 230,15,speedfactor,Factor_{speed},,,editfield,2,1502
-231,15,tmax,t_{max},h,h,editfield,3,1503
 232,15,f_Inoc,f_{Inoculation},,,switch,4,1504
 233,16,aP1script,a_{P1script},1/h,h^{-1},editfield,1,1601
 234,16,aP1trans,a_{P1trans},1/h,h^{-1},editfield,2,1602

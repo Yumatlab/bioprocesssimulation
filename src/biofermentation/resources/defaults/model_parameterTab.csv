@@ -187,7 +187,6 @@ model_parameterID,modelID,parameterID,value,description
 21796,1,228,9.0,Maximum pH required for growth
 21797,1,229,2.0,Calculation interval
 21798,1,230,1.0,Speed factor of simulation
-21799,1,231,5.0,Time limit for cultivation
 21800,1,232,0.0,Inoculation flag
 21801,1,249,1469.0,Maximum value of kLa
 21802,1,250,2.5,Minimum value of kLa
@@ -448,7 +447,6 @@ model_parameterID,modelID,parameterID,value,description
 22623,2,228,9.0,Maximum pH required for growth
 22624,2,229,2.0,Calculation interval
 22625,2,230,1.0,Speed factor of simulation
-22626,2,231,5.0,Time limit for cultivation
 22627,2,232,0.0,Inoculation flag
 22628,2,233,104.0,
 22629,2,234,15.04,
@@ -728,7 +726,6 @@ model_parameterID,modelID,parameterID,value,description
 23249,5,228,9.0,Maximum pH required for growth
 23250,5,229,2.0,Calculation interval
 23251,5,230,1.0,Speed factor of simulation
-23252,5,231,5.0,Time limit for cultivation
 23253,5,232,0.0,Inoculation flag
 23254,5,233,104.0,
 23255,5,234,15.04,

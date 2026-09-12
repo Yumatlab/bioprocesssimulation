@@ -23,7 +23,8 @@ happens only with --remove-broken-projects, and is listed either way.
 import argparse
 from pathlib import Path
 
-from biofermentation.db.repair import repair
+from biofermentation.db.connection import backup_database
+from biofermentation.db.repair import DEAD_PARAMETERS, remove_dead_parameters, repair
 from biofermentation.resources import default_database
 
 
@@ -41,12 +42,28 @@ def main() -> int:
         action="store_true",
         help="also delete projects whose parameters were never written",
     )
+    parser.add_argument(
+        "--remove-dead-parameters",
+        action="store_true",
+        help=f"also drop parameters nothing reads ({', '.join(DEAD_PARAMETERS)})",
+    )
     args = parser.parse_args()
 
     target = args.database or default_database(create=False)
     if not target.is_file():
         print(f"no database at {target}")
         return 1
+
+    if not args.dry_run:
+        # Before anything is deleted, and through SQLite's backup API so a
+        # write-ahead log comes with it.
+        print(f"  backup            {backup_database(target, '.pre-repair.db')}")
+
+    if args.remove_dead_parameters or args.dry_run:
+        dead = remove_dead_parameters(target, dry_run=not args.remove_dead_parameters)
+        for entry in dead["parameters"]:
+            verb = "removed" if dead["applied"] else "would be removed"
+            print(f"  dead parameter    {entry['name']:10s} — {verb}")
 
     report = repair(
         target,

@@ -204,6 +204,18 @@ Deshalb stehen sie als `LOG_COLUMNS` in `migrate.py`.
    Phasenraster und Plotmarkierungen dieselbe kennen. Zwei Phasen derselben
    Liste auf derselben Nummer bleiben ein Fehler und scheitern weiter laut.
 
+7. **`tmax` war ein Parameter, den nichts liest.** Kategorie „Settings",
+   `reading_rate` = `invisible`, also in keinem Dialog sichtbar — und in
+   keiner Formel: weder die Python-Modelle noch die MATLAB-Quellen greifen
+   ihn ab. Die beiden Fundstellen in `FigureApp.mlapp` sind eine lokale
+   Variable für den x-Bereich des Plots und ein Tooltip dazu, gleicher Name,
+   andere Sache. Er stand in `parameterTab`, in beiden Organismus-Defaults, in
+   drei Modellen und in fünf Projekten und entschied nirgends etwas.
+   Entfernt mit `repair.remove_dead_parameters()` — getrennt von `repair()`,
+   weil das Falsches richtigstellt und dies Überflüssiges wegnimmt.
+   **Die Referenz-CSVs behalten ihn**: sie halten fest, was der MATLAB-Lauf
+   hatte, nicht was diese Datenbank haben soll.
+
 Die produktive DB hatte zusätzlich eine inkonsistente Freelist
 (`integrity_check` meldete vier nie benutzte Seiten). Das Template ist über
 `VACUUM INTO` erzeugt und dadurch bereinigt.

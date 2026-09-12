@@ -91,9 +91,14 @@ def test_the_half_written_projects_are_found(db_copy: Path):
 
 
 def test_project_732_is_the_interrupted_write(db_copy: Path):
-    """42 of 250 rows, contiguous, ending on the highest id ever assigned."""
+    """42 rows, contiguous, ending on the highest id ever assigned.
+
+    MATLAB was writing 250 of them. The expectation is 249 today because
+    `tmax` has since been dropped from the model — the 42 that were written
+    are history and do not change, what they are measured against does.
+    """
     row = next(r for r in find_broken_projects(db_copy) if r["projectID"] == 732)
-    assert (row["parameters"], row["expected"]) == (42, 250)
+    assert (row["parameters"], row["expected"]) == (42, 249)
 
     with sqlite3.connect(f"file:{db_copy}?mode=ro", uri=True) as conn:
         lo, hi, n = conn.execute(
@@ -212,3 +217,73 @@ def test_the_repaired_database_still_runs_both_models(db_copy: Path):
         state = run_simulation(organism, p, 20)
         assert state.idx == 20
         assert state.v.cXL[20] > 0
+
+
+# ------------------------------------------------- parameters nobody reads --
+
+
+def test_the_template_carries_no_parameter_nothing_reads():
+    """tmax is gone from the shipped database; the list is empty from here on."""
+    from biofermentation.db.repair import find_dead_parameters
+
+    assert find_dead_parameters(TEMPLATE_DB) == []
+
+
+def test_a_dead_parameter_is_removed_everywhere_it_sat(tmp_path):
+    """Put it back the way the template carried it, then take it out again."""
+    import sqlite3
+
+    from biofermentation.db.repair import find_dead_parameters, remove_dead_parameters
+
+    target = tmp_path / "SimulationAppDB.db"
+    shutil.copy(TEMPLATE_DB, target)
+    with sqlite3.connect(target) as conn:
+        conn.execute(
+            "INSERT INTO parameterTab (parameterID, categoryID, name, tex, unit, tex_unit, "
+            "type, internal_order, external_order) VALUES (231, 15, 'tmax', 't_{max}', 'h', "
+            "'h', 'editfield', 3, 1503)"
+        )
+        conn.execute(
+            "INSERT INTO default_modelTab (organismID, parameterID, value, description) "
+            "VALUES (1, 231, 5.0, 'Time limit for cultivation')"
+        )
+        conn.execute(
+            "INSERT INTO project_parameterTab (projectID, parameterID, value) "
+            "VALUES (716, 231, 5.0)"
+        )
+
+    assert find_dead_parameters(target)[0]["name"] == "tmax"
+    report = remove_dead_parameters(target, dry_run=False)
+    assert report["rows"] == 3
+    assert find_dead_parameters(target) == []
+
+    # And again: a parameter that is already gone is not an error.
+    assert remove_dead_parameters(target, dry_run=False)["rows"] == 0
+
+
+def test_a_dry_run_removes_nothing(tmp_path):
+    import sqlite3
+
+    from biofermentation.db.repair import remove_dead_parameters
+
+    target = tmp_path / "SimulationAppDB.db"
+    shutil.copy(TEMPLATE_DB, target)
+    with sqlite3.connect(target) as conn:
+        conn.execute(
+            "INSERT INTO parameterTab (parameterID, categoryID, name) VALUES (231, 15, 'tmax')"
+        )
+    report = remove_dead_parameters(target)
+    assert report["applied"] is False
+    assert report["parameters"][0]["name"] == "tmax"
+    with sqlite3.connect(target) as conn:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM parameterTab WHERE name = 'tmax'"
+        ).fetchone()[0] == 1
+
+
+def test_the_reference_run_keeps_its_record_of_tmax():
+    """The reference CSVs are what the MATLAB run had, not what this database
+    should have. They are evidence and stay as they are — the comparison
+    builds its state from them and never asks the database."""
+    reference = REPO_ROOT / "tests" / "reference_data" / "ecoli_reference_p.csv"
+    assert "tmax" in reference.read_text(encoding="utf-8")
