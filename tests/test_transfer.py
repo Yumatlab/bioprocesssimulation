@@ -56,6 +56,87 @@ def test_a_bioreactor_round_trips_through_yaml(db, tmp_path):
     assert again.manufacturer == definition.manufacturer
 
 
+def test_an_organism_reports_what_its_parameters_mean(db):
+    from biofermentation.db.definitions import organism_parameters
+
+    rows = organism_parameters(db, "Escherichia coli")
+    assert len(rows) > 100
+    assert {"parametername", "tex", "unit", "categoryname", "reading_rate", "value"} <= set(rows[0])
+    sections = [row["categorysection"] for row in rows]
+    assert sections == sorted(sections)
+
+
+def test_an_organism_says_what_stands_on_it(db):
+    from biofermentation.db.definitions import organism_usage
+
+    assert organism_usage(db, "Escherichia coli")["projects"] > 0
+    with pytest.raises(LookupError, match="Nonsense"):
+        organism_usage(db, "Nonsense")
+
+
+def test_saving_default_values_touches_nothing_else(db):
+    """An editor that changes four numbers should not rewrite the categories,
+    the variables and the models on its way out."""
+    from biofermentation.db.definitions import organism_parameters, save_organism_parameters
+
+    before = export_definition(db, "Escherichia coli")
+    name = organism_parameters(db, "Escherichia coli")[0]["parametername"]
+
+    result = save_organism_parameters(db, "Escherichia coli", {name: 0.25, "nonsense": 1.0})
+    assert result == {"parameters": 1, "unknown_parameters": 1}
+
+    after = export_definition(db, "Escherichia coli")
+    assert [c.name for c in after.categories] == [c.name for c in before.categories]
+    assert [v.name for v in after.variables] == [v.name for v in before.variables]
+    assert [m.name for m in after.models] == [m.name for m in before.models]
+    assert next(p.default for p in after.parameters if p.name == name) == pytest.approx(0.25)
+
+
+def test_a_rename_moves_the_organism_rather_than_copying_it(db):
+    """Everything references organismID, so a rename is one UPDATE. Going
+    through import_definition would key on the name and leave two."""
+    from biofermentation.db.definitions import list_organisms, organism_usage, update_organism
+
+    before = organism_usage(db, "Escherichia coli")
+    update_organism(db, "Escherichia coli", new_name="E. coli K-12", description="a strain")
+
+    names = {row["name"] for row in list_organisms(db)}
+    assert "E. coli K-12" in names
+    assert "Escherichia coli" not in names
+    assert len(names) == 2
+    # The models and projects came with it — they never held the name.
+    assert organism_usage(db, "E. coli K-12") == before
+
+    with pytest.raises(ValueError, match="already exists"):
+        update_organism(db, "E. coli K-12", new_name="Pichia pastoris")
+
+
+def test_an_organism_in_use_cannot_be_deleted(db):
+    from biofermentation.db.definitions import delete_organism
+
+    with pytest.raises(ValueError, match="still used"):
+        delete_organism(db, "Escherichia coli")
+
+
+def test_a_copied_organism_can_be_deleted_again(db):
+    """default_modelTab is the one reference the schema gives no cascade."""
+    import sqlite3
+
+    from biofermentation.db.definitions import delete_organism, import_definition
+
+    copy = export_definition(db, "Escherichia coli")
+    copy.display_name, copy.name, copy.models = "E. coli K-12", "ecoli_k12", []
+    import_definition(db, copy)
+
+    assert delete_organism(db, "E. coli K-12")["defaults"] > 100
+    with sqlite3.connect(db) as conn:
+        orphans = conn.execute(
+            "SELECT COUNT(*) FROM default_modelTab WHERE organismID NOT IN "
+            "(SELECT organismID FROM organismTab)"
+        ).fetchone()[0]
+    assert orphans == 0
+
+
 def test_a_vessel_reports_what_its_parameters_mean(db):
     """The transfer package carries values; a form needs the labels too."""
     from biofermentation.db import bioreactor_parameters

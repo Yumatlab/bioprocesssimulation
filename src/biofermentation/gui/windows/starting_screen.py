@@ -96,6 +96,7 @@ class StartingScreen(QWidget):
 
     #: What the Library button offers, in order. None is a separator.
     LIBRARY_ENTRIES = (
+        "Organisms…",
         "Import organism…",
         "Export organism…",
         None,

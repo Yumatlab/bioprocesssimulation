@@ -135,7 +135,9 @@ class SimulationApp(QApplication):
         )
 
         window = self.starting_screen
-        if name == "Bioreactors…":
+        if name == "Organisms…":
+            self.manage_organisms()
+        elif name == "Bioreactors…":
             self.manage_bioreactors()
         elif name == "Import organism…":
             import_organism_file(window, self.db_path)
@@ -158,6 +160,12 @@ class SimulationApp(QApplication):
 
         dialog = BioreactorManager(self.db_path, parent=self.starting_screen)
         dialog.exec()
+
+    def manage_organisms(self) -> None:
+        """Copy an organism and change its values — the kinetics stay put."""
+        from .dialogs.organisms import OrganismManager
+
+        OrganismManager(self.db_path, parent=self.starting_screen).exec()
 
     def import_project(self) -> int | None:
         """Read an export back in and open what it produced."""

@@ -580,30 +580,49 @@ tunen.
 
 ---
 
-## Einen Bioreaktor anlegen — ohne Python
+## Kessel und Organismen anlegen — ohne Python
 
-**Library → Bioreactors…** auf dem Startbildschirm. Liste links, Kessel rechts,
-vier Handlungen: auswählen, aus einem bestehenden einen neuen machen,
-bearbeiten, löschen.
+Zwei Dialoge derselben Bauart, **Library → Bioreactors…** und **Organisms…**
+auf dem Startbildschirm. Liste links, das Objekt rechts, vier Handlungen:
+auswählen, aus einem bestehenden einen neuen machen, bearbeiten, löschen.
 
-- **Neu heißt kopieren.** Welche Parameter einen Kessel ausmachen, ist nichts,
-  wonach ein Formular fragen sollte — der Kessel daneben weiß es. Ein leeres
-  Formular hieße, den Anwender das Modell auswendig können zu lassen.
-- **Eine Änderung erreicht nur neue Projekte.** `create_project` kopiert die
-  Werte in `project_parameterTab`, ein laufendes Projekt trägt seine eigene
-  Kopie — genau das macht einen gespeicherten Lauf reproduzierbar. Der Dialog
-  sagt es in der Kopfzeile, sonst würde es jemand anders herum erwarten.
-- **Ein Kessel, auf dem etwas steht, wird nicht gelöscht.** Die Kaskade die
-  Modelle mitnehmen zu lassen ist der Weg, auf dem die MATLAB-Version Projekte
-  verloren hat; `delete_bioreactor` fragt vorher `bioreactor_usage`.
+- **Neu heißt kopieren.** Welche Parameter einen Kessel oder einen Organismus
+  ausmachen, ist nichts, wonach ein Formular fragen sollte — das Objekt
+  daneben weiß es. Ein leeres Formular hieße, den Anwender das Datenmodell
+  auswendig können zu lassen.
+- **Eine Änderung erreicht nur Neues.** `create_model` kopiert die Werte in
+  `model_parameterTab`, `create_project` von dort in `project_parameterTab`:
+  zwei Lagen Kopie, und beide sind der Grund, warum ein gespeicherter Lauf
+  reproduzierbar ist. Beide Dialoge sagen es in der Kopfzeile, sonst würde es
+  jemand anders herum erwarten.
+- **Was benutzt wird, wird nicht gelöscht.** Die Kaskade die Modelle
+  mitnehmen zu lassen ist der Weg, auf dem die MATLAB-Version Projekte
+  verloren hat; beide `delete_*` fragen vorher `*_usage`.
+- **Die Kinetik ist kein Datensatz.** `organismTab.function_file` zeigt auf das
+  Modell-Plugin; der Dialog zeigt den Namen und lässt ihn nicht ändern. Eine
+  Kopie behält die Kinetik, aus der sie kopiert wurde — neue Bilanzgleichungen
+  sind ein Plugin, kein Formular. Genau an dieser Linie verläuft die Grenze
+  zwischen „ohne Python" und „mit".
+- **Ein Umbenennen ist ein `UPDATE`.** Modelle und Projekte zeigen auf
+  `organismID`, nicht auf den Namen. Über `import_definition` zu gehen würde
+  auf den Anzeigenamen schlüsseln und den alten Organismus neben dem neuen
+  stehen lassen.
+- **`save_organism_parameters` fasst nur die Werte an.** Kategorien,
+  Variablen und Modelle beim Speichern von vier Zahlen mitzuschreiben wäre
+  viel Risiko für wenig.
+- **`default_modelTab.organismID` ist die einzige Referenz ohne
+  `ON DELETE CASCADE`** — diese Zeilen löscht `delete_organism` deshalb
+  selbst. Kein von Hand nachgebautes Kaskadieren, sondern die eine Stelle, für
+  die das Schema keines erklärt.
 
-**Ein neuer Kessel allein ist nicht auswählbar.** Ein Projekt entsteht aus
+**Ein neuer Kessel oder Organismus allein ist nicht auswählbar.** Ein Projekt entsteht aus
 einem **Modell** — Organismus × Kessel —, und `create_project` liest nichts
 außer `model_parameterTab`. Bis dahin konnte niemand ein Modell anlegen: der
 Import schreibt `modelTab`-Zeilen ohne `bioreactorID`, und MATLABs
 ModelCreator ist nicht portiert. `create_model()` macht die drei Schritte in
-**einer** Transaktion, und der Knopf „Make selectable…" steht neben dem Kessel,
-den er betrifft.
+**einer** Transaktion, und beide Dialoge haben den Knopf „Make selectable…"
+neben dem Objekt, das er betrifft — der eine fragt nach dem Organismus, der
+andere nach dem Kessel.
 
 **Der Kessel gewinnt, wenn beide Seiten denselben Parameter nennen.** Er darf
 nur einmal vorkommen: `project_parameterTab` ist `UNIQUE (projectID,

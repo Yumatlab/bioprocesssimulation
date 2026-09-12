@@ -35,6 +35,162 @@ def list_organisms(db_path: Path | str) -> list[dict]:
         ]
 
 
+def organism_parameters(db_path: Path | str, name: str) -> list[dict]:
+    """The organism's default values with what an editor needs to show them.
+
+    `export_definition` is the transfer contract and carries the whole
+    organism; a form needs the symbol, the unit and the category, ordered the
+    way the other parameter dialogs order things.
+    """
+    with get_connection(db_path, readonly=True) as conn:
+        row = conn.execute("SELECT organismID FROM organismTab WHERE name = ?", (name,)).fetchone()
+        if row is None:
+            raise LookupError(f"no organism named {name!r} in the database")
+        return [
+            dict(entry)
+            for entry in conn.execute(
+                """
+                SELECT p.name AS parametername, p.tex, p.unit, p.type,
+                       c.name AS categoryname, c.section AS categorysection,
+                       c.reading_rate, d.value, d.description
+                  FROM default_modelTab d
+                  JOIN parameterTab p ON p.parameterID = d.parameterID
+                  JOIN categoryTab c ON c.categoryID = p.categoryID
+                 WHERE d.organismID = ?
+                 ORDER BY c.section, c.name, p.internal_order, p.parameterID
+                """,
+                (row["organismID"],),
+            )
+        ]
+
+
+def organism_usage(db_path: Path | str, name: str) -> dict[str, int]:
+    """How many models and projects stand on this organism."""
+    with get_connection(db_path, readonly=True) as conn:
+        row = conn.execute("SELECT organismID FROM organismTab WHERE name = ?", (name,)).fetchone()
+        if row is None:
+            raise LookupError(f"no organism named {name!r} in the database")
+        organism_id = row["organismID"]
+        return {
+            "models": conn.execute(
+                "SELECT COUNT(*) FROM modelTab WHERE organismID = ?", (organism_id,)
+            ).fetchone()[0],
+            "projects": conn.execute(
+                "SELECT COUNT(*) FROM projectTab WHERE organismID = ?", (organism_id,)
+            ).fetchone()[0],
+        }
+
+
+def save_organism_parameters(
+    db_path: Path | str, name: str, values: dict[str, float]
+) -> dict[str, int]:
+    """Write default values back. One transaction, nothing else touched.
+
+    The narrow counterpart of import_definition: an editor that changes four
+    numbers should not rewrite the categories, the variables and the models
+    on its way out. Parameters the organism does not have are reported, not
+    created — default_modelTab is a value per parameter the organism already
+    defines.
+    """
+    with get_connection(db_path) as conn:
+        row = conn.execute("SELECT organismID FROM organismTab WHERE name = ?", (name,)).fetchone()
+        if row is None:
+            raise LookupError(f"no organism named {name!r} in the database")
+        organism_id = row["organismID"]
+
+        known = {
+            entry["name"]: entry["parameterID"]
+            for entry in conn.execute(
+                """
+                SELECT p.parameterID, p.name
+                  FROM default_modelTab d
+                  JOIN parameterTab p ON p.parameterID = d.parameterID
+                 WHERE d.organismID = ?
+                """,
+                (organism_id,),
+            )
+        }
+        written = 0
+        for parameter, value in values.items():
+            if parameter not in known:
+                continue
+            conn.execute(
+                "UPDATE default_modelTab SET value = ? WHERE organismID = ? AND parameterID = ?",
+                (float(value), organism_id, known[parameter]),
+            )
+            written += 1
+    return {"parameters": written, "unknown_parameters": len(values) - written}
+
+
+def update_organism(
+    db_path: Path | str, name: str, *, new_name: str | None = None, description: str | None = None
+) -> None:
+    """Rename an organism or change its description. One transaction.
+
+    A rename is one UPDATE: models and projects reference `organismID`, not
+    the name. Going through `import_definition` would key on the display name
+    and leave the old organism standing beside the new one.
+    """
+    with get_connection(db_path) as conn:
+        row = conn.execute("SELECT organismID FROM organismTab WHERE name = ?", (name,)).fetchone()
+        if row is None:
+            raise LookupError(f"no organism named {name!r} in the database")
+        if new_name and new_name != name:
+            taken = conn.execute(
+                "SELECT COUNT(*) FROM organismTab WHERE name = ?", (new_name,)
+            ).fetchone()[0]
+            if taken:
+                raise ValueError(f"an organism named {new_name!r} already exists")
+            conn.execute(
+                "UPDATE organismTab SET name = ? WHERE organismID = ?",
+                (new_name, row["organismID"]),
+            )
+        conn.execute(
+            "UPDATE organismTab SET description = ? WHERE organismID = ?",
+            (description, row["organismID"]),
+        )
+
+
+def delete_organism(db_path: Path | str, name: str) -> dict[str, int]:
+    """Remove an organism and the rows that belong to it alone. One transaction.
+
+    Refuses while a model or a project stands on it, for the same reason as
+    with a vessel.
+
+    `default_modelTab.organismID` is the one reference without ON DELETE
+    CASCADE, so those rows are deleted here — not as a hand-built cascade, but
+    because the schema declares none for them. Everything else
+    (variable_handlingTab, process_variableTab) SQLite takes itself.
+    """
+    usage = organism_usage(db_path, name)
+    if usage["models"] or usage["projects"]:
+        raise ValueError(
+            f"organism {name!r} is still used by {usage['models']} model(s) and "
+            f"{usage['projects']} project(s); delete those first"
+        )
+
+    with get_connection(db_path) as conn:
+        organism_id = conn.execute(
+            "SELECT organismID FROM organismTab WHERE name = ?", (name,)
+        ).fetchone()["organismID"]
+        defaults = conn.execute(
+            "DELETE FROM default_modelTab WHERE organismID = ?", (organism_id,)
+        ).rowcount
+        conn.execute("DELETE FROM organismTab WHERE organismID = ?", (organism_id,))
+    return {"defaults": defaults}
+
+
+def free_organism_name(db_path: Path | str, name: str) -> str:
+    """`name`, or the first "name (2)" that is not taken."""
+    taken = {row["name"] for row in list_organisms(db_path)}
+    if name not in taken:
+        return name
+    number = 2
+    while f"{name} ({number})" in taken:
+        number += 1
+    return f"{name} ({number})"
+
+
 def export_definition(db_path: Path | str, organism_name: str) -> OrganismDefinition:
     """Read an organism out of the database as a definition."""
     with get_connection(db_path, readonly=True) as conn:

@@ -1118,3 +1118,82 @@ def test_deleting_from_the_dialog_takes_the_values_with_it(reactors, db):
     reactors.list.setCurrentRow(1)
     assert reactors.delete_selected(confirmed=True) is True
     assert {row["name"] for row in list_bioreactors(db)} == {"BIOSTAT ED"}
+
+
+# -------------------------------------------------------- the organisms --
+
+
+@pytest.fixture
+def organisms(db, qapp):
+    from biofermentation.gui.dialogs.organisms import OrganismManager
+
+    return OrganismManager(db)
+
+
+def test_the_organism_dialog_shows_the_values_and_names_the_kinetics(organisms):
+    """The kinetics are a plugin, not data — the dialog says so rather than
+    offering a field that could point anywhere."""
+    assert organisms.list.count() == 2
+    assert organisms._current == "Escherichia coli"
+    assert len(organisms._boxes) > 100
+    assert "Escherichia_coli" in organisms.kinetics_label.text()
+    assert organisms.reservoirs_label.text() == "1"
+    assert organisms.delete_button.isEnabled() is False
+
+
+def test_a_copied_organism_keeps_the_kinetics_and_drops_the_models(organisms, db):
+    """Same equations, its own numbers — that is what a copy is for. The
+    models belong to the original; the copy gets the one it needs."""
+    from biofermentation.db.definitions import export_definition
+    from biofermentation.db.project import list_models
+
+    assert organisms.create_from_selected("E. coli K-12") == "E. coli K-12"
+    copy = export_definition(db, "E. coli K-12")
+    source = export_definition(db, "Escherichia coli")
+
+    assert copy.function_file == source.function_file
+    assert len(copy.parameters) == len(source.parameters)
+    assert all(row["organism_name"] != "E. coli K-12" for row in list_models(db))
+    assert organisms.delete_button.isEnabled() is True, "nothing stands on it yet"
+
+
+def test_a_copied_organism_reaches_a_project_through_a_model(organisms, db, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    from biofermentation.db import create_project, load_phases
+
+    monkeypatch.setattr(QMessageBox, "information", lambda *args, **kwargs: None)
+    organisms.create_from_selected("E. coli K-12")
+    name = next(iter(organisms._boxes))
+    organisms._boxes[name].setValue(0.25)
+    assert organisms.save(announce=False) is True
+
+    model_id = organisms.create_model_for_selected(bioreactor_id=1, name="K-12 in BIOSTAT ED")
+    assert model_id is not None
+    project = create_project(db, "On the copy", model_id)
+    assert load_phases(db, project).p[name] == pytest.approx(0.25)
+
+
+def test_renaming_an_organism_keeps_its_models(organisms, db, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    from biofermentation.db.definitions import organism_usage
+
+    monkeypatch.setattr(QMessageBox, "information", lambda *args, **kwargs: None)
+    before = organism_usage(db, "Escherichia coli")
+    organisms.name_edit.setText("E. coli (HAW)")
+    assert organisms.save() is True
+
+    assert organisms._current == "E. coli (HAW)"
+    assert organism_usage(db, "E. coli (HAW)") == before
+
+
+def test_a_name_that_is_taken_is_refused_for_organisms(organisms, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args, **kwargs: None)
+    assert organisms.create_from_selected("Pichia pastoris") is None
+    assert organisms.list.count() == 2
+
+    organisms.name_edit.setText("Pichia pastoris")
+    assert organisms.save() is False

@@ -2,6 +2,7 @@
 
 from .bioreactors import BioreactorManager
 from .closing import Choice, ClosingDialog
+from .organisms import OrganismManager
 from .parameters import (
     ControllerParametersDialog,
     ParameterDialog,
@@ -15,6 +16,7 @@ __all__ = [
     "ClosingDialog",
     "ConditionEditor",
     "ControllerParametersDialog",
+    "OrganismManager",
     "ParameterDialog",
     "PhaseEditor",
     "PhaseParameterDialog",
