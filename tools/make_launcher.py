@@ -23,6 +23,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 APP_NAME = "Biofermentation Simulation"
 BUNDLE_ID = "de.haw-hamburg.biofermentation"
+#: Where a launch that fails before its first window says what happened.
+LOG = "/tmp/biofermentation-launch.log"
 
 
 def interpreter() -> Path:
@@ -58,6 +60,28 @@ def make_macos_app(target: Path) -> Path:
     launcher.write_text(
         "#!/bin/sh\n"
         "# Written by tools/make_launcher.py — edit that, not this.\n"
+        "#\n"
+        "# Two things this script does that look superfluous and are not:\n"
+        "#\n"
+        "# It forces the native architecture on Apple Silicon. The interpreter\n"
+        "# of a venv is a universal binary, and a bundle started through\n"
+        "# LaunchServices inherits the architecture preference of whoever\n"
+        "# asked for it — which can be x86_64. numpy\'s extension modules are\n"
+        "# built for one architecture, so the import fails and the window never\n"
+        "# appears.\n"
+        "#\n"
+        "# The hardware is asked, not the process: under Rosetta `uname -m`\n"
+        "# answers x86_64, so deciding from it would pick exactly the wrong\n"
+        "# slice. hw.optional.arm64 is a property of the machine.\n"
+        "#\n"
+        "# The log is the other half: a bundle that dies before its first\n"
+        "# window has nowhere to say why. Everything the application prints\n"
+        "# ends up in that file.\n"
+        f'exec >>"{LOG}" 2>&1\n'
+        'echo "=== $(date) ==="\n'
+        'if [ "$(/usr/sbin/sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then\n'
+        f'    exec /usr/bin/arch -arm64 "{interpreter()}" -m biofermentation.gui.app "$@"\n'
+        "fi\n"
         f'exec "{interpreter()}" -m biofermentation.gui.app "$@"\n',
         encoding="utf-8",
     )
@@ -79,6 +103,8 @@ def make_macos_app(target: Path) -> Path:
         # Without this the window is drawn at half resolution and every label
         # in it looks like a screenshot of a label.
         "NSHighResolutionCapable": True,
+        # Never under Rosetta: see the note in the launch script.
+        "LSRequiresNativeExecution": True,
         "LSMinimumSystemVersion": "11.0",
     }
     (contents / "Info.plist").write_bytes(plistlib.dumps(plist))
@@ -117,6 +143,8 @@ def main() -> int:
 
     made = make_macos_app(target) if sys.platform == "darwin" else make_windows_shortcut(target)
     print(f"{made}\n  runs {interpreter()} -m biofermentation.gui.app")
+    if sys.platform == "darwin":
+        print(f"  log: {LOG}")
     return 0
 
 
