@@ -24,6 +24,7 @@ from biofermentation.gui.dialogs.export import ExportDialog, write_table, write_
 from biofermentation.gui.dialogs.parameters import (
     SECTION_ORDER,
     ControllerParametersDialog,
+    ModeBox,
     ParameterDialog,
 )
 from biofermentation.gui.dialogs.plot_settings import STANDARD, PlotSettingsDialog, VariableEditor
@@ -163,6 +164,54 @@ def test_the_sections_come_in_reading_order(window):
         sections,
         key=lambda name: SECTION_ORDER.index(name) if name in SECTION_ORDER else len(SECTION_ORDER),
     ), "a section appears twice, split by another one"
+
+
+def test_a_mode_is_a_list_of_names_not_a_number_field(window):
+    """Mode_pO2 = 3 says nothing; the database has called it pO2-Gasmix."""
+    dialog = ParameterDialog(
+        window.setup.p_meta, window.runner.state.p, started=False, modes=window.modes
+    )
+    box = dialog._boxes["Mode_pO2"]
+    assert isinstance(box, ModeBox)
+    names = [box.itemText(index) for index in range(box.count())]
+    assert names == ["Manual", "pO2-Agitation", "pO2-Aeration", "pO2-Gasmix", "pO2-Feed"]
+    assert isinstance(dialog._boxes["pHw"], ModeBox) is False, "a setpoint is still a number"
+
+
+def test_choosing_a_mode_reports_its_number(window):
+    """The names are for reading; what is stored stays the number."""
+    dialog = ParameterDialog(
+        window.setup.p_meta, window.runner.state.p, started=False, modes=window.modes
+    )
+    box = dialog._boxes["Mode_pO2"]
+    box.setValue(3)
+    assert box.currentText() == "pO2-Gasmix"
+    dialog.accept()
+    assert dialog.changes["Mode_pO2"] == 3.0
+
+
+def test_a_mode_the_database_does_not_name_is_kept(window):
+    """Better an entry reading "7 (unknown)" than silently becoming Manual."""
+    p = dict(window.runner.state.p)
+    p["Mode_pO2"] = 7.0
+    dialog = ParameterDialog(window.setup.p_meta, p, started=False, modes=window.modes)
+    box = dialog._boxes["Mode_pO2"]
+    assert box.value() == 7.0
+    assert "unknown" in box.currentText()
+    dialog.accept()
+    assert "Mode_pO2" not in dialog.changes, "nothing was touched"
+
+
+def test_the_log_writes_the_name_of_the_mode(window):
+    """A log that records "Mode_pO2 from 1 to 3" records nothing readable."""
+    before = window.modes["Mode_pO2"][int(window.runner.state.p["Mode_pO2"])]
+    window._apply_changes({"Mode_pO2": 3.0}, "Parameters")
+    line = window.log_view.entries[-1].message
+    assert f"from {before} to pO2-Gasmix" in line
+    assert "3.0" not in line
+
+    window._set_parameter("pHw", 6.9)
+    assert "6.900" in window.log_view.entries[-1].message
 
 
 def test_invisible_parameters_are_not_offered(window):
@@ -740,6 +789,28 @@ def test_a_phase_stores_only_what_was_changed(window):
     dialog.accept()
 
     assert phase.parameters == {"pO2w": pytest.approx(p["pO2w"] + 15)}
+
+
+def test_the_phase_summary_reads_in_names_not_in_numbers(window):
+    """The Parameter Update view is where a phase says what it will do."""
+    from biofermentation.gui.dialogs import PhaseParameterDialog
+
+    phase = window.setup.phases[-1]
+    phase.parameters = {}
+    phase.typeID = PhaseType.PARAMETER_UPDATE
+    dialog = PhaseParameterDialog(
+        phase, window.setup.p_meta, window.runner.state.p, modes=window.modes
+    )
+    before = window.modes["Mode_pO2"][int(window.runner.state.p["Mode_pO2"])]
+    dialog._boxes["Mode_pO2"].setValue(3)
+    assert f"Mode_pO2: {before} → pO2-Gasmix" in dialog.summary.toPlainText()
+
+    # A number keeps its decimals rather than collapsing to %g.
+    dialog._boxes["pO2w"].setValue(dialog._original["pO2w"] + 15)
+    assert "pO2w: " in dialog.summary.toPlainText()
+
+    dialog.accept()
+    assert phase.parameters["Mode_pO2"] == 3.0
 
 
 def test_the_reset_button_appears_only_on_a_changed_parameter(window):

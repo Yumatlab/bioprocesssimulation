@@ -40,6 +40,7 @@ from ...db import load_project_log, save_project_with_backup
 from ...db.models import ProjectSetup
 from ...resources import app_icon_path
 from ..settings import load_settings
+from ..values import format_value, mode_table
 from ..widgets import CONTROL_PANELS, ControllerView, ControlPanel, PhaseGrid, StatusLamp
 from ..widgets.log_view import OPERATION_EVENT, LogView
 from ..widgets.variable_pool import VariablePool
@@ -99,6 +100,9 @@ class ControlWindow(QMainWindow):
         # What this installation shows, read once here. A window keeps what it
         # was built with; the dialog says so rather than pretending otherwise.
         self.settings, self._settings_problem = load_settings()
+        # What the mode numbers are called. parameter_controlmodesTab is the
+        # only place that knows, and both the dialogs and the log need it.
+        self.modes = mode_table(setup.p_modes)
         # Set once the closing question has been answered, so the answer is
         # not asked for twice on the way out.
         self._leave_confirmed = False
@@ -590,7 +594,10 @@ class ControlWindow(QMainWindow):
         with self.runner.editing() as state:
             old = state.p.get(name)
             state.p[name] = value
-            self.note(f"Parameter {name} changed from {old} to {value}")
+            self.note(
+                f"Parameter {name} changed from {self._named(name, old)}"
+                f" to {self._named(name, value)}"
+            )
 
     def _set_dt(self, seconds: int) -> None:
         with self.runner.editing() as state:
@@ -695,12 +702,17 @@ class ControlWindow(QMainWindow):
             self.setup.p_meta,
             self.runner.state.p,
             started=self.runner.state.idx > 0,
+            modes=self.modes,
             parent=self,
         )
         with self.runner.editing():
             accepted = dialog.exec() == QDialog.DialogCode.Accepted
         if accepted:
             self._apply_changes(dialog.changes, "Parameters")
+
+    def _named(self, name: str, value) -> str:
+        """A parameter's value as it is read: a mode by name, else a number."""
+        return format_value(name, value, self.modes)
 
     def _apply_changes(self, changes: dict[str, float], what: str) -> None:
         """One guarded write for a whole dialog, not one per field."""
@@ -712,7 +724,8 @@ class ControlWindow(QMainWindow):
                 old = state.p.get(name)
                 state.p[name] = value
                 self.note(
-                    f"Parameter {name} has been changed from {old} to {value}",
+                    f"Parameter {name} has been changed from {self._named(name, old)}"
+                    f" to {self._named(name, value)}",
                     "Parameter Value Change",
                 )
         for panel in self.panels.values():
@@ -767,6 +780,7 @@ class ControlWindow(QMainWindow):
             parent=self,
             p_meta=self.setup.p_meta,
             p=self.runner.state.p,
+            modes=self.modes,
         )
         with self.runner.editing():
             accepted = dialog.exec() == QDialog.DialogCode.Accepted

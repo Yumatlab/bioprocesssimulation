@@ -337,6 +337,53 @@ war und abgeschaltet herumstand.
   Einstellung, die ändert, was das Fenster kann; ein gesperrtes Δt ohne
   Erklärung daneben liest sich als Defekt.
 
+### Ein Modus ist ein Name, eine Zahl ist eine Zahl
+
+`gui/values.py` ist die eine Stelle, durch die Phasenraster, Parameterdialoge
+und Log ihre Werte hindurchschreiben. Zwei Fragen, beide übers Lesen, nicht
+übers Rechnen.
+
+- **`Mode_pO2 = 3` sagt niemandem etwas**, und die Datenbank sagt seit jeher
+  „pO2-Gasmix" — in `parameter_controlmodesTab`. Die Regelpanels zeigen die
+  Namen von Anfang an; Parameterdialog, Phasendialog und Log druckten die
+  rohe Zahl, und ein Log, aus dem niemand herauslesen kann, was eingestellt
+  wurde, protokolliert nichts. `mode_table(setup.p_modes)` wird einmal im
+  Fenster gebaut und weitergereicht.
+- **`ModeBox` ist ein `QComboBox`, der `value`/`setValue`/`decimals`/
+  `valueChanged` beantwortet** — dieselbe Abmachung wie `SegmentedControl`
+  und `RotarySelector` bei den Panels: die Editoren tragen ihn, ohne zu
+  wissen, welche der beiden Sorten sie halten. `decimals()` ist 0, damit
+  `_differs` bei einem halben Schritt vergleicht; zwei Modi liegen eine ganze
+  Zahl auseinander.
+- **Eine Modusnummer, die die Datenbank nicht benennt, bleibt eine Zahl.** Sie
+  bekommt einen eigenen Eintrag „7 (unknown)", statt still zum ersten Modus
+  der Liste zu werden. Ein Rateversuch läse sich wie eine Tatsache.
+- **Die grüne Markierung eines geänderten Feldes trägt einen Typselektor.**
+  Ein Stylesheet ohne Selektor vererbt sich an die Kinder, und die
+  Auswahlliste einer Combobox *ist* ein Kind: grün eingefärbt nimmt sie die
+  Auswahlmarkierung mit — dieselbe Falle, der `default.qss` schon einen
+  Absatz widmet.
+- **Mindestens drei Nachkommastellen, und mehr, wo die Zahl mehr hat.**
+  `format_number` misst das, statt es zu raten: die erste Stelle, ab der
+  Runden den Wert nicht mehr ändert, ist die, die er hat. Zwei Stellen machten
+  aus einem 0,005-h-Timer „0.00 h" — eine Bedingung, die nie auslöst und
+  sofort auslöst.
+- **Eine gemessene Zeit wird gerundet, eine eingestellte nicht.** Die
+  Endzeit einer gelaufenen Phase kommt aus der Aufsummierung und trägt deren
+  Arithmetik hinter sich her: 8.502222222223 h sind 8,502 h mit Rauschen.
+  Der Timer daneben ist eine Zahl, die jemand eingetippt hat, und behält jede
+  Stelle. Deshalb `cap=3` für `condition.time` und die Vorgabe für alles
+  andere.
+
+### Eine gelaufene Phase ist ein Protokoll, kein Plan
+
+Abgeschlossene und laufende Phasen sind nicht mehr zu bearbeiten, nicht nur
+nicht zu löschen. Der Automat hat ihre Bedingungen bereits gelesen und ihre
+Parameter bereits angewandt; eine Änderung danach schriebe einen Plan, der
+den gelaufenen Prozess nicht beschreibt. Die beiden Gründe, aus denen eine
+Schaltfläche tot ist, sagen weiter Verschiedenes — „Pause the process to edit
+a phase" gegen „A running or completed phase cannot be edited".
+
 ### Was im Log steht, und was man davon sieht
 
 Drei Sorten Einträge und zwei Schalter darüber. **Parameter Value Change** ist

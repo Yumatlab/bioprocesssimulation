@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from ...control import EndCondition, PhaseStatus, StartCondition
 from ...db.models import Phase
+from ..values import format_number
 from .indicators import StatusLamp
 from .tex import tex_to_html
 
@@ -54,8 +55,12 @@ def condition_text(
     if type_id == EndCondition.TIMER:
         value = condition.value or 0.0
         if status_id in (PhaseStatus.ACTIVE, PhaseStatus.COMPLETED) and condition.time is not None:
-            return f"t = {condition.time:.2f} h ({value:.2f} h timer)"
-        return f"Timer ({value:.2f} h)"
+            # The timer is a number somebody typed and keeps every place it
+            # has; the time the phase actually ended is a measurement, and
+            # its tail is the arithmetic of the accumulation, not a decimal
+            # anyone set — 8.502222222223 h is 8.502 h with noise after it.
+            return f"t = {format_number(condition.time, cap=3)} h ({format_number(value)} h timer)"
+        return f"Timer ({format_number(value)} h)"
     return "-"
 
 
@@ -66,7 +71,7 @@ def _variable_text(condition, variables: dict[int, dict], operators: dict[int, s
         return "-"
     unit = variable.get("tex_unit") or ""
     name = variable.get("shorttex") or variable.get("name") or "?"
-    return f"{name} {symbol} {condition.value:.2f} {unit}".strip()
+    return f"{name} {symbol} {format_number(condition.value)} {unit}".strip()
 
 
 class PhasePanel(QGroupBox):
@@ -154,15 +159,17 @@ class PhasePanel(QGroupBox):
         self.lamp.set_status(phase.statusID or 1)
         self.lamp.setToolTip(statuses.get(phase.statusID, ""))
 
-        # A phase that has run, or is running, is part of the record. Deleting
-        # it would leave a process history that never happened.
+        # A phase that has run, or is running, is part of the record. Editing
+        # or deleting it would leave a process history that never happened —
+        # the automaton has already read its conditions and applied its
+        # parameters, so a change now would be rewriting what was done.
         self._finished = phase.statusID in (PhaseStatus.ACTIVE, PhaseStatus.COMPLETED)
         self.apply_editable()
 
         if phase.statusID == PhaseStatus.PENDING and phase.start.time is not None:
-            self.setToolTip(f"Start: t = {phase.start.time:.3f} h")
+            self.setToolTip(f"Start: t = {format_number(phase.start.time, cap=3)} h")
         elif phase.statusID == PhaseStatus.ACTIVE and phase.end.time is not None:
-            self.setToolTip(f"End: t = {phase.end.time:.3f} h")
+            self.setToolTip(f"End: t = {format_number(phase.end.time, cap=3)} h")
         else:
             self.setToolTip("")
 
@@ -176,10 +183,13 @@ class PhasePanel(QGroupBox):
         editable = getattr(self, "_editable", True)
         finished = getattr(self, "_finished", False)
 
-        self.edit_button.setEnabled(editable)
-        self.edit_button.setToolTip(
-            "Edit this phase" if editable else "Pause the process to edit a phase"
-        )
+        self.edit_button.setEnabled(editable and not finished)
+        if not editable:
+            self.edit_button.setToolTip("Pause the process to edit a phase")
+        elif finished:
+            self.edit_button.setToolTip("A running or completed phase cannot be edited")
+        else:
+            self.edit_button.setToolTip("Edit this phase")
 
         self.delete_button.setEnabled(editable and not finished)
         if not editable:

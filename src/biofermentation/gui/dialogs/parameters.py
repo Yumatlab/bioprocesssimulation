@@ -22,11 +22,10 @@ first step everything visible is editable; afterwards only the cyclic ones.
 That is why no new column was added to the database.
 """
 
-import math
-
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
@@ -43,6 +42,8 @@ from PySide6.QtWidgets import (
 )
 
 from ...control import PHASE_PARAMETERS, PhaseType
+from ..values import ModeTable, decimals_for, format_value, modes_of
+from ..widgets.indicators import select_data
 from ..widgets.tex import tex_label, tex_to_html
 
 #: reading_rate values that stay editable once the simulation has started.
@@ -58,17 +59,47 @@ INVISIBLE = "invisible"
 SECTION_ORDER = ("Parameters", "Organism", "Bioreactor", "General")
 
 
-def decimals_for(value: float, floor: int = 4, cap: int = 12) -> int:
-    """Enough places to show this value, at least `floor`.
+class ModeBox(QComboBox):
+    """A control mode by name, answering the calls a spin box answers.
 
-    A box with four decimals holds 1e-05 as 0.0000 and hands that back on the
-    next read: KD_gasmix appeared as "1e-05 → 0" in every phase, untouched,
-    because the field could not represent what was put into it.
+    `Mode_pO2 = 3` is not something anyone reads back; the database has called
+    it "pO2-Gasmix" all along. Because this box answers `value`, `setValue`,
+    `decimals` and `valueChanged`, the editors carry it without knowing which
+    of the two they hold — the same bargain `SegmentedControl` and
+    `RotarySelector` strike with `QComboBox` over in the control panels.
+
+    `decimals()` is 0, so `_differs` compares at half a step: two modes are a
+    whole number apart, and no two of them are half of one.
     """
-    if not value or not math.isfinite(value):
-        return floor
-    magnitude = math.floor(math.log10(abs(value)))
-    return min(cap, max(floor, 3 - magnitude))
+
+    valueChanged = Signal(float)
+
+    def __init__(self, value: float, labels: dict[int, str], parent=None):
+        super().__init__(parent)
+        for number in sorted(labels):
+            self.addItem(labels[number], int(number))
+        if not select_data(self, value):
+            # A stored number no mode carries. Shown as itself rather than
+            # silently turned into the first mode in the list.
+            self.addItem(f"{int(value)} (unknown)", int(value))
+            self.setCurrentIndex(self.count() - 1)
+        self.currentIndexChanged.connect(lambda _=0: self.valueChanged.emit(self.value()))
+        self.setMinimumWidth(150)
+
+    def value(self) -> float:
+        return float(self.currentData())
+
+    def setValue(self, value: float) -> None:  # noqa: N802 - the spin box API
+        select_data(self, value)
+
+    def decimals(self) -> int:
+        return 0
+
+
+def _field(value: float, name: str = "", modes: ModeTable | None = None):
+    """The editor for one parameter: a list of modes, or a number."""
+    labels = modes_of(name, modes)
+    return ModeBox(value, labels) if labels else _spin(value)
 
 
 def _spin(value: float, decimals: int | None = None) -> QDoubleSpinBox:
@@ -87,6 +118,21 @@ def _rich(text: str) -> QLabel:
     label = QLabel(text)
     label.setTextFormat(Qt.TextFormat.RichText)
     return label
+
+
+def _mark_changed(widget, changed: bool) -> None:
+    """Colour a field that has been moved away from the project value.
+
+    The rule carries a type selector on purpose. A style sheet set on a widget
+    without one propagates to its children, and the popup list of a combo box
+    is a child: painting that green takes the selection highlight with it —
+    the trap default.qss already spends a paragraph on.
+    """
+    if not changed:
+        widget.setStyleSheet("")
+        return
+    selector = "QComboBox" if isinstance(widget, QComboBox) else "QDoubleSpinBox"
+    widget.setStyleSheet(f"{selector} {{ background: #e3f5e3; border-color: #4a9a4a; }}")
 
 
 class _EditorBase(QDialog):
@@ -194,8 +240,9 @@ class ParameterDialog(_EditorBase):
     at step 0 cannot be changed retroactively without invalidating the run.
     """
 
-    def __init__(self, p_meta, p, *, started: bool, sections=None, parent=None):
+    def __init__(self, p_meta, p, *, started: bool, sections=None, modes=None, parent=None):
         super().__init__("Parameters", parent)
+        self._modes: ModeTable = modes or {}
         self.resize(560, 720)
         layout = QVBoxLayout(self)
 
@@ -235,7 +282,7 @@ class ParameterDialog(_EditorBase):
                 name = meta["parametername"]
                 if name not in p:
                     continue
-                widget = _spin(p[name])
+                widget = _field(p[name], name, self._modes)
                 cyclic = meta.get("reading_rate") == CYCLIC
                 widget.setEnabled(cyclic or not started)
                 if started and not cyclic:
@@ -316,10 +363,11 @@ class PhaseParameterDialog(_EditorBase):
     writing the current value back: the operator may have moved it since.
     """
 
-    def __init__(self, phase, p_meta, p, *, parent=None):
+    def __init__(self, phase, p_meta, p, *, modes=None, parent=None):
         super().__init__(f"Parameters of {phase.name or 'the phase'}", parent)
         self.resize(620, 720)
         self._phase = phase
+        self._modes: ModeTable = modes or {}
         layout = QVBoxLayout(self)
 
         offered = offered_parameters(phase, p_meta)
@@ -384,7 +432,7 @@ class PhaseParameterDialog(_EditorBase):
 
     def _add_row(self, form: QFormLayout, meta: dict, name: str, project_value: float) -> None:
         stored = self._phase.parameters.get(name)
-        widget = _spin(stored if stored is not None else project_value)
+        widget = _field(stored if stored is not None else project_value, name, self._modes)
         widget.valueChanged.connect(lambda _=0.0, key=name: self._changed(key))
         self._boxes[name] = widget
         #: The value to fall back to — the project's, not the phase's.
@@ -431,13 +479,12 @@ class PhaseParameterDialog(_EditorBase):
         """A changed field looks changed, and only then can be reset."""
         changed = self._differs(name)
         self._resets[name].setVisible(changed)
-        self._boxes[name].setStyleSheet(
-            "background: #e3f5e3; border-color: #4a9a4a;" if changed else ""
-        )
+        _mark_changed(self._boxes[name], changed)
 
     def _update_summary(self) -> None:
         lines = [
-            f"{name}: {self._original[name]:g} → {self._boxes[name].value():g}"
+            f"{name}: {format_value(name, self._original[name], self._modes)}"
+            f" → {format_value(name, self._boxes[name].value(), self._modes)}"
             for name in sorted(self._boxes)
             if self._differs(name)
         ]

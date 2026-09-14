@@ -270,14 +270,38 @@ def test_a_variable_condition_reads_as_one_line():
     variables = {1: {"name": "cXL", "shorttex": "c_{XL}", "tex_unit": "gl^{-1}"}}
     operators = {3: ">"}
     condition = Condition(typeID=StartCondition.VARIABLE, variableID=1, operatorID=3, value=0.0)
-    assert condition_text(condition, "start", variables, operators) == "c_{XL} > 0.00 gl^{-1}"
+    assert condition_text(condition, "start", variables, operators) == "c_{XL} > 0.000 gl^{-1}"
+
+
+def test_a_condition_keeps_the_decimals_it_has():
+    """Three places at least, and more where the number carries more.
+
+    Two places showed a 0.005 h timer as "0.00 h" — a condition that reads as
+    "never" and fires on the next step.
+    """
+    variables = {1: {"name": "cXL", "shorttex": "c_{XL}", "tex_unit": "gl^{-1}"}}
+    operators = {3: ">"}
+    condition = Condition(typeID=StartCondition.VARIABLE, variableID=1, operatorID=3, value=0.0625)
+    assert condition_text(condition, "start", variables, operators) == "c_{XL} > 0.0625 gl^{-1}"
+    assert (
+        condition_text(Condition(typeID=EndCondition.TIMER, value=0.005), "end", {}, {})
+        == "Timer (0.005 h)"
+    )
 
 
 def test_a_timer_shows_its_end_once_the_phase_runs():
     condition = Condition(typeID=EndCondition.TIMER, value=5.0, time=8.5)
-    assert condition_text(condition, "end", {}, {}) == "Timer (5.00 h)"
+    assert condition_text(condition, "end", {}, {}) == "Timer (5.000 h)"
     running = condition_text(condition, "end", {}, {}, PhaseStatus.ACTIVE)
-    assert running == "t = 8.50 h (5.00 h timer)"
+    assert running == "t = 8.500 h (5.000 h timer)"
+
+    # The measured end is rounded; the timer that was set is not. An
+    # accumulated time carries its own arithmetic after the third place.
+    measured = Condition(typeID=EndCondition.TIMER, value=0.005, time=8.502222222223)
+    assert (
+        condition_text(measured, "end", {}, {}, PhaseStatus.COMPLETED)
+        == "t = 8.502 h (0.005 h timer)"
+    )
 
 
 def test_the_grid_puts_an_arrow_between_every_pair(qapp, db_copy):
@@ -393,6 +417,37 @@ def test_a_running_or_finished_phase_cannot_be_deleted(window):
     assert len(window.setup.phases) == before
 
 
+def test_a_running_or_finished_phase_cannot_be_edited(window):
+    """The automaton has already read it; a change now rewrites the record.
+
+    A completed phase applied its parameters and its end condition decided
+    when it stopped. Editing either afterwards would leave a plan that does
+    not describe the run that happened.
+    """
+    for phase, panel in zip(window.setup.phases, window.phase_grid.panels, strict=True):
+        protected = phase.statusID in (PhaseStatus.ACTIVE, PhaseStatus.COMPLETED)
+        assert panel.edit_button.isEnabled() is not protected, phase.name
+        if protected:
+            assert "cannot be edited" in panel.edit_button.toolTip()
+
+
+def test_a_pending_phase_is_editable_again_once_the_process_stands(window):
+    """The two reasons a button is dead say different things."""
+    upcoming = next(
+        panel
+        for phase, panel in zip(window.setup.phases, window.phase_grid.panels, strict=True)
+        if phase.statusID not in (PhaseStatus.ACTIVE, PhaseStatus.COMPLETED)
+    )
+    assert upcoming.edit_button.isEnabled() is True
+
+    window.phase_grid.set_editable(False)
+    assert upcoming.edit_button.isEnabled() is False
+    assert "Pause the process" in upcoming.edit_button.toolTip()
+
+    window.phase_grid.set_editable(True)
+    assert upcoming.edit_button.isEnabled() is True
+
+
 def test_the_arrow_forces_the_next_phase(window):
     for phase in window.setup.phases:
         phase.statusID = PhaseStatus.UPCOMING
@@ -430,9 +485,7 @@ def test_the_log_tab_collects_what_happened(window):
     """
     window.run_button.click()
     window.run_button.click()
-    written = [
-        entry for entry in window.log_view.entries if entry.event_type == OPERATION_EVENT
-    ]
+    written = [entry for entry in window.log_view.entries if entry.event_type == OPERATION_EVENT]
     assert [entry.message for entry in written] == ["Process started", "Process paused"]
 
     assert "Process paused" not in window.log_view.view.toPlainText()

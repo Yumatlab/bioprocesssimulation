@@ -148,6 +148,7 @@ class PhaseEditor(QDialog):
         parent: QWidget | None = None,
         p_meta=None,
         p=None,
+        modes=None,
     ):
         super().__init__(parent)
         self.setWindowTitle(f"Edit {phase.name or 'Phase'}")
@@ -157,6 +158,8 @@ class PhaseEditor(QDialog):
         #: What the parameter dialog needs; without them its button stays off.
         self._p_meta = p_meta
         self._p = p
+        #: What the control modes are called, passed straight through.
+        self._modes = modes
 
         layout = QVBoxLayout(self)
 
@@ -259,7 +262,9 @@ class PhaseEditor(QDialog):
 
         if self._p_meta is None or self._p is None:
             return
-        dialog = PhaseParameterDialog(self._draft, self._p_meta, self._p, parent=self)
+        dialog = PhaseParameterDialog(
+            self._draft, self._p_meta, self._p, modes=self._modes, parent=self
+        )
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self._update_for_type()
 
