@@ -1,0 +1,19 @@
+# Was hier nicht hineingehört, und warum.
+
+# Die Datenbank ist Laufzeitzustand, kein Quellcode. SimulationAppDB.db ist
+# 47 MB, davon 98,9 % freie Seiten, und sie ändert sich bei jedem Lauf. Ein
+# bereinigter Abzug liegt als Vorlage in der Python-Portierung
+# (src/biofermentation/resources/SimulationAppDB_template.db, 0,56 MB).
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Ausgabe des MATLAB Compilers - 110 MB, jederzeit neu erzeugbar.
+BiofermentationSimulation/
+
+# macOS und Python-Nebenprodukte
+.DS_Store
+._*
+__pycache__/
+*.pyc

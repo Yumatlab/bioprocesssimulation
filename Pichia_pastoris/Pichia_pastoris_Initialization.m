@@ -1,0 +1,266 @@
+function new_app = Pichia_pastoris_Initialization(app)
+    % Control parameters
+    app.a.cE      = 0; % Difference between temperature setpoint and measured temperature [°C]
+    app.a.ce      = 0; % Normalized difference cE [%]
+
+    app.a.cEpH    = 0; % Difference between pH setpoint and measured pH filtered through a time delay of first order
+
+    app.a.cP_Part = 0; % P part of temperature master controller
+    app.a.cI_Part = 0; % I part of temperature master controller
+
+    app.a.cE_agi = 0; % Difference between pO2 setpoint and measured pO2 [%]
+    app.a.ce_agi = 0; % Normalized difference cE_agi [-]
+    app.a.cP_agi = 0; % P part of pO2-agitation master controller [-]
+    app.a.cI_agi = 0; % I part of pO2-agitation master controller [-]
+    app.a.cD_agi = 0; % D part of pO2-agitation master controller [-]
+
+    app.a.cE_feedpO2 = 0; % Difference between feed rate setpoint and current feed rate [l/h]
+    app.a.ce_feedpO2 = 0; % Normalized difference cE_feed [-]
+    app.a.cP_feedpO2 = 0; % P part of feed rate controller [-]
+    app.a.cI_feedpO2 = 0; % I part of feed rate controller [-]
+    app.a.cD_feedpO2 = 0; % D part of feed rate controller [-]
+    app.a.yfeedpO2   = 0; % Output of feed controller
+
+    app.a.cE_aeration = 0; % Difference between pO2 setpoint and measured pO2 [%]
+    app.a.ce_aeration = 0; % Normalized difference cE_aeration [-]
+    app.a.cP_aeration = 0; % P part of aeration controller [-]
+    app.a.cI_aeration = 0; % I part of aeration controller [-]
+    app.a.cD_aeration = 0; % D part of aeration controller [-]
+
+    app.a.cE_gasmix = 0; % Difference between pO2 setpoint and measured pO2 [%]
+    app.a.ce_gasmix = 0; % Normalized difference cE_gasmix [-]
+    app.a.cP_gasmix = 0; % P part of pO2-gasmix controller [-]
+    app.a.cI_gasmix = 0; % I part of pO2-gasmix controller [-]
+    app.a.cD_gasmix = 0; % D part of pO2-gasmix controller [-]
+
+    app.a.cE_LW = 0; % Difference between liquid weight setpoint and actual liquid weight [kg]
+    app.a.ce_LW = 0; % Normalized difference cE_LW [-]
+    app.a.cI_LW = 0; % I part of liquid weight controller [-]
+
+    app.a.cE_feedR1 = 0; % Difference between feed rate setpoint and current feed rate [l/h]
+    app.a.ce_feedR1 = 0; % Normalized difference cE_feed [-]
+    app.a.cP_feedR1 = 0; % P part of feed rate controller [-]
+    app.a.cI_feedR1 = 0; % I part of feed rate controller [-]
+    app.a.cD_feedR1 = 0; % D part of feed rate controller [-]
+
+    app.a.cE_feedR2 = 0; % Difference between feed rate setpoint and current feed rate [l/h]
+    app.a.ce_feedR2 = 0; % Normalized difference cE_feed [-]
+    app.a.cP_feedR2 = 0; % P part of feed rate controller [-]
+    app.a.cI_feedR2 = 0; % I part of feed rate controller [-]
+    app.a.cD_feedR2 = 0; % D part of feed rate controller [-]
+
+    app.a.cE_feedR3 = 0; % Difference between feed rate setpoint and current feed rate [l/h]
+    app.a.ce_feedR3 = 0; % Normalized difference cE_feed [-]
+    app.a.cP_feedR3 = 0; % P part of feed rate controller [-]
+    app.a.cI_feedR3 = 0; % I part of feed rate controller [-]
+    app.a.cD_feedR3 = 0; % D part of feed rate controller [-]
+
+    % Additional parameters
+    app.a.ToI        = 0; % Time of inoculation [h]
+    app.a.VLflag     = 0; % Flag that activates once VLmax was reached once
+    app.a.VolumeFlag = 0; % Returns 1 if VLmax is reached
+
+    % Calculate growth rates
+    app.a.mySm = app.p.yXpS1gr*app.p.qS1pXm; % Specific substrate-maintenance-growth rate [1/h]
+    app.a.myOm = app.p.yXpOgr*app.p.qOpXm+app.a.mySm; % Specific oxygen-maintenance-growth rate [1/h]
+
+    app.a.qS1pXmax = (app.p.my1opt+app.a.mySm)/app.p.yXpS1gr; % Maximum specific glycerol uptake rate [1/h]
+    app.a.qS2pXmax = (app.p.my2opt+app.a.mySm)/app.p.yXpS2gr; % Maximum specific methanol uptake rate [1/h]
+
+    app.a.qOpXmax  = (app.p.my1opt+app.a.mySm)/app.p.yXpOgr+app.p.qOpXm; % Maximum specific oxygen uptake rate [1/h] INFO: INSTEAD OF MY1MAX WHICH IS NOT DEFINED YET I USED MY1OPT (change later maybe)
+
+    % Calculate parameters of temperature system
+    app.a.kCT      = 1/(1/app.p.alphaC+app.p.deltaCT/app.p.lambdaCT+1/app.p.alphaT); % Heat passing coefficient cooling system - exchange system [W/(m^2*K)]
+    app.a.tauCTc   = app.p.mC*app.p.cH2O/(app.a.kCT*app.p.ACT); % Time constant cooling system - cooling down system [h]
+    app.a.RT       = 1/(app.p.mdotT*app.p.cH2O); % Heat resistance [K/W]
+    app.a.DTc      = app.p.mdotT/app.p.mTc; % Flow through rate of temperature stream in cooling down system [1/h]
+    app.a.tauTcC   = app.p.mTc*app.p.cH2O/(app.a.kCT*app.p.ACT); % Time constant cooling system [h]
+    app.a.phiTcC   = app.a.DTc*app.a.tauTcC; % Time constant of cooling down system
+    app.a.DD       = app.p.mdotT/app.p.mD; % Flow through rate of temperature stream in double jacket system [1/h]
+    app.a.CD       = app.p.mD*app.p.cH2O+app.p.mWD*app.p.cW; % Volumetric heat capacity double jacket [Wh/K]
+    app.a.kDU      = 1/(1/app.p.alphaD+app.p.deltaDU/app.p.lambdaDU+1/app.p.alphaU); % Heat transmission coefficient double jacket - environment [W/(m^2*K)]
+    app.a.tauDU    = app.a.CD/(app.a.kDU*app.p.ADU); % Time constant double jacket - environment [h]
+    app.a.kDL      = 1/(1/app.p.alphaD+app.p.deltaDL/app.p.lambdaDL+1/app.p.alphaL); % Heat transmissio  coefficient double jacket - liquid phase [W/(m^2*K)]
+    app.a.tauDL    = app.a.CD/(app.a.kDL*app.p.ADL); % Time constant double jacket - liquid phase [h]
+    app.a.tauD     = 1/(app.a.DD+1/app.a.tauDU+1/app.a.tauDL); % Time constant of double jacket system [h]
+    app.a.kLU      = 1/(1/app.p.alphaL+app.p.deltaLU/app.p.lambdaLU+1/app.p.alphaU); % Heat transmission coefficient liquid - environment [W/(m^2*K)]
+    app.a.mHmax    = app.p.VH*app.p.rhoH2O; % Maximum possible mass in heating system H [kg]
+    app.a.CHmax    = app.a.mHmax*app.p.cH2O; % Maximum volumetricheat capacity of the heating system [Ws/K]
+    app.a.kHTh     = 1/(1/app.p.alphaH+app.p.deltaHTh/app.p.lambdaHTh+1/app.p.alphaTh); % Coefficient of heat transmission [kJ/m^2]
+    app.a.Qny      = app.p.deltahv*app.a.mHmax; % Maximum amount of heat of evaporation [kJ]
+    app.a.thetaDJ  = app.p.thetaDJ_WP; % Temperature working point in double jacket [°C]
+
+    % Absolute pressure set-point calculation [N/m^2]
+    app.a.pGw = app.p.deltapGw*10^5+app.p.pnG;
+
+    % Calculate parameters of pH system
+    app.a.cCLmax0  = app.p.pGcal/app.p.HCO20;
+
+    % Dimensionless dissociation constants
+    app.a.ApH = app.p.KB1/app.p.CH0;
+    app.a.BpH = app.a.ApH*app.p.KB2/app.p.CH0;
+    app.a.CpH = app.a.BpH*app.p.KB3/app.p.CH0;
+    app.a.DpH = app.p.KC1/app.p.CH0;
+    app.a.EpH = app.a.DpH*app.p.KC2/app.p.CH0;
+    app.a.FpH = app.p.KP1/app.p.CH0;
+    app.a.GpH = app.p.KAl/app.p.CH0;
+    app.a.HpH = app.p.KAc1/app.p.CH0;
+    app.a.IpH = app.a.HpH*app.p.KAc2/app.p.CH0;
+
+    % Calculation of O2 Henry constant [Nm/kg]
+    app.a.HO2 = app.p.HnO2/(1+app.p.K1HO2*app.p.thetaL0+app.p.K2HO2*app.p.thetaL0^2+app.p.K3HO2*app.p.thetaL0^3+app.p.K4HO2*app.p.thetaL0^4); %
+
+    % O2-concentration in liquid phase at 100 % pO2-indication
+    app.a.cOL100 = app.p.pGcal*app.p.xOGcal/app.a.HO2; %
+
+    % Maximum potential O2 concentration in liquid phase [g/l]
+    app.a.cOLmax = (app.p.pGcal+app.p.deltapGw*10^5)/app.a.HO2; %
+
+    %% Fill variable struct
+    app.v.xO2(1)     = app.p.xOAIR*100; %
+    app.v.xCO2(1)    = app.p.xCAIR*100; %?
+
+    app.v.VL(1)      = app.p.VL0;
+    app.v.VT1(1)     = app.p.VT10;
+    app.v.VT2(1)     = app.p.VT20;
+    app.v.Vacid(1)   = 0;
+    app.v.Vbase(1)   = 0;
+
+    app.v.FT1 = 0;
+    app.v.FT2 = 0;
+
+    % Two reservoirs
+    app.v.VR1(1) = app.p.VR10;
+    app.v.VR1in(1) = 0;
+    app.v.FR1(1) = app.p.FR1w;
+
+    app.v.VR2(1) = app.p.VR20;
+    app.v.VR2in(1) = 0;
+    app.v.FR2(1) = app.p.FR2w;
+
+    app.v.QS1in(1) = (app.v.FR1(end)*app.p.cS1R1+app.v.FR2(end)*app.p.cS1R2)/app.v.VL(end);
+    app.v.QS2in(1) = (app.v.FR1(end)*app.p.cS2R1+app.v.FR2(end)*app.p.cS2R2)/app.v.VL(end);
+
+    if app.p.f_InocStart == 1
+        app.v.cXL(1) = app.p.cXL0;
+    else
+        app.v.cXL(1) = 0;
+    end
+
+    app.v.cS1L(1)    = app.p.cS1L0;
+    app.v.cS2L(1)    = app.p.cS2L0;
+
+    app.v.thetaL(1)  = app.p.thetaL0;
+    app.v.thetaD(1)  = app.p.thetaD0;
+    app.v.pG(1)      = app.p.pGcal+app.p.deltapGw*10^5;
+
+    app.v.pO2(1)     = app.p.pO20;
+    app.v.cOL(1)     = (app.p.pO20/100)*app.a.cOL100;
+    app.v.pO2w(1)    = app.p.pO2w;
+    app.v.xOL(1)     = app.a.cOL100/app.a.cOLmax;
+
+    app.v.xOG(1)     = app.p.xOGcal;
+    app.v.xOGin(1)   = app.p.xOGcal;
+    app.a.xCGin(1)   = app.p.xCGcal;
+    app.v.xCG(1)     = app.p.xCGcal;
+
+    %app.v.CPLtot(1)  = 0; % Here maybe introduce app.a.CPLtot0?
+    app.v.cP1X(1) = 0;
+    app.v.cP1L(1) = 0; % Maybe here different
+
+    app.v.CB1Ltot(1) = app.p.CB1Ltot0;
+    app.v.CB2Ltot(1) = app.p.CB2Ltot0;
+    app.v.CAlLtot(1) = app.p.CAlLtot0;
+    app.v.CAcLtot(1) = app.p.CAcLtot0;
+
+    app.v.hF(1)      = 0;
+    app.v.AAF(1)     = 0;
+
+    app.v.pHL(1)     = app.p.pH0;
+    app.v.pH(1)      = app.p.pH0;
+
+    app.v.RQ(1)      = 0.1;
+
+    app.v.CCLtot(1)  = (1+app.p.KC1*10^app.p.pH0+app.p.KC1*app.p.KC2*10^(2*app.p.pH0))*app.p.xCAIR*app.a.cCLmax0/app.p.MCO2;
+
+    if app.p.f_motor == 1
+        app.v.NSt(1) = app.p.NStw;
+    else
+        app.v.NSt(1) = 0;
+    end
+    if app.p.f_aeration == 1
+        if app.p.f_air == 1
+            app.v.FnAIR(1) = app.p.FnAIRw;
+        else
+            app.v.FnAIR(1) = 0;
+        end
+
+        if app.p.f_O2 == 1
+            app.v.FnO2(1) = app.p.FnO2w;
+        else
+            app.v.FnO2(1) = 0;
+        end
+
+        if app.p.f_N2 == 1
+            app.v.FnN2(1) = app.p.FnN2w;
+        else
+            app.v.FnN2(1) = 0;
+        end
+
+        if app.p.f_CO2 == 1
+            app.v.FnCO2(1) = app.p.FnCO2w;
+        else
+            app.v.FnCO2(1) = 0;
+        end
+        app.v.FnG(1) = app.v.FnAIR(1)+app.v.FnO2(1)+app.v.FnN2(1)+app.v.FnCO2(1);
+    else
+        app.v.FnG(1)  = 0;
+    end
+    if app.p.f_harvest == 1
+        app.v.FH(1)  = app.p.FHrelw/100*app.p.FHmax;
+    else
+        app.v.FH(1)  = 0;
+    end
+    app.v.OURm(1)    = 0;
+    app.v.OURmax(1)  = 0;
+    app.v.QO2max(1)  = app.v.FnG(1)*60*app.p.MO2/(app.v.VL(1)*app.p.VnM);
+    app.v.QCO2max(1) = app.v.QO2max(1)*app.p.MCO2/app.p.MO2;
+    app.v.kLa(1)     = app.p.kLamin+app.p.kLamax*((app.p.FnGw/app.p.FnGmax)^app.p.beta)*((app.p.NStw/app.p.NStmax)^(3*app.p.alpha))/((app.p.VL0/app.p.VLmin)^app.p.alpha);
+    app.v.OTRmax(1)  = (app.p.kLamin+app.p.kLamax*((app.p.FnGw/app.p.FnGmax)^app.p.beta)*((app.p.NStw/app.p.NStmax)^(3*app.p.alpha))/((app.p.VL0/app.p.VLmin)^app.p.alpha))*app.a.cOLmax;
+    app.v.OUR(1)     = 0;
+    app.v.OTR(1)     = app.v.OTRmax(end)*(app.p.xOAIR-app.v.cOL(end)/app.a.cOLmax);
+    app.v.CTR(1)     = 0;
+    app.v.qXpX(1)    = 0;
+
+    % Measured variables
+    app.v.pHLm(1) = app.p.pH0;
+    app.v.thetaLm(1) = app.p.thetaL0;
+    app.v.pO2m(1) = app.p.pO20;
+    app.v.cS1Lm(1) = app.p.cS1L0;
+    app.v.cS2Lm(1) = app.p.cS2L0;
+
+    % AOX induction related variables
+    app.v.qS2pXind(1) = 0;
+    app.v.qS2pXscript(1) = 0;
+    app.v.qP1pXscriptw(1) = 0;
+    app.v.qS2pXtrans(1) = 0;
+    app.v.qS2pXact(1) = 0;
+    app.v.qS2pX(1) = 0;
+
+    % Product expression related variables
+    app.v.qP1pXind(1) = 0;
+    app.v.qP1pXback(1) = 0;
+    app.v.qP1pXscript(1) = 0;
+    app.v.qP1pXtrans(1) = 0;
+    app.v.qP1pXact(1) = 0;
+    app.v.qP1pX(1) = 0;
+
+if app.v.cXL(end) > 0
+    app.a.inoc_occ = 1; % Flag that activates once inoculation has happened
+else
+    app.a.inoc_occ = 0;
+end
+
+% Transfer information to main app
+new_app = app;
+end
