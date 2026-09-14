@@ -25,3 +25,18 @@ und die, in die neue Erkenntnisse gehören.
 Wer danach weitermachen will, nimmt
 [`weiterentwicklung.md`](weiterentwicklung.md) — dort steht auch der fertige
 Startprompt für eine Version 4 mit Claude Code.
+
+## Als PDF
+
+Für alle, die lieber auf Papier oder im Reader lesen:
+
+```bash
+pip install -e ".[docs]"
+python tools/make_pdfs.py
+```
+
+Das legt `docs/pdf/` an — je ein gesetztes PDF mit Seitenzahlen, 31 Seiten
+zusammen. Gesetzt wird mit Chrome im Hintergrund; fehlt es, weicht das
+Werkzeug auf Qt aus und sagt es. Die PDFs liegen nicht im Repository: sie sind
+jederzeit neu erzeugbar, und als Binärdateien in der Historie wären sie nur
+Rauschen.

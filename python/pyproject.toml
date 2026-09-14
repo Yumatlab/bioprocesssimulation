@@ -55,6 +55,11 @@ dev = [
 build = [
     "pyinstaller>=6.3",
 ]
+# tools/make_pdfs.py sets docs/*.md as PDFs. Chrome does the typesetting and
+# is not a Python package; this is only the markdown parser.
+docs = [
+    "markdown>=3.5",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/biofermentation"]
