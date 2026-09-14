@@ -774,13 +774,39 @@ Vorher hielt jede Stelle eine Kopie, und so gehen sie auseinander: das Fenster
 sagte 3.0, das Paket 0.1.0, und das gebaute `.app`-Bündel nahm seinen Stempel
 vom Paket. `test_packaging.py` hält die drei zusammen.
 
+### Zwei Stände, ein Repository
+
+`github.com/Yumatlab/bioprocesssimulation` enthält bereits die
+MATLAB-Anwendung. Dieses Repository hat damit **keine gemeinsame Historie** —
+es ist eine eigene Wurzel. Zusammengebracht wird beides bewusst und sichtbar,
+nicht durch einen Push:
+
+- **Die Portierung geht auf einen eigenen Branch**, `python-port`, und von
+  dort über einen Pull Request. `remote.origin.push` ist fest darauf
+  eingestellt und `push.default` steht auf `nothing`, damit ein nacktes
+  `git push` überhaupt kein Ziel hat.
+- **`tools/pre-push-guard.sh` erzwingt es**, statt es zu versprechen. Der
+  Hook weist drei Dinge ab: einen Push auf `main`/`master` der Gegenseite,
+  das Löschen eines Remote-Branches, und jeden Push, der Commits der
+  Gegenseite nicht als Vorfahren enthält — also genau das, was `--force` und
+  `--force-with-lease` sonst durchlassen. Installiert wird er mit
+  `tools/install-hooks.sh`; `.git/hooks` ist nicht Teil des Repositorys, ein
+  Hook, der zählt, muss also getrackt und von dort kopiert werden.
+- **Fünf Fälle durchgespielt** (Push auf main, neuer Branch, Überschreiben
+  mit fremden Commits, Löschen, normales Fortschreiben) — die drei
+  verbotenen scheitern, die zwei erlaubten laufen.
+
 ### Offen aus Phase 0
 
-- **GitHub-Repository** anlegen und `main` pushen, damit die CI-Matrix läuft
-  (Plan §0.2). Der Workflow liegt bereit und baut auf jeden `v*`-Tag beide
-  Installationsdateien. **Bis dahin ist der Windows-Build nicht nur
-  ungetestet, sondern nie gebaut worden** — Cross-Compiling gibt es bei
-  PyInstaller nicht, die CI ist der einzige Weg dorthin.
+- **`main` der Gegenseite holen und ansehen**, bevor irgendetwas
+  zusammengeführt wird. Erst dann ist zu entscheiden, ob die Portierung in
+  ein Unterverzeichnis zieht — `.github/workflows/ci.yml` muss in jedem Fall
+  im Wurzelverzeichnis liegen, sonst läuft die Matrix nicht.
+- **CI-Matrix** läuft erst nach dem ersten Push (Plan §0.2). Der Workflow
+  liegt bereit und baut auf jeden `v*`-Tag beide Installationsdateien.
+  **Bis dahin ist der Windows-Build nicht nur ungetestet, sondern nie gebaut
+  worden** — Cross-Compiling gibt es bei PyInstaller nicht, die CI ist der
+  einzige Weg dorthin.
 - ~~**Lizenz**~~ **festgelegt: MIT.** `LICENSE`, `license`-Feld in
   `pyproject.toml`, ein Abschnitt im README und der Info-Tab sagen es jetzt
   alle vier.
