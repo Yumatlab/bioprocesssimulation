@@ -63,6 +63,36 @@ def test_the_bundle_is_stamped_with_the_package_version():
     assert 'path = "src/biofermentation/__init__.py"' in pyproject
 
 
+def test_the_licence_is_declared_where_anyone_would_look():
+    """Four places, and the port was missing from all of them.
+
+    The Information tab carried the MATLAB application's CC BY 4.0 paragraph
+    and nothing about this implementation, which left the port under "all
+    rights reserved" in the one place someone would look it up.
+    """
+    from biofermentation.gui.windows.control_app import ABOUT_TEXT
+
+    root = BUILD_DIR.parent
+    licence = (root / "LICENSE").read_text(encoding="utf-8")
+    assert licence.startswith("MIT License")
+    # The attribution CC BY asks for has to travel with the MIT text.
+    assert "Creative Commons Attribution 4.0" in licence
+    assert "Lesser General Public" in licence, "a packaged build carries Qt"
+    # The lineage CC BY asks to be named, and what each name did.
+    assert "Lena Sophia Kaletsch" in licence
+    assert "previous developer" in licence
+    assert "Luttmann" in licence
+
+    pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'license = { file = "LICENSE" }' in pyproject
+
+    assert "MIT License" in ABOUT_TEXT
+    assert "creativecommons.org/licenses/by/4.0" in ABOUT_TEXT
+    assert "Lena Sophia Kaletsch" in ABOUT_TEXT
+    assert "previous developer" in ABOUT_TEXT
+    assert "## Lizenz" in (root / "README.md").read_text(encoding="utf-8")
+
+
 # --------------------------------------------------------- the resources --
 
 

@@ -762,13 +762,24 @@ vom Paket. `test_packaging.py` hält die drei zusammen.
   Installationsdateien. **Bis dahin ist der Windows-Build nicht nur
   ungetestet, sondern nie gebaut worden** — Cross-Compiling gibt es bei
   PyInstaller nicht, die CI ist der einzige Weg dorthin.
-- **Lizenz** ist noch nicht festgelegt; `pyproject.toml` hat deshalb kein
-  `license`-Feld. Der CC-BY-4.0-Absatz im Info-Tab ist die Lizenz der
-  **MATLAB-Anwendung** und wörtlich von dort übernommen; über den Python-Port
-  sagt er nichts. Dazu gehört die dritte Frage, die noch niemand beantwortet
-  hat: das gepackte Bündel enthält Qt, und PySide6 steht unter LGPLv3 — eine
-  Weitergabe schuldet den Lizenztext und die Möglichkeit, die Qt-Bibliotheken
-  auszutauschen. `docs/installation.md` erwähnt beides bisher nicht.
+- ~~**Lizenz**~~ **festgelegt: MIT.** `LICENSE`, `license`-Feld in
+  `pyproject.toml`, ein Abschnitt im README und der Info-Tab sagen es jetzt
+  alle vier.
+
+  Drei Dinge, die dabei auseinanderzuhalten waren. **Der CC-BY-4.0-Absatz im
+  Info-Tab war die Lizenz der MATLAB-Anwendung**, wörtlich von dort
+  übernommen — über den Python-Port sagte er nichts, und damit stand der
+  rechtlich unter „alle Rechte vorbehalten". CC BY ist kein Copyleft, der
+  Port durfte also frei gewählt werden; geschuldet ist nur die Namensnennung,
+  und die steht jetzt in `LICENSE` und im Info-Tab: **Lena Sophia Kaletsch**
+  als Vorentwicklerin der Anwendung (Version 1.3, 01.03.2024) und das
+  BIOSIM-Programm von Prof. Dr.-Ing. R. Luttmann. **CC BY taugt nicht für
+  Code** — Creative Commons rät selbst davon ab (keine Patentklausel, keine
+  Quell-/Objektcode-Unterscheidung). Und **das gepackte Bündel enthält Qt**:
+  PySide6 steht unter LGPLv3, eine Weitergabe der gebauten Datei schuldet
+  den Lizenztext und die Möglichkeit, die Qt-Bibliotheken auszutauschen. Für
+  die Weitergabe des Quellcodes gilt das nicht. `docs/installation.md` hat
+  dafür einen eigenen Abschnitt.
 
 ---
 

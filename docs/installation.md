@@ -119,12 +119,34 @@ grüne Tests kein Build — `needs: test`.
 
 ---
 
+## Weitergabe: was mit im Paket steckt
+
+Der eigene Code steht unter MIT (`LICENSE`). Eine **gepackte** Fassung ist
+aber mehr als der eigene Code: PyInstaller legt den Interpreter und jede
+Abhängigkeit mit hinein, und darunter ist Qt — über PySide6, unter der
+**GNU Lesser General Public License v3**.
+
+Wer die gebaute Einzeldatei weitergibt, schuldet damit:
+
+- den Lizenztext der LGPLv3 neben der Datei,
+- den Hinweis, dass die Anwendung Qt benutzt und unter welcher Lizenz,
+- und die Möglichkeit, die Qt-Bibliotheken gegen eine eigene Fassung
+  auszutauschen. Bei einer Einzeldatei heißt das praktisch: den Quellcode
+  dieser Anwendung mitliefern oder verlinken, damit sich der Bau mit einem
+  anderen Qt wiederholen lässt. Ein Verzeichnis-Bau statt einer Einzeldatei
+  (`runtime_tmpdir` weglassen) macht es unmittelbarer, weil die
+  Qt-Bibliotheken dann als eigene Dateien danebenliegen.
+
+Für die Weitergabe des **Quellcodes** gilt nichts davon — dort installiert
+sich jeder PySide6 selbst.
+
 ## Bekannte Einschränkungen
 
 - **Unsigniert**, siehe oben.
-- **Kein Anwendungssymbol.** Das Logo des Originals ist ein Bildmittel der
-  Hochschule und gehört nicht in diese Portierung; `icon=None` in beiden
-  Spezifikationen ist die Stelle, an der ein eigenes eingehängt würde.
+- **Ein eigenes Anwendungssymbol.** Das Logo des Originals ist ein Bildmittel
+  der Hochschule und gehört nicht in diese Portierung; `resources/icons/`
+  trägt stattdessen ein eigenes, und beide Spezifikationen stempeln es über
+  `specs.icon_file()`.
 - **Das macOS-Bündel gilt für die Architektur des Bau-Rechners.** Ein
   `universal2`-Bündel, das auf Intel und Apple Silicon läuft, verlangt
   *jede* Abhängigkeit als universelles Rad — ein einzelarchitektonisches

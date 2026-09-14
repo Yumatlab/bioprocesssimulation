@@ -9,8 +9,21 @@ dynamic = ["version"]
 description = "Bioreactor process simulation with a plugin-based organism architecture"
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [{ name = "Yuma Iff" }]
+authors = [{ name = "Philipp Yuma Iff" }]
 keywords = ["bioreactor", "fermentation", "simulation", "ode", "qt"]
+# The MIT licence covers this Python implementation. The CC BY 4.0 attribution
+# for the MATLAB application it is ported from travels in LICENSE and in the
+# Information tab; a packaged build also carries Qt under LGPLv3. See LICENSE.
+license = { file = "LICENSE" }
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+]
 
 dependencies = [
     "numpy>=1.26",

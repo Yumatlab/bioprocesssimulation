@@ -45,21 +45,34 @@ from ..widgets import CONTROL_PANELS, ControllerView, ControlPanel, PhaseGrid, S
 from ..widgets.log_view import OPERATION_EVENT, LogView
 from ..widgets.variable_pool import VariablePool
 
-#: Provenance and licence. Taken from the Information tab of the original,
-#: which is the only place either is recorded.
+#: Provenance and licence. The middle paragraph is the one the original's
+#: Information tab carries, kept verbatim — it is the licence of the MATLAB
+#: application, and the attribution it asks for has to travel with every copy.
+#: What it never said is which licence *this* port is under, which left the
+#: question open in the one place someone would look it up.
 ABOUT_TEXT = """
-<p><b>Author of the MATLAB application:</b> Philipp Yuma Iff, 18.07.2025</p>
+<p><b>Author:</b> Philipp Yuma Iff. MATLAB application 18.07.2025,
+Python port 2026.</p>
 
-<p>This work is licensed under the
+<p>The Python port is licensed under the <b>MIT License</b>; the full text and
+the attribution below travel with it in the LICENSE file.</p>
+
+<p>It is a port of the Biofermentation Simulation MATLAB App Designer
+application, which is licensed under the
 <a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons
 Attribution 4.0 International License</a>. To view a copy of this license,
 visit http://creativecommons.org/licenses/by/4.0/ or send a letter to
 Creative Commons, PO Box 1866, Mountain View, CA 94042, USA.</p>
 
-<p>This application is based on Version 1.3 of the Biofermentation Simulation
-App by Lena Sophia Kaletsch (01.03.2024) and the BIOSIM program conceived by
-Prof. Dr.-Ing. R. Luttmann. It was developed for the laboratory of Bioprocess
-Automation at the University of Applied Sciences Hamburg.</p>
+<p>That application continues the work of the previous developer of this
+software, <b>Lena Sophia Kaletsch</b>, who developed Version 1.3 of the
+Biofermentation Simulation App (01.03.2024). It rests in turn on the BIOSIM
+program conceived by Prof. Dr.-Ing. R. Luttmann, and was developed for the
+laboratory of Bioprocess Automation at the University of Applied Sciences
+Hamburg.</p>
+
+<p style="color:#6a6a6a">A packaged build also contains Qt by way of PySide6,
+under the GNU Lesser General Public License v3.</p>
 
 <p style="color:#6a6a6a">The two institutional logos of the original are not
 reproduced here: they are the university's image assets, not part of this
