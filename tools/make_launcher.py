@@ -17,6 +17,7 @@ import os
 import plistlib
 import shutil
 import stat
+import subprocess
 import sys
 from pathlib import Path
 
@@ -51,10 +52,11 @@ def make_macos_app(target: Path) -> Path:
     bundle = target / f"{APP_NAME}.app"
     contents = bundle / "Contents"
     macos, resources = contents / "MacOS", contents / "Resources"
-    if bundle.exists():
-        shutil.rmtree(bundle)
-    macos.mkdir(parents=True)
-    resources.mkdir(parents=True)
+    # Written into, not deleted and recreated: a bundle that is replaced gets
+    # a new inode, and anything pointing at the old one — a Dock entry above
+    # all — points at nothing afterwards.
+    macos.mkdir(parents=True, exist_ok=True)
+    resources.mkdir(parents=True, exist_ok=True)
 
     launcher = macos / "launch"
     launcher.write_text(
@@ -108,7 +110,43 @@ def make_macos_app(target: Path) -> Path:
         "LSMinimumSystemVersion": "11.0",
     }
     (contents / "Info.plist").write_bytes(plistlib.dumps(plist))
+    _sign(bundle)
+    _register(bundle)
     return bundle
+
+
+def _sign(bundle: Path) -> None:
+    """Sign the bundle with an ad-hoc signature.
+
+    Without any signature Gatekeeper rejects the bundle — `spctl` says "no
+    usable signature" — and a double-click in the Finder does nothing at all,
+    silently. `open` from a terminal still works, which is what makes this so
+    confusing to diagnose: it runs for whoever built it and for nobody else.
+
+    Ad-hoc means "signed by no one", which is enough for a locally built
+    application. It is not a substitute for signing a release; see
+    docs/installation.md.
+    """
+    _run(["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(bundle)], "sign")
+
+
+def _register(bundle: Path) -> None:
+    """Tell LaunchServices the bundle exists, so Spotlight and the Finder see
+    it without waiting for whatever would otherwise notice."""
+    lsregister = (
+        "/System/Library/Frameworks/CoreServices.framework/Frameworks"
+        "/LaunchServices.framework/Support/lsregister"
+    )
+    _run([lsregister, "-f", str(bundle)], "register")
+
+
+def _run(command: list[str], what: str) -> None:
+    if not Path(command[0]).is_file():
+        print(f"  could not {what}: {command[0]} is not there")
+        return
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    if result.returncode:
+        print(f"  could not {what}: {(result.stderr or result.stdout).strip()}")
 
 
 def make_windows_shortcut(target: Path) -> Path:
