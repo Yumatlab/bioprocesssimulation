@@ -23,14 +23,20 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+      # The application lives in python/; only this file has to stay at the
+      # top of the repository, because that is the only place GitHub looks
+      # for it. Everything it runs happens one directory down.
       - run: pip install -e ".[dev]"
+        working-directory: python
       - name: Lint
         run: ruff check .
+        working-directory: python
       # Qt needs an off-screen platform plugin on the CI runners.
       - name: Test
         env:
           QT_QPA_PLATFORM: offscreen
         run: pytest
+        working-directory: python
 
   # Plan section 7.2: every tag produces both installers, so neither has to
   # be built by hand on a machine that happens to run the right system.
@@ -46,11 +52,11 @@ jobs:
           - os: windows-latest
             spec: build/windows.spec
             artefact: BiofermentationSimulation-windows
-            path: dist/BiofermentationSimulation.exe
+            path: python/dist/BiofermentationSimulation.exe
           - os: macos-latest
             spec: build/macos.spec
             artefact: BiofermentationSimulation-macos
-            path: dist/Biofermentation Simulation.app
+            path: python/dist/Biofermentation Simulation.app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -58,13 +64,16 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -e ".[build]"
+        working-directory: python
       - name: Build
         run: pyinstaller --noconfirm ${{ matrix.spec }}
+        working-directory: python
       # A build that produces a file which cannot start is worse than none.
       - name: Smoke test the build
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -c "import biofermentation.gui.app"
+        working-directory: python
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artefact }}

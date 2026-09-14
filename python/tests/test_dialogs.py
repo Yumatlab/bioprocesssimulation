@@ -32,7 +32,10 @@ from biofermentation.gui.widgets.indicators import select_data
 from biofermentation.gui.widgets.panel_specs import CONTROL_PANELS, PH_PANEL
 from biofermentation.gui.windows.control_app import ControlWindow
 
-TEMPLATE = Path("src/biofermentation/resources/SimulationAppDB_template.db")
+# From __file__, like every other test module: a path relative to the
+# working directory only holds while pytest is started from one place.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+TEMPLATE = REPO_ROOT / "src" / "biofermentation" / "resources" / "SimulationAppDB_template.db"
 PROJECT = 519
 
 

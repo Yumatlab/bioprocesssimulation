@@ -29,11 +29,20 @@ LOG = "/tmp/biofermentation-launch.log"
 
 
 def interpreter() -> Path:
-    """The Python that runs the application — this project's, not the system's."""
-    local = REPO / ".venv" / ("Scripts" if os.name == "nt" else "bin") / (
-        "python.exe" if os.name == "nt" else "python"
-    )
-    return local if local.is_file() else Path(sys.executable)
+    """The Python that runs the application — this project's, not the system's.
+
+    Looked for beside the project and one level above it. The repository holds
+    two applications in two folders, and an environment that sits above both
+    survives the project folder being moved; a venv cannot be moved, only
+    rebuilt, so it is worth not forcing the question.
+    """
+    where = "Scripts" if os.name == "nt" else "bin"
+    name = "python.exe" if os.name == "nt" else "python"
+    for root in (REPO, REPO.parent):
+        candidate = root / ".venv" / where / name
+        if candidate.is_file():
+            return candidate
+    return Path(sys.executable)
 
 
 def version() -> str:

@@ -1,71 +1,44 @@
 # Biofermentation Simulation
 
 Simulation von Bioreaktorprozessen (Batch, Fed-Batch, Induktion) für
-verschiedene Mikroorganismen. Python-Portierung der MATLAB-App-Designer-
-Anwendung Version 2.x.
+verschiedene Mikroorganismen. Pro Zeitschritt werden Regler (pO2, pH,
+Temperatur, Füllstand), Fütterung und Stoffbilanzen gerechnet; ein
+Phasenautomat schaltet Prozessphasen anhand konfigurierbarer Start- und
+Endbedingungen weiter.
 
-Pro Zeitschritt werden Regler (pO2, pH, Temperatur, Füllstand), Fütterung und
-Stoffbilanzen berechnet; ein Phasenautomat schaltet Prozessphasen anhand
-konfigurierbarer Start- und Endbedingungen weiter.
+Dieses Repository enthält **zwei Fassungen derselben Anwendung**.
 
-## Stand
+| Ordner | Fassung | Stand |
+|---|---|---|
+| [`matlab/`](matlab/) | MATLAB App Designer | Version 2.2, der Stand der Masterarbeit (Tag `v2.2`) |
+| [`python/`](python/) | Python, PySide6 | Version 3.0, die Neuimplementierung |
 
-Version 3.0 — die Portierung ist funktionsfertig. Phasen 0 bis 7 abgeschlossen
-(Datenschicht, Simulationskern, Phasenautomat, Oberfläche, Plot-Engine,
-Verteilung); Phase 8, das Handbuch, ist offen. Das E.-coli-Modell ist gegen
-einen MATLAB-Referenzlauf verifiziert (`docs/verifikation_escherichia_coli.md`),
-das Pichia-Modell bewusst nicht — die Begründung steht dort ebenfalls.
+Sie stehen nebeneinander, nicht übereinander: die MATLAB-Fassung ist die
+Vorlage, aus der portiert wurde, und bleibt als solche lesbar und lauffähig.
 
-Der aktuelle Fortschritt und alle offenen Punkte stehen in `CLAUDE.md`.
+**Die Python-Fassung ist die, die weiterentwickelt wird.** Sie rechnet dieselbe
+Simulation — das *Escherichia-coli*-Modell ist gegen einen Referenzlauf der
+MATLAB-Anwendung verifiziert, nachzulesen in
+[`python/docs/verifikation_escherichia_coli.md`](python/docs/verifikation_escherichia_coli.md).
+Was sie zusätzlich kann und woran sie anders gebaut ist, steht in
+[`python/CLAUDE.md`](python/CLAUDE.md).
 
-## Entwicklungsumgebung
+## Womit anfangen
 
-```bash
-python3.11 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
-pytest
-ruff check .
-```
-
-## Struktur
-
-```
-src/biofermentation/
-  db/          Datenbankzugriff (Phase 1)
-  core/        Simulationszustand, Preallokation, Runner (Phase 2/4)
-  organisms/   Organismusmodelle + Plugin-Registry (Phase 2)
-  control/     Phasenautomat und Regler (Phase 3)
-  gui/         PySide6-Oberfläche (Phasen 4-6)
-  resources/   SimulationAppDB_template.db
-tests/         pytest, inklusive MATLAB-Referenzläufe
-build/         PyInstaller-Spec-Dateien (Phase 7)
-docs/          Handbuch (Phase 8)
-```
-
-## Neues Organismusmodell
-
-Zwei Wege, beide ohne Eingriff in bestehenden Code:
-
-- **Nur Parameter:** `definition.yaml` im Organismus-Ordner anlegen; ein
-  Import-Skript befüllt die Parametertabellen der Datenbank.
-- **Neue Kinetik:** Unterklasse von `OrganismModel` schreiben und mit
-  `@register` versehen. Die Registry findet sie beim Start automatisch.
-
-Details in `docs/` (Phase 8), Schnittstelle in `src/biofermentation/organisms/base.py`.
+- **Anwenden**: fertige Installationsdateien für Windows und macOS hängen an
+  jedem Release. Einrichtung und bekannte Einschränkungen in
+  [`python/docs/installation.md`](python/docs/installation.md).
+- **Entwickeln**: `python/README.md` beschreibt die Entwicklungsumgebung und
+  wie ein neues Organismusmodell entsteht.
+- **Nachvollziehen, wie es gebaut ist**: `python/CLAUDE.md` ist der lange Text
+  dazu — Datenmodell, Reglerlogik, Datenbankregeln und jede Entscheidung, die
+  nicht selbsterklärend war.
 
 ## Lizenz
 
-MIT — siehe [LICENSE](LICENSE).
-
-Die Portierung stammt von der MATLAB-Anwendung Version 2.2 ab, die unter
-[CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) steht. Diese führt
-die Arbeit der **Vorentwicklerin Lena Sophia Kaletsch** fort, von der Version
-1.3 der Biofermentation Simulation App stammt (01.03.2024), und beruht
-ihrerseits auf dem BIOSIM-Programm von Prof. Dr.-Ing. R. Luttmann. Diese
-Namensnennung steht in `LICENSE` und im Info-Tab der Anwendung und muss jede
-Kopie begleiten.
-
-Eine **gepackte** Fassung enthält zusätzlich Qt über PySide6 unter der LGPLv3.
-Wer sie weitergibt, übernimmt deren Pflichten; siehe
-`docs/installation.md`.
+Die Python-Fassung steht unter der MIT-Lizenz, siehe
+[`python/LICENSE`](python/LICENSE). Die MATLAB-Anwendung steht unter
+[CC BY 4.0](http://creativecommons.org/licenses/by/4.0/); sie führt die Arbeit
+der Vorentwicklerin **Lena Sophia Kaletsch** fort (Version 1.3, 01.03.2024)
+und beruht auf dem BIOSIM-Programm von Prof. Dr.-Ing. R. Luttmann. Entwickelt
+für das Labor für Bioprozessautomatisierung der HAW Hamburg.
