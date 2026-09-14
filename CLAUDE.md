@@ -417,6 +417,25 @@ Vorschritts als Beimpfungszeit vermerkt. `_adopt_inoculation` liest beides
 daraus zurück; bei `f_InocStart` bleibt `ToI` auf 0, wie bei einem frischen
 Lauf.
 
+**Das Original hatte die Regel, die Portierung hat sie verloren.**
+`Escherichia_coli_Initialization.m` schließt mit genau dieser Prüfung:
+
+```matlab
+if app.v.cXL(end) > 0
+    app.a.inoc_occ = 1; % Flag that activates once inoculation has happened
+else
+    app.a.inoc_occ = 0;
+end
+```
+
+Sie steht dort *nach* dem `f_InocStart`-Zweig und außerhalb davon, läuft also
+auch für einen geladenen Lauf. Die Portierung hat den Zweig übersetzt und die
+Prüfung danach nicht — `initialize()` ruft `init_variables` nur bei
+`idx == 0`, und damit fiel beides zusammen weg. Ein Übersetzungsfehler, kein
+geerbter: **beim Rückportieren nach MATLAB gehört dieser Punkt nicht auf die
+Liste.** Die Lehre daraus ist allgemeiner — was in der Quelle *neben* einem
+`if` steht, wird beim Übersetzen leicht Teil davon.
+
 ### Der Reglertab
 
 Die Anwendung rechnet jeden Anteil jedes Reglers in jedem Schritt — und zeigte
