@@ -41,7 +41,7 @@ from ...db.models import ProjectSetup
 from ...resources import app_icon_path
 from ..settings import load_settings
 from ..widgets import CONTROL_PANELS, ControllerView, ControlPanel, PhaseGrid, StatusLamp
-from ..widgets.log_view import LogView
+from ..widgets.log_view import OPERATION_EVENT, LogView
 from ..widgets.variable_pool import VariablePool
 
 #: Provenance and licence. Taken from the Information tab of the original,
@@ -69,6 +69,11 @@ port.</p>
 #: The gap between two panels of Control Options. Where the panels sit is not
 #: here — it is a text file the user can edit; see gui/panel_layout.py.
 PANEL_SPACING = 6
+
+#: Air above and below the two signal lamps in the menu bar. It makes the bar
+#: taller, which is the point: flush against the window frame they read as
+#: part of the title bar rather than as part of the application.
+LAMP_MARGIN = 7
 
 
 class ControlWindow(QMainWindow):
@@ -99,9 +104,13 @@ class ControlWindow(QMainWindow):
         self._leave_confirmed = False
 
         info = setup.info
-        self.setWindowTitle(
-            f"Control App - {info.name} - {info.organism_name} - {info.bioreactor_name}"
-        )
+        # The student view is named in the title because it is the one setting
+        # that changes what the window can do. Someone looking at a screenshot
+        # of a locked Δt should not have to guess why it is locked.
+        title = f"Control App - {info.name} - {info.organism_name} - {info.bioreactor_name}"
+        if self.settings.student_view:
+            title += " - Student View"
+        self.setWindowTitle(title)
         # The five controller panels and the run column need this much; see
         # ControlPanel.content_width and indicators.FIELD_MIN_WIDTH. The
         # height carries the tallest panel and the run column.
@@ -250,10 +259,15 @@ class ControlWindow(QMainWindow):
         No "Connected" lamp: there is no standing connection to report. The
         database is read once at the start and written once at the end, and a
         lamp that is green for the life of the window says nothing.
+
+        The margins are the whole point of the corner widget being this tall:
+        a menu bar sizes itself around its corner widget, so the padding here
+        lifts the lamps off the window frame instead of leaving them pressed
+        against it.
         """
         strip = QWidget()
         row = QHBoxLayout(strip)
-        row.setContentsMargins(0, 0, 10, 0)
+        row.setContentsMargins(0, LAMP_MARGIN, 10, LAMP_MARGIN)
         row.setSpacing(6)
         self.lamps: dict[str, StatusLamp] = {}
         for name in ("Process Running", "Inoculated"):
@@ -585,15 +599,18 @@ class ControlWindow(QMainWindow):
         # The refresh rate follows the step width, so speedfactor 1 is real
         # time whatever Δt is.
         self.runner.sync_interval_to_dt()
-        self.note(f"Δt set to {seconds} s, refresh every {self.runner.interval_ms} ms")
+        self.note(
+            f"Δt set to {seconds} s, refresh every {self.runner.interval_ms} ms",
+            OPERATION_EVENT,
+        )
 
     def toggle_run(self) -> None:
         if self.runner.running:
             self.runner.pause()
-            self.note("Process paused", "Process")
+            self.note("Process paused", OPERATION_EVENT)
         else:
             self.runner.start()
-            self.note("Process started", "Process")
+            self.note("Process started", OPERATION_EVENT)
         self.refresh()
         self.refresh_phases()
 
@@ -970,7 +987,7 @@ class ControlWindow(QMainWindow):
         self.figure_windows.append(window)
         window.show()
         window.raise_()
-        self.note(f"Plot opened ({window.template.name})")
+        self.note(f"Plot opened ({window.template.name})", OPERATION_EVENT)
         return window
 
     def _figure_closed(self, window) -> None:
@@ -986,7 +1003,7 @@ class ControlWindow(QMainWindow):
         self.data_tables.append(window)
         window.show()
         window.raise_()
-        self.note("Data table opened")
+        self.note("Data table opened", OPERATION_EVENT)
         return window
 
     def _table_closed(self, window) -> None:

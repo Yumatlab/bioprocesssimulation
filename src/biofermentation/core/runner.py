@@ -111,8 +111,38 @@ def load_project_state(
         state.a.skipped_variables = _adopt(state, stored.t, stored.v)
         organism.initialize(state)  # rebuild a, keep v
         state.a.restarted_variables = _restart_unstored(state)
+        _adopt_inoculation(state)
 
     return state, organism
+
+
+def _adopt_inoculation(state: SimulationState) -> None:
+    """Read the inoculation back out of the stored biomass.
+
+    `a` is not persisted, and `initialize` only sets `inoc_occ` for a fresh
+    run — `init_variables` is skipped once there are stored steps. A resumed
+    run therefore started with `inoc_occ` = 0 while `f_Inoc` was still 1, and
+    the model takes exactly that pair as "inoculate now": the next step
+    replaced the grown `cXL` with `cXL0` and moved the time of inoculation to
+    the moment the project was reopened. Both are silent; the only visible
+    sign was the lamp, which stayed dark until the first step turned it on.
+
+    The series says what happened. Biomass in the vessel means inoculation
+    has occurred, and the step that wrote the first positive value recorded
+    `t` of the step before it as the time of inoculation — which is what the
+    antifoam timer counts from. Inoculated at t = 0 keeps `ToI` at 0, as a
+    fresh run does.
+    """
+    cXL = state.v.get("cXL")
+    if cXL is None or not isinstance(cXL, np.ndarray):
+        return
+    grown = np.flatnonzero(np.nan_to_num(cXL[: state.idx + 1]) > 0)
+    if grown.size == 0:
+        state.a.inoc_occ = 0
+        return
+    first = int(grown[0])
+    state.a.inoc_occ = 1
+    state.a.ToI = float(state.v.t[first - 1]) if first > 0 else 0.0
 
 
 def _restart_unstored(state: SimulationState) -> list[str]:

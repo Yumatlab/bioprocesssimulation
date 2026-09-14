@@ -333,6 +333,42 @@ war und abgeschaltet herumstand.
 - **Gelesen wird beim Öffnen eines Projekts**, nicht laufend. Ein offenes
   Fenster behält, womit es gebaut wurde, und der Dialog sagt das, statt so zu
   tun als ob.
+- **Die Studierendenansicht steht im Fenstertitel.** Sie ist die einzige
+  Einstellung, die ändert, was das Fenster kann; ein gesperrtes Δt ohne
+  Erklärung daneben liest sich als Defekt.
+
+### Was im Log steht, und was man davon sieht
+
+Drei Sorten Einträge und zwei Schalter darüber. **Parameter Value Change** ist
+der laute Normalfall, **Operation** der neue: Plot geöffnet, Datentabelle
+geöffnet, Prozess pausiert, Δt geändert — was mit der *Anwendung* gemacht
+wurde, nicht mit dem Prozess. Alles andere (Phasenereignisse, Phaseninfos,
+Prozess, Projekt, Fehler) steht immer da.
+
+- **Geschrieben wird immer, gezeigt nicht.** Der Filter arbeitet auf den
+  Datensätzen, nicht auf dem Text: ein nachträglich gesetzter Haken zeigt die
+  ganze Sitzung, nicht nur das, was danach kommt. Und der Export bekommt
+  ohnehin alles — ein Log, der nur zeigt, was gerade angehakt war, wäre als
+  Protokoll wertlos.
+- **Operationen starten ausgeblendet.** Sie sind die häufigsten Einträge und
+  die uninteressantesten für die Frage, die jemand an einen Log stellt.
+
+### Ein wieder geöffnetes Projekt ist schon beimpft
+
+`a` wird nicht gespeichert, und `initialize` setzt `inoc_occ` nur für einen
+frischen Zustand — `init_variables` läuft nicht mehr, sobald Schritte
+gespeichert sind. Ein fortgesetzter Lauf kam deshalb mit `inoc_occ` = 0
+zurück, während `f_Inoc` noch 1 war: genau das Paar, das das Modell als „jetzt
+beimpfen" liest. Der nächste Schritt ersetzte die gewachsene `cXL` durch
+`cXL0` und setzte `ToI`, von dem der Antischaumtimer zählt, auf den Moment des
+Öffnens. Beides still — sichtbar war nur die Lampe, die erst mit dem ersten
+Schritt anging, und genau die hat es gemeldet.
+
+**Die Zeitreihe sagt, was war.** Biomasse im Kessel heißt beimpft, und der
+Schritt, der den ersten positiven Wert geschrieben hat, hat `t` des
+Vorschritts als Beimpfungszeit vermerkt. `_adopt_inoculation` liest beides
+daraus zurück; bei `f_InocStart` bleibt `ToI` auf 0, wie bei einem frischen
+Lauf.
 
 ### Der Reglertab
 
@@ -376,6 +412,12 @@ lesen, damit beides nicht auseinanderläuft.
   Phase schreibt sie beim Start, und sie zum Bearbeiten anzubieten hieße
   anzubieten, ihre eigene Aufzeichnung zu überschreiben.
 
+**Die Abschnitte stehen in Lesereihenfolge**, nicht in Datenbankreihenfolge:
+Parameters, Organism, Bioreactor, General (`SECTION_ORDER`). `categoryTab`
+sortiert nach ID und schob damit General — Kalibrierkonstanten und Schalter —
+über die Sollwerte, wegen derer der Dialog geöffnet wurde. Ein Abschnitt, den
+die Liste nicht kennt, folgt hinten, statt sich dazwischenzudrängen.
+
 **Ein Feld, das seinen Wert nicht darstellen kann, meldet eine Änderung, die
 niemand gemacht hat.** `KD_gasmix` ist 1e-05, die `QDoubleSpinBox` hatte vier
 Nachkommastellen, hielt also 0.0000 und gab das zurück: in jedem Phasendialog
@@ -408,6 +450,11 @@ Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
   Zuordnung mit `default`); es ist Geschmack, keine Verdrahtung. Fünf Modi
   sind ein anderes Problem als zwei: pO2 trägt den Drehschalter, der Breite
   gegen Höhe tauscht (132 px Quadrat, keine Breite), der Rest die Tasten.
+- **Die beiden Signallampen haben Luft nach oben.** Sie sitzen als
+  Eckwidget in der Menüleiste, und ohne Rand oben und unten liegt die Lampe
+  auf y = 0 — sie liest sich dann als Teil der Titelleiste statt als Teil der
+  Anwendung. `LAMP_MARGIN` macht die Leiste um 2 × 7 px höher; eine Menüleiste
+  richtet sich nach ihrem Eckwidget.
 - **Die Lampe hat nur der Tastenwähler.** Eine Taste sagt, *welcher* Modus
   gewählt ist — blau, nicht grün, denn ob dieser Modus etwas regelt, ist eine
   zweite Frage, und die beantwortet die Lampe daneben. Der Drehschalter

@@ -21,7 +21,11 @@ from biofermentation.core.simulation_runner import SimulationRunner
 from biofermentation.db import load_phases
 from biofermentation.db.plots import load_plot_styles, load_plot_template
 from biofermentation.gui.dialogs.export import ExportDialog, write_table, write_text_table
-from biofermentation.gui.dialogs.parameters import ControllerParametersDialog, ParameterDialog
+from biofermentation.gui.dialogs.parameters import (
+    SECTION_ORDER,
+    ControllerParametersDialog,
+    ParameterDialog,
+)
 from biofermentation.gui.dialogs.plot_settings import STANDARD, PlotSettingsDialog, VariableEditor
 from biofermentation.gui.widgets.indicators import select_data
 from biofermentation.gui.widgets.panel_specs import CONTROL_PANELS, PH_PANEL
@@ -141,6 +145,24 @@ def test_during_the_run_only_cyclic_parameters_stay_editable(window):
     assert "cS1L0" in dialog._boxes
     assert dialog._boxes["cS1L0"].isEnabled() is False
     assert dialog._boxes["pHw"].isEnabled() is True
+
+
+def test_the_sections_come_in_reading_order(window):
+    """Parameters first, then the organism, the vessel and the rest.
+
+    The database sorts categories by id, which puts General — calibration
+    constants and switches — above the setpoints someone opened the dialog
+    for. A section SECTION_ORDER does not know follows rather than pushing in.
+    """
+    dialog = ParameterDialog(window.setup.p_meta, window.runner.state.p, started=False)
+    sections = [group.title().split(" — ")[0] for group in dialog._groups]
+    seen = list(dict.fromkeys(sections))
+    known = [section for section in seen if section in SECTION_ORDER]
+    assert known == [section for section in SECTION_ORDER if section in seen]
+    assert sections == sorted(
+        sections,
+        key=lambda name: SECTION_ORDER.index(name) if name in SECTION_ORDER else len(SECTION_ORDER),
+    ), "a section appears twice, split by another one"
 
 
 def test_invisible_parameters_are_not_offered(window):

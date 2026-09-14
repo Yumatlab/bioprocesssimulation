@@ -31,6 +31,7 @@ EVENT_COLORS = {
     "Phase Event": "#5fd08a",
     "Phase Information": "#c3a6ff",
     "Parameter Value Change": "#e5b567",
+    "Operation": "#5fc9c3",
     "Project": "#9aa0a6",
     "Error": "#ff7b72",
 }
@@ -42,6 +43,11 @@ SESSION_RULE = "──────── this session ────────"
 
 #: The event type the "include parameter updates" switch filters out.
 PARAMETER_EVENT = "Parameter Value Change"
+#: Handling the application rather than the process: a plot opened, a table
+#: opened, the run paused, Δt changed. It is recorded — the log is the record
+#: of a session — but it is not what someone reads the log for, so it starts
+#: hidden and the switch below brings it back.
+OPERATION_EVENT = "Operation"
 
 
 @dataclass
@@ -103,6 +109,18 @@ class LogView(QWidget):
         self.parameter_checkbox.setChecked(True)
         self.parameter_checkbox.toggled.connect(self.rebuild)
         controls.addWidget(self.parameter_checkbox)
+
+        # Off to begin with: operations are the noisiest entries and the least
+        # informative about the run. They are written either way, so ticking
+        # the box shows them for the whole session, not just from now on.
+        self.operation_checkbox = QCheckBox("Include operations")
+        self.operation_checkbox.setChecked(False)
+        self.operation_checkbox.setToolTip(
+            "Opening a plot or a data table, pausing the run, changing Δt — "
+            "what was done to the application rather than to the process."
+        )
+        self.operation_checkbox.toggled.connect(self.rebuild)
+        controls.addWidget(self.operation_checkbox)
         layout.addLayout(controls)
 
         self.view = QTextEdit()
@@ -177,6 +195,8 @@ class LogView(QWidget):
 
     def _passes(self, entry: LogEntry) -> bool:
         if not self.parameter_checkbox.isChecked() and entry.event_type == PARAMETER_EVENT:
+            return False
+        if not self.operation_checkbox.isChecked() and entry.event_type == OPERATION_EVENT:
             return False
         needle = self.filter_edit.text().strip().lower()
         if not needle:
@@ -261,4 +281,4 @@ def _monospace() -> str:
     return font.family()
 
 
-__all__ = ["EVENT_COLORS", "LogEntry", "LogView"]
+__all__ = ["EVENT_COLORS", "OPERATION_EVENT", "PARAMETER_EVENT", "LogEntry", "LogView"]

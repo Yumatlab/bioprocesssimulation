@@ -54,6 +54,7 @@ from biofermentation.gui.widgets import (
 from biofermentation.gui.widgets.control_panel import MANUAL_MODE
 from biofermentation.gui.widgets.controller_view import SHARE_COLORS
 from biofermentation.gui.widgets.indicators import GREEN, RED
+from biofermentation.gui.widgets.log_view import OPERATION_EVENT
 from biofermentation.gui.widgets.tex import tex_label, tex_to_html
 from biofermentation.gui.windows import ControlWindow
 from biofermentation.gui.windows.control_app import PANEL_SPACING
@@ -420,8 +421,22 @@ def test_saving_resumes_a_running_simulation(window):
 
 
 def test_the_log_tab_collects_what_happened(window):
+    """Starting and pausing are recorded, and shown once operations are on.
+
+    They are operations, not process events: the log starts without them,
+    because what someone reads it for is what the process did. Recorded all
+    the same — ticking the box shows the whole session, not only what came
+    after the tick.
+    """
     window.run_button.click()
     window.run_button.click()
+    written = [
+        entry for entry in window.log_view.entries if entry.event_type == OPERATION_EVENT
+    ]
+    assert [entry.message for entry in written] == ["Process started", "Process paused"]
+
+    assert "Process paused" not in window.log_view.view.toPlainText()
+    window.log_view.operation_checkbox.setChecked(True)
     text = window.log_view.view.toPlainText()
     assert "Process started" in text
     assert "Process paused" in text
@@ -1215,3 +1230,52 @@ def test_the_student_view_locks_the_step_width_and_hides_the_speed(qapp, db_copy
     ordinary = _window_with(db_copy, monkeypatch, Settings())
     assert ordinary.dt_box.isReadOnly() is False
     assert ordinary.speed_box.parent() is not None
+
+
+def test_the_inoculated_lamp_is_on_before_the_first_step(qapp, db_copy):
+    """A project that was inoculated comes back inoculated.
+
+    It used to take a step to find out: `a` is not persisted, the lamp reads
+    `inoc_occ`, and that was 0 until the model had recomputed it. The lamp
+    was the visible half of it — the invisible half was the model reading the
+    same 0 as "inoculate now" and resetting the biomass.
+    """
+    from biofermentation.db import save_project
+    from biofermentation.db.models import VariableSeries
+
+    setup = load_phases(db_copy, PICHIA_PROJECT)
+    state, organism = load_project_state(db_copy, PICHIA_PROJECT)
+    state.p["f_Inoc"] = 1.0
+    state.p["f_InocStart"] = 1.0
+    state.v.cXL[0] = float(state.p["cXL0"])
+    runner = SimulationRunner(organism, state, phases=PhaseAutomaton.from_setup(setup))
+    for _ in range(3):
+        runner._on_tick()
+    save_project(
+        db_copy,
+        PICHIA_PROJECT,
+        p=dict(state.p),
+        series=VariableSeries(
+            t=state.trimmed()["t"], v=state.trimmed(), real_t=[""] * (state.idx + 1)
+        ),
+    )
+
+    reopened, organism = load_project_state(db_copy, PICHIA_PROJECT)
+    window = ControlWindow(
+        load_phases(db_copy, PICHIA_PROJECT),
+        SimulationRunner(organism, reopened),
+        db_copy,
+    )
+    assert window.lamps["Inoculated"].color() == GREEN
+    assert window.inoculate_button.isEnabled() is False
+
+
+def test_the_student_view_says_so_in_the_title(qapp, db_copy, monkeypatch):
+    """A locked Δt with nothing to explain it reads as a defect."""
+    from biofermentation.gui.settings import Settings
+
+    window = _window_with(db_copy, monkeypatch, Settings(student_view=True))
+    assert window.windowTitle().endswith(" - Student View")
+
+    ordinary = _window_with(db_copy, monkeypatch, Settings())
+    assert "Student View" not in ordinary.windowTitle()

@@ -50,6 +50,13 @@ CYCLIC = "cyclic"
 #: reading_rate value of parameters no editor should show at all.
 INVISIBLE = "invisible"
 
+#: The order the sections of categoryTab are shown in. The database sorts by
+#: id, which puts "General" — calibration constants and switches nobody opens
+#: this dialog for — above the setpoints. This is the order they are looked
+#: for in: what is being run, then what it is run with, then the vessel, then
+#: the rest. A section not named here follows, in database order.
+SECTION_ORDER = ("Parameters", "Organism", "Bioreactor", "General")
+
 
 def decimals_for(value: float, floor: int = 4, cap: int = 12) -> int:
     """Enough places to show this value, at least `floor`.
@@ -471,7 +478,13 @@ def _locked_hint(*, partial: bool = False) -> QLabel:
 
 
 def _by_category(p_meta, sections=None) -> dict[tuple[str, str], list[dict]]:
-    """Group the metadata rows, keeping the order load_phases sorted them in."""
+    """Group the metadata rows, sections in reading order.
+
+    Within a section the order is the one `load_phases` sorted the rows in.
+    The sections themselves are put in the order someone looks for them:
+    what the run does first, then what it runs on. A section the database
+    grew that SECTION_ORDER does not know comes last rather than nowhere.
+    """
     grouped: dict[tuple[str, str], list[dict]] = {}
     for meta in p_meta:
         if meta.get("reading_rate") == INVISIBLE:
@@ -480,4 +493,9 @@ def _by_category(p_meta, sections=None) -> dict[tuple[str, str], list[dict]]:
         if sections is not None and section not in sections:
             continue
         grouped.setdefault((section, meta.get("categoryname") or "Other"), []).append(meta)
-    return grouped
+
+    def rank(key: tuple[str, str]) -> int:
+        section = key[0]
+        return SECTION_ORDER.index(section) if section in SECTION_ORDER else len(SECTION_ORDER)
+
+    return {key: grouped[key] for key in sorted(grouped, key=rank)}

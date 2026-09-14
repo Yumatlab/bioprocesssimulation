@@ -285,6 +285,98 @@ def test_a_stored_run_is_resumed_where_it_stopped(registry, tmp_path):
     assert resumed.idx == state.idx + 1
 
 
+def test_a_resumed_run_is_not_inoculated_a_second_time(registry, tmp_path):
+    """Reopening an inoculated project must not throw the culture away.
+
+    `a` is not persisted and `init_variables` only runs for a fresh state, so
+    a resumed run came back with `inoc_occ` = 0 while `f_Inoc` was still 1 —
+    the pair the model reads as "inoculate now". The next step replaced the
+    grown cXL with cXL0 and moved the time of inoculation, which the antifoam
+    timer counts from, to the moment the project was reopened. Nothing said
+    so; the lamp went on and the biomass went back.
+    """
+    from biofermentation.db import save_project
+    from biofermentation.db.models import VariableSeries
+
+    db = tmp_path / "SimulationAppDB.db"
+    shutil.copy(TEMPLATE_DB, db)
+
+    state = run_simulation("escherichia_coli", _growing(ECOLI_PROJECT), 20)
+    grown = float(state.v.cXL[state.idx])
+    assert grown > float(state.p.cXL0), "the fixture did not grow, so nothing is at stake"
+    save_project(
+        db,
+        ECOLI_PROJECT,
+        p=dict(state.p),
+        series=VariableSeries(
+            t=state.trimmed()["t"], v=state.trimmed(), real_t=[""] * (state.idx + 1)
+        ),
+    )
+
+    resumed, model = load_project_state(db, ECOLI_PROJECT)
+    assert resumed.p.f_Inoc == 1
+    assert resumed.a.inoc_occ == 1, "the stored biomass says it has happened"
+
+    model.calculate_step(resumed)
+    assert float(resumed.v.cXL[resumed.idx]) > grown, "the culture kept growing"
+
+
+def test_a_resumed_run_recovers_when_the_culture_went_in(registry, tmp_path):
+    """Inoculation during the run, not at the start: ToI is the time of it."""
+    from biofermentation.db import save_project
+    from biofermentation.db.models import VariableSeries
+
+    db = tmp_path / "SimulationAppDB.db"
+    shutil.copy(TEMPLATE_DB, db)
+
+    organism = get_organism("escherichia_coli")
+    state = build_state(_parameters(ECOLI_PROJECT, f_Inoc=0.0, f_InocStart=0.0), organism)
+    run_steps(state, organism, 5)
+    state.p.f_Inoc = 1.0  # the Inoculate button, pressed mid-run
+    inoculated_after = float(state.v.t[state.idx])
+    run_steps(state, organism, 5)
+    assert state.a.ToI == pytest.approx(inoculated_after)
+
+    save_project(
+        db,
+        ECOLI_PROJECT,
+        p=dict(state.p),
+        series=VariableSeries(
+            t=state.trimmed()["t"], v=state.trimmed(), real_t=[""] * (state.idx + 1)
+        ),
+    )
+
+    resumed, _ = load_project_state(db, ECOLI_PROJECT)
+    assert resumed.a.inoc_occ == 1
+    assert resumed.a.ToI == pytest.approx(inoculated_after)
+
+
+def test_a_resumed_run_that_was_never_inoculated_still_can_be(registry, tmp_path):
+    from biofermentation.db import save_project
+    from biofermentation.db.models import VariableSeries
+
+    db = tmp_path / "SimulationAppDB.db"
+    shutil.copy(TEMPLATE_DB, db)
+
+    organism = get_organism("escherichia_coli")
+    state = build_state(_parameters(ECOLI_PROJECT, f_Inoc=0.0, f_InocStart=0.0), organism)
+    run_steps(state, organism, 10)
+    save_project(
+        db,
+        ECOLI_PROJECT,
+        p=dict(state.p),
+        series=VariableSeries(
+            t=state.trimmed()["t"], v=state.trimmed(), real_t=[""] * (state.idx + 1)
+        ),
+    )
+
+    resumed, model = load_project_state(db, ECOLI_PROJECT)
+    assert resumed.a.inoc_occ == 0
+    resumed.p.f_Inoc = 1.0
+    model.calculate_step(resumed)
+    assert float(resumed.v.cXL[resumed.idx]) == pytest.approx(float(resumed.p.cXL0))
+
+
 @pytest.mark.xfail(
     reason="variable_handlingTab assigns neither organism the offgas fractions, "
     "OTRmax, OURmax or the setpoint series; see docs and CLAUDE.md",
