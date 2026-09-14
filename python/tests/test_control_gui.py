@@ -782,7 +782,7 @@ def test_the_signal_lights_sit_in_the_menu_bar(window):
 
 def test_the_panels_sit_where_the_layout_file_says(window):
     """The arrangement comes out of a text file, not out of the window."""
-    layout = window.tabs.widget(0).layout()
+    layout = window.control_options.layout()
     for title, place in window.placements.items():
         index = layout.indexOf(window.panels[title])
         assert index >= 0, title
@@ -841,12 +841,18 @@ def test_every_value_box_in_the_tab_is_the_same_width(window):
 
 
 def test_the_control_window_fits_a_normal_screen(window):
-    """It asked for 1600 px: a QDoubleSpinBox sizes itself to the widest text
-    its range allows, and these accept plus or minus a billion.
+    """1440 is the narrowest screen this is meant for.
 
-    1440 is the narrowest screen this is meant for. Five panels side by side
-    cost more width than a grid of six does — that is the price of the row,
-    and it has to stay under that number.
+    How wide the panels want to be is not a number this project controls: a
+    QDoubleSpinBox sizes itself to the widest text its range allows, and the
+    range is plus or minus a billion drawn in whatever font the system uses.
+    Measured at 1174 px on macOS and 1538 on a Windows runner — with the same
+    layout file.
+
+    So the window does not promise to be wide enough for its contents; it
+    promises to fit the screen, and Control Options scrolls when the two
+    disagree. That is what this checks, and it is the reason the tab sits in
+    a scroll area.
     """
     assert window.minimumSizeHint().width() <= 1440
     assert window.width() <= 1440
@@ -1059,12 +1065,19 @@ def test_the_knob_marks_hand_control_in_red(qapp):
 
 
 def test_every_value_box_in_the_tab_is_the_same_width_across_panels(window):
-    """A setpoint without a reading beside it used to get half the width."""
+    """A setpoint without a reading beside it used to get half the width.
+
+    Measured as a ratio, not in pixels. A grid hands its leftover pixels to
+    whichever column will take them, and how many are left over depends on
+    the font: within 2 px on macOS, 140/144/148 on a Windows runner. Neither
+    is the defect this guards — that one was 72 against 133, a field at half
+    the width of its neighbour.
+    """
     _laid_out(window)
     widths = {
         row.setpoint.width() for panel in window.panels.values() for row in panel.rows.values()
     }
-    assert max(widths) - min(widths) <= 2, sorted(widths)
+    assert min(widths) >= 0.9 * max(widths), sorted(widths)
 
 
 def test_the_knob_spreads_its_positions_over_the_arc(qapp):

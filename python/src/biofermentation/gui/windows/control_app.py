@@ -15,8 +15,8 @@ Two rules the window keeps to:
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QPalette, QPixmap
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QAction, QGuiApplication, QPalette, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QFormLayout,
@@ -128,10 +128,7 @@ class ControlWindow(QMainWindow):
         if self.settings.student_view:
             title += " - Student View"
         self.setWindowTitle(title)
-        # The five controller panels and the run column need this much; see
-        # ControlPanel.content_width and indicators.FIELD_MIN_WIDTH. The
-        # height carries the tallest panel and the run column.
-        self.resize(1420, 680)
+        self._open_at_a_sensible_size()
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -184,6 +181,25 @@ class ControlWindow(QMainWindow):
             self.note(f"Panel layout not used — {self._layout_problem}", "Error")
 
     # ------------------------------------------------------------ build --
+
+    def _open_at_a_sensible_size(self) -> None:
+        """Wide enough for the panels, and never wider than the screen.
+
+        1420 x 680 was typed in once and then stopped being true. What the
+        Control Options tab needs depends on the layout file and on the
+        system's font: measured 936 x 672 here, and half as much again on a
+        Windows runner. Opening below that means opening already scrolled.
+
+        So: ask for what the panels want plus the run column, and let the
+        screen have the last word — a window larger than the display is the
+        one size that helps nobody. Anything still left over scrolls.
+        """
+        wanted = QSize(1420, 770)
+        screen = QGuiApplication.primaryScreen()
+        if screen is not None:
+            available = screen.availableGeometry().size()
+            wanted = wanted.boundedTo(QSize(available.width() - 40, available.height() - 80))
+        self.resize(wanted.expandedTo(QSize(900, 560)))
 
     def _style_tab_pages(self) -> None:
         """Let the stylesheet paint the pages.
@@ -314,7 +330,22 @@ class ControlWindow(QMainWindow):
             )
 
     def _build_control_options(self) -> QWidget:
-        """The controller panels, arranged the way the layout file says."""
+        """The controller panels, arranged the way the layout file says.
+
+        In a scroll area, like the Process Manager, and for the same reason:
+        **the window has to be able to be narrower than its contents.** What
+        the panels need is not a fixed number — it is however wide the
+        system's font draws five panels side by side, and that is a different
+        number on every platform. Measured: 1174 px here against 1538 on a
+        Windows runner, where the screen this is meant for is 1440. Without
+        the scroll area the window simply cannot be made to fit, and a
+        minimum width nobody can satisfy is worse than a scrollbar nobody
+        needs.
+
+        It also keeps the arrangement a matter of taste. The layout file may
+        put all five panels on one row; whether that fits is then the screen's
+        question, not the application's.
+        """
         from ..panel_layout import load_layout
 
         page = QWidget()
@@ -341,7 +372,12 @@ class ControlWindow(QMainWindow):
             layout.addWidget(panel, place.row, place.column, place.row_span, place.column_span)
 
         self._size_panel_grid(layout)
-        return page
+
+        area = QScrollArea()
+        area.setWidgetResizable(True)
+        area.setWidget(page)
+        self.control_options = page
+        return area
 
     def _size_panel_grid(self, layout) -> None:
         """Equal columns, equal rows — whatever the arrangement turns out to be.
