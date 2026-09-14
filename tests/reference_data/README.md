@@ -53,7 +53,10 @@ Begasung, Antischaum, Ernte, Glycerin.
 ## Pichia — vorhanden, aber nicht verwendbar
 
 Quelle ist `Thesis_SimulationAppDB.db` (Stand der Abgabe, 2. März 2025),
-Projekt 520. Der Lauf selbst ist ausgezeichnet: 8,2 h, beide Reservoirs, die
+Projekt 520. **Diese Datei liegt nicht im Repository** — 64 MB, die jeder
+Klon mitschleppen würde, um eine Extraktion zu wiederholen, deren Ergebnis
+danebenliegt und getrackt ist. Wer `extract.py` erneut laufen lassen will,
+legt sie unter `additional_files/` ab; `.gitignore` hält sie draußen. Der Lauf selbst ist ausgezeichnet: 8,2 h, beide Reservoirs, die
 vollständige AOX-Induktions- und Expressionskette, sieben Phasen
 (Batch → Fed-Batch → Puls-Feed → Produktionsphase → Puls-Feed 2 →
 Produktion 2 → Methanol-Toxizitätstest).
