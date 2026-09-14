@@ -176,8 +176,15 @@ def test_every_organism_plugin_is_a_hidden_import(specs):
 
 
 def test_a_plugin_without_a_definition_is_not_declared_as_data(specs):
-    """Pichia ships no definition.yaml; declaring it would break the build."""
-    declared = [source for source, _ in specs.data_files()]
+    """Pichia ships no definition.yaml; declaring it would break the build.
+
+    The separators are normalised before the comparison, and that is the
+    whole point of this line. Under Windows these paths come back with
+    backslashes, the needle never matches, and `assert not any(...)` passes
+    for the wrong reason — a test that stops testing instead of failing.
+    """
+    declared = [str(source).replace("\\", "/") for source, _ in specs.data_files()]
+    assert declared, "the specs declare no data files at all"
     assert not any("pichia_pastoris/definition.yaml" in source for source in declared)
 
 
