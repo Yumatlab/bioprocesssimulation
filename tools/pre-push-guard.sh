@@ -13,17 +13,21 @@
 #
 # Three rules, and each one names what it is protecting:
 #
-#   1. Never write to the remote's main or master. Our history goes to its
-#      own branch; bringing the two together is a decision made in a pull
-#      request with both sides visible, not a side effect of a push.
-#   2. Never delete a remote branch.
-#   3. Never overwrite a remote branch with something that is not a
+#   1. Never delete a remote branch.
+#   2. Never overwrite a remote branch with something that is not a
 #      continuation of it. This is what a forced push does, and it is the
-#      only way to actually lose someone else's commits.
+#      only way to actually lose someone else's commits. It also catches the
+#      case this repository was built for: two histories with no common
+#      root, where nothing on the remote is an ancestor of anything here.
+#   3. Not to main or master unless it is said out loud. Adding to the
+#      MATLAB history is a legitimate thing to do; doing it by accident is
+#      not. Rule 2 already makes it impossible to lose anything, so this is
+#      about intent, not about safety:
 #
-# To push somewhere this hook forbids, edit the branch list below or remove
-# the hook. Refusing to be overridden by a flag is the point; refusing to be
-# removed would just be theatre.
+#          BIOFERM_PUSH_MAIN=1 git push origin matlab-main:main
+#
+# There is no flag for rules 1 and 2, and no flag is planned. Refusing to be
+# overridden is their whole purpose.
 
 PROTECTED="refs/heads/main refs/heads/master"
 ZERO="0000000000000000000000000000000000000000"
@@ -34,15 +38,19 @@ status=0
 while read -r local_ref local_sha remote_ref remote_sha; do
     [ -z "$remote_ref" ] && continue
 
-    for protected in $PROTECTED; do
-        if [ "$remote_ref" = "$protected" ]; then
-            echo "pre-push: refusing to push to $remote_ref on the remote." >&2
-            echo "          That branch holds the MATLAB application. Push to a" >&2
-            echo "          branch of its own and merge through a pull request:" >&2
-            echo "          git push origin main:python-port" >&2
-            status=1
-        fi
-    done
+    if [ -z "$BIOFERM_PUSH_MAIN" ]; then
+        for protected in $PROTECTED; do
+            if [ "$remote_ref" = "$protected" ]; then
+                echo "pre-push: refusing to push to $remote_ref without being asked to." >&2
+                echo "          That branch holds the MATLAB application. Either push" >&2
+                echo "          to a branch of its own," >&2
+                echo "              git push origin main:python-port" >&2
+                echo "          or say that main is really meant:" >&2
+                echo "              BIOFERM_PUSH_MAIN=1 git push origin <local>:main" >&2
+                status=1
+            fi
+        done
+    fi
 
     if [ "$local_sha" = "$ZERO" ]; then
         echo "pre-push: refusing to delete $remote_ref on the remote." >&2
