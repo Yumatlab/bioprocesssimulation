@@ -565,6 +565,25 @@ Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
   größere behielte seinen Vorsprung bei jeder Fenstergröße. `_size_panel_grid`
   rechnet beides aus den Platzierungen aus — ein Panel über zwei Zellen
   braucht aus jeder die Hälfte.
+- **Wie breit die Panels sein wollen, entscheidet nicht dieses Projekt.** Eine
+  `QDoubleSpinBox` bemisst sich an der breitesten Zahl ihres Wertebereichs, und
+  der ist ±1e12 — gezeichnet in der Schrift des jeweiligen Systems. Gemessen
+  mit derselben Layoutdatei: **1174 px unter macOS, 1538 auf einem
+  Windows-Runner**, bei 1440 als schmalstem Zielbildschirm. Eine Mindestbreite,
+  die niemand einhalten kann, ist schlimmer als ein Rollbalken, den niemand
+  braucht: **Control Options liegt deshalb in einer `QScrollArea`**, wie der
+  Process Manager. Das Fenster verspricht nicht, breit genug für seinen Inhalt
+  zu sein, sondern auf den Bildschirm zu passen.
+  Die Öffnungsgröße wird dabei am Bildschirm begrenzt
+  (`_open_at_a_sensible_size`) — 1420 × 680 war eine einmal hingeschriebene
+  Zahl und lag unter dem, was der Tab braucht (936 × 672), das Fenster ging
+  also von sich aus gerollt auf.
+- **Pixelgenaue Layoutzusagen halten nur auf einem System.** Die Feldbreiten
+  liegen hier innerhalb von 2 px beieinander, unter Windows bei 140/144/148 —
+  ein Raster verteilt seine Restpixel, und wie viele übrig bleiben, hängt an
+  der Schrift. Der Test misst deshalb ein Verhältnis (kein Feld unter 90 % des
+  breitesten) statt einer Pixeldifferenz. Der Fehler, den er bewacht, war 72
+  gegen 133.
 - **Die Panels füllen ihre Zelle**, ohne Ausrichtung. Der Zwischenraum vor dem
   Knopf sammelt die Luft ein, also steht der Knopf am Fuß jedes Panels und
   alle vier stehen auf einer Linie.
