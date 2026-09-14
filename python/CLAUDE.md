@@ -242,7 +242,7 @@ MATLAB-Projektordner.
 | 5 | ControlApp, Phasenmanager | **abgeschlossen** |
 | 6 | Plot-Engine | **abgeschlossen** |
 | 7 | Verteilung Windows/macOS | **abgeschlossen** |
-| 8 | Dokumentation | offen |
+| 8 | Dokumentation | **abgeschlossen** |
 | — | UX-Durchgang nach dem ersten Anwendertest | **abgeschlossen**, 18 Punkte |
 
 ### UX-Durchgang — was daraus als Regel bleibt
@@ -1136,6 +1136,42 @@ Kopieren der `.db` ohne WAL sind sie verloren.
   unmöglich — kein Toleranzwert kann gleichzeitig aussagekräftig und
   erfüllbar sein. Deshalb: scharfes Fenster vor dem ersten Umschalten, danach
   nichts. Die Toleranzen in `test_organisms.py` sind gemessen, nicht geraten.
+
+### Phase 8: fünf Dokumente, je eines pro Frage
+
+`docs/` beantwortet fünf Fragen und keine zweimal. Ein Wegweiser
+(`docs/README.md`) sagt, welche welche ist.
+
+| Datei | Frage |
+|---|---|
+| `handbuch.md` | Wie bediene ich das? |
+| `installation.md` | Wie installiere und verteile ich das? |
+| `architektur.md` | Wie ist das gebaut? |
+| `weiterentwicklung.md` | Wie entwickle ich es weiter? |
+| `verifikation_escherichia_coli.md` | Stimmen die Zahlen? |
+
+- **Diese Datei bleibt das Warum.** `architektur.md` ist die Landkarte und
+  verweist hierher, statt die Begründungen zu wiederholen — zwei Texte über
+  dieselbe Sache laufen nach der dritten Änderung auseinander, und dann weiß
+  niemand mehr, welcher gilt.
+- **Nichts wird behauptet, was nicht nachschlagbar ist.** Die
+  Parameterbeschreibungen im Handbuch kommen aus `default_modelTab`, nicht aus
+  dem Gedächtnis, und alle 34 dort genannten Parameternamen sind maschinell
+  gegen `parameterTab` und `variableTab` geprüft worden. Ein Treffer kam
+  zurück und hat einen Absatz korrigiert: `xO2` und `xCO2` haben in
+  `variableTab` **gar keine Zeile** — die frühere Formulierung „die Datenbank
+  ordnet sie keinem Organismus zu" war zu freundlich.
+  Ebenso nachgemessen: die Schrittweite ist 2 s aus `deltatsec` und nicht die
+  18 s aus `DEFAULT_DT` — `gui/app.py` überschreibt sie beim Öffnen.
+- **`weiterentwicklung.md` enthält den Startprompt für eine Version 4.** Er
+  ist nicht Beiwerk, sondern der Kern des Dokuments: er nennt die sieben
+  Regeln, deren Verletzung hier schon Schaden angerichtet hat, und verlangt
+  Messungen statt Behauptungen. Die Zielgruppe ist eine Masterstudentin der
+  Pharmazeutischen Biotechnologie, keine Informatikerin — Git und virtuelle
+  Umgebungen werden so weit erklärt, wie man sie braucht, und nicht weiter.
+- **Der Abschnitt „Wie Sie eine Änderung absichern" ist der wichtigste.** Er
+  sagt, was die Anwendung selbst prüfen kann — ob sie dasselbe rechnet wie
+  gestern — und was nicht: ob das Modell die Biologie richtig beschreibt.
 
 ### Arbeitsweise
 

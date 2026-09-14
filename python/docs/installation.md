@@ -7,7 +7,7 @@ Projektplan §7 · ersetzt den früheren Abschnitt zum MATLAB-Compiler
 ## Für Anwender
 
 Es wird **kein Python benötigt** und **keine Administratorrechte**. Beide
-Dateien liegen unter [Releases](../../releases) am jeweils neuesten Tag.
+Dateien liegen unter [Releases](https://github.com/Yumatlab/bioprocesssimulation/releases) am jeweils neuesten Tag.
 
 | System | Datei | Nutzung |
 |---|---|---|

@@ -18,6 +18,17 @@ das Pichia-Modell bewusst nicht — die Begründung steht dort ebenfalls.
 
 Der aktuelle Fortschritt und alle offenen Punkte stehen in `CLAUDE.md`.
 
+## Dokumentation
+
+| Sie wollen… | Lesen Sie |
+|---|---|
+| die Anwendung bedienen | [`docs/handbuch.md`](docs/handbuch.md) |
+| sie installieren | [`docs/installation.md`](docs/installation.md) |
+| wissen, wie sie gebaut ist | [`docs/architektur.md`](docs/architektur.md) |
+| sie weiterentwickeln | [`docs/weiterentwicklung.md`](docs/weiterentwicklung.md) |
+| wissen, ob die Zahlen stimmen | [`docs/verifikation_escherichia_coli.md`](docs/verifikation_escherichia_coli.md) |
+| wissen, *warum* sie so gebaut ist | [`CLAUDE.md`](CLAUDE.md) |
+
 ## Entwicklungsumgebung
 
 ```bash
@@ -52,7 +63,8 @@ Zwei Wege, beide ohne Eingriff in bestehenden Code:
 - **Neue Kinetik:** Unterklasse von `OrganismModel` schreiben und mit
   `@register` versehen. Die Registry findet sie beim Start automatisch.
 
-Details in `docs/` (Phase 8), Schnittstelle in `src/biofermentation/organisms/base.py`.
+Details in [`docs/weiterentwicklung.md`](docs/weiterentwicklung.md),
+Schnittstelle in `src/biofermentation/organisms/base.py`.
 
 ## Lizenz
 
