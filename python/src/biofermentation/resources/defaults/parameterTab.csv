@@ -318,3 +318,7 @@ parameterID,categoryID,name,tex,unit,tex_unit,type,internal_order,external_order
 318,5,FR1j,F_{R1j},l/h,lh^{-1},uneditable,17,517
 319,5,FR2j,F_{R2j},l/h,lh^{-1},uneditable,18,518
 320,5,FR3j,F_{R3j},l/h,lh^{-1},uneditable,19,519
+321,8,f_awpO2,aw_{pO_2},,,switch,20,820
+322,8,f_awtemp,aw_{\vartheta},,,switch,21,821
+323,8,f_awLW,aw_{LW},,,switch,22,822
+324,8,f_awfeed,aw_{feed},,,switch,23,823

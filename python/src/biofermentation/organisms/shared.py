@@ -86,6 +86,11 @@ def init_controller_states(state: SimulationState) -> None:
     state.a.VolumeFlag = 0  # VLmax reached
     state.a.inoc_occ = 0  # inoculation has happened
     state.a.pH_negative = False  # the pH iteration ran into xpH < 0
+    # May a controller hold its integrator at all? The project decides per
+    # controller; this is the installation's veto over all of them, set by the
+    # control window out of settings.yaml. True here so that a headless run —
+    # a reference run, a test — is never quietly restricted.
+    state.a.antiwindup_allowed = True
 
 
 def init_physical_constants(state: SimulationState) -> None:
@@ -293,6 +298,55 @@ def meas_transfer_function(
     K = 1.0
     T = dt / 3600
     return previous_value + (T / tau) * (K * current_value - previous_value)
+
+
+def integrate(
+    previous: float,
+    increment: float,
+    output: float,
+    low: float,
+    high: float,
+    *,
+    active: bool,
+) -> float:
+    """The integrator's next value, frozen while it would push past a limit.
+
+    Conditional integration, the plainest form of anti-windup: when the
+    controller's output already sits outside its range and the new increment
+    points further out, the integral keeps the value it had. It resumes the
+    moment the error turns round, so the controller reacts at once instead of
+    first unwinding.
+
+    `output` is the unclamped sum computed with `previous + increment` — the
+    integral has to be part of it, or the test would ask whether the output
+    was saturated before this step rather than whether it is now.
+
+    **`active=False` is the MATLAB structure and stays the default.** That
+    integrator runs on while the output is stuck at its limit, and the
+    verified E. coli run was recorded with it; switching this on changes
+    numbers. Which controller does it is a parameter of the project
+    (`f_awpO2`, `f_awtemp`, `f_awLW`, `f_awfeed`), and a missing parameter
+    means off — an older project computes exactly what it did before.
+    """
+    if not active:
+        return previous + increment
+    if output > high and increment > 0:
+        return previous
+    if output < low and increment < 0:
+        return previous
+    return previous + increment
+
+
+def anti_windup(p, a, flag: str) -> bool:
+    """Whether this controller may hold its integrator.
+
+    Two switches, and the second can only take away. The project says per
+    controller (`p[flag]`); the installation may forbid it for all of them at
+    once, and that answer lives in `a` rather than in `p` because it belongs
+    to the session, not to the project — written into `p` it would be saved
+    and would overwrite the flags the project actually carries.
+    """
+    return bool(p.get(flag, 0)) and bool(a.get("antiwindup_allowed", True))
 
 
 def clamp(value: float, low: float, high: float) -> float:

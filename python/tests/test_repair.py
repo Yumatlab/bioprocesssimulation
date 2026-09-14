@@ -93,23 +93,35 @@ def test_the_half_written_projects_are_found(db_copy: Path):
 def test_project_732_is_the_interrupted_write(db_copy: Path):
     """42 rows, contiguous, ending on the highest id ever assigned.
 
-    MATLAB was writing 250 of them. The expectation is 249 today because
-    `tmax` has since been dropped from the model — the 42 that were written
-    are history and do not change, what they are measured against does.
+    MATLAB was writing 250 of them. The expectation is 253 today because
+    `tmax` has since been dropped and the four anti-windup switches added —
+    the 42 that were written are history and do not change, what they are
+    measured against does.
+
+    The contiguity is the evidence, which is why `add_flags` leaves the nine
+    half-created projects alone: four rows with today's ids appended here
+    would put a gap in the one record of what the MATLAB path did.
     """
     row = next(r for r in find_broken_projects(db_copy) if r["projectID"] == 732)
-    assert (row["parameters"], row["expected"]) == (42, 249)
+    assert (row["parameters"], row["expected"]) == (42, 253)
 
     with sqlite3.connect(f"file:{db_copy}?mode=ro", uri=True) as conn:
         lo, hi, n = conn.execute(
             "SELECT MIN(project_parameterID), MAX(project_parameterID), COUNT(*) "
             "FROM project_parameterTab WHERE projectID = 732"
         ).fetchone()
-        highest = conn.execute(
-            "SELECT seq FROM sqlite_sequence WHERE name = 'project_parameterTab'"
+        intruders = conn.execute(
+            "SELECT COUNT(*) FROM project_parameterTab "
+            "WHERE projectID != 732 AND project_parameterID BETWEEN ? AND ?",
+            (lo, hi),
         ).fetchone()[0]
     assert hi - lo + 1 == n, "an interrupted write leaves no gaps"
-    assert hi == highest, "nothing was ever written after it"
+    # Not "nothing was written afterwards" — this application writes to that
+    # table too, and `add_flags` already has. What cannot change is that these
+    # 42 rows are one unbroken run belonging to one project: a write that was
+    # cut off partway, with nothing of anyone else's between its first row and
+    # its last.
+    assert intruders == 0, "the interrupted write is one unbroken block"
 
 
 def test_the_stray_defaults_are_found(db_copy: Path):

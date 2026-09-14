@@ -20,6 +20,7 @@ from ..base import OrganismMetadata, OrganismModel
 from ..registry import register
 from ..shared import (
     CONTROL_LOOPS,
+    anti_windup,
     clamp,
     henry_co2,
     henry_o2,
@@ -27,6 +28,7 @@ from ..shared import (
     init_common_variables,
     init_controller_states,
     init_physical_constants,
+    integrate,
     meas_transfer_function,
     pt1_filter,
 )
@@ -307,11 +309,13 @@ class EscherichiaColi(OrganismModel):
             a.ce_feedpO2[i] = a.cE_feedpO2 / (100 - 0)
 
             a.cP_feedpO2 = a.ce_feedpO2[i] * p.KP_feedpO2
-            a.cI_feedpO2 = (
-                a.cI_feedpO2 + (a.ce_feedpO2[i] + a.ce_feedpO2[prev]) / 2 * dt * p.KI_feedpO2
-            )
+            increment = (a.ce_feedpO2[i] + a.ce_feedpO2[prev]) / 2 * dt * p.KI_feedpO2
             a.cD_feedpO2 = (a.ce_feedpO2[i] - a.ce_feedpO2[prev]) / dt * p.KD_feedpO2
 
+            raw = ((a.cP_feedpO2 + a.cI_feedpO2 + increment + a.cD_feedpO2) * 100 + a.yfeedpO2) / 2
+            a.cI_feedpO2 = integrate(
+                a.cI_feedpO2, increment, raw, 0.0, 100.0, active=anti_windup(p, a, "f_awpO2")
+            )
             a.yfeedpO2 = ((a.cP_feedpO2 + a.cI_feedpO2 + a.cD_feedpO2) * 100 + a.yfeedpO2) / 2
             a.yfeedpO2 = clamp(a.yfeedpO2, 0.0, 100.0)
 
@@ -334,16 +338,25 @@ class EscherichiaColi(OrganismModel):
 
                 # MATLAB lag: the P part reads idx - 1 while I and D read idx.
                 a[f"cP_feedR{n}"] = a[f"ce_feedR{n}"][prev] * p[f"KP_feedR{n}"]
-                a[f"cI_feedR{n}"] = (
-                    a[f"cI_feedR{n}"]
-                    + (a[f"ce_feedR{n}"][i] + a[f"ce_feedR{n}"][prev]) / 2 * dt * p[f"KI_feedR{n}"]
+                increment = (
+                    (a[f"ce_feedR{n}"][i] + a[f"ce_feedR{n}"][prev]) / 2 * dt * p[f"KI_feedR{n}"]
                 )
                 a[f"cD_feedR{n}"] = (
                     (a[f"ce_feedR{n}"][i] - a[f"ce_feedR{n}"][prev]) / dt * p[f"KD_feedR{n}"]
                 )
 
-                yFR = a[f"cP_feedR{n}"] + a[f"cI_feedR{n}"] + a[f"cD_feedR{n}"]
-                yFR = clamp(yFR, 0.0, 1.0)
+                yFR = a[f"cP_feedR{n}"] + a[f"cI_feedR{n}"] + increment + a[f"cD_feedR{n}"]
+                a[f"cI_feedR{n}"] = integrate(
+                    a[f"cI_feedR{n}"],
+                    increment,
+                    yFR,
+                    0.0,
+                    1.0,
+                    active=anti_windup(p, a, "f_awfeed"),
+                )
+                yFR = clamp(
+                    a[f"cP_feedR{n}"] + a[f"cI_feedR{n}"] + a[f"cD_feedR{n}"], 0.0, 1.0
+                )
                 v[f"FR{n}"][i] = p[f"FR{n}max"] * yFR
 
     # ----------------------------------------------------- pO2 control --
@@ -362,9 +375,17 @@ class EscherichiaColi(OrganismModel):
             a.ce_agi[i] = a.cE_agi / (100 - 1)
 
             a.cP_agi = a.ce_agi[i] * p.KP_agi
-            a.cI_agi = a.cI_agi + (a.ce_agi[i] + a.ce_agi[prev]) / 2 * dt * p.KI_agi
+            increment = (a.ce_agi[i] + a.ce_agi[prev]) / 2 * dt * p.KI_agi
             a.cD_agi = (a.ce_agi[i] - a.ce_agi[prev]) / dt * p.KD_agi
 
+            a.cI_agi = integrate(
+                a.cI_agi,
+                increment,
+                a.cP_agi + a.cI_agi + increment + a.cD_agi,
+                0.3,
+                1.0,
+                active=anti_windup(p, a, "f_awpO2"),
+            )
             yNSt = clamp(a.cP_agi + a.cI_agi + a.cD_agi, 0.3, 1.0)
             v.NSt[i] = yNSt * p.NStmax
 
@@ -374,11 +395,19 @@ class EscherichiaColi(OrganismModel):
             a.ce_aeration[i] = a.cE_aeration / (100 - 1)
 
             a.cP_aeration = a.ce_aeration[i] * p.KP_aeration
-            a.cI_aeration = (
-                a.cI_aeration + (a.ce_aeration[i] + a.ce_aeration[prev]) / 2 * dt * p.KI_aeration
-            )
+            increment = (a.ce_aeration[i] + a.ce_aeration[prev]) / 2 * dt * p.KI_aeration
             a.cD_aeration = (a.ce_aeration[i] - a.ce_aeration[prev]) / dt * p.KD_aeration
 
+            # The limits are the 30 and 100 the branch below applies; they are
+            # named here because the integrator has to know them a line early.
+            a.cI_aeration = integrate(
+                a.cI_aeration,
+                increment,
+                (a.cP_aeration + a.cI_aeration + increment + a.cD_aeration) * 100,
+                30.0,
+                100.0,
+                active=anti_windup(p, a, "f_awpO2"),
+            )
             yaeration = (a.cP_aeration + a.cI_aeration + a.cD_aeration) * 100
             diff = 0.0
             if yaeration < 30:
@@ -397,10 +426,16 @@ class EscherichiaColi(OrganismModel):
             a.ce_gasmix[i] = a.cE_gasmix / (1 - p.xOAIR)
 
             a.cP_gasmix = a.ce_gasmix[i] * p.KP_gasmix
-            a.cI_gasmix[i] = (
-                a.cI_gasmix[prev] + (a.ce_gasmix[i] + a.ce_gasmix[prev]) / 2 * dt * p.KI_gasmix
-            )
+            increment = (a.ce_gasmix[i] + a.ce_gasmix[prev]) / 2 * dt * p.KI_gasmix
             a.cD_gasmix = (a.ce_gasmix[i] - a.ce_gasmix[prev]) / dt * p.KD_gasmix
+            a.cI_gasmix[i] = integrate(
+                a.cI_gasmix[prev],
+                increment,
+                (a.cP_gasmix + a.cI_gasmix[prev] + increment + a.cD_gasmix) * 100,
+                p.xOAIR * 100,
+                100.0,
+                active=anti_windup(p, a, "f_awpO2"),
+            )
 
             # MATLAB writes cD_gasmix as a scalar and then indexes it with
             # (idx), which raises once idx passes 1. Taken as the scalar here,
@@ -479,9 +514,17 @@ class EscherichiaColi(OrganismModel):
 
             cP_LW = a.ce_LW[i] * p.KP_LW
             a.cP_LW = cP_LW
-            a.cI_LW[i] = a.cI_LW[prev] + (a.ce_LW[i] + a.ce_LW[prev]) / 2 * dt * p.KI_LW
+            increment = (a.ce_LW[i] + a.ce_LW[prev]) / 2 * dt * p.KI_LW
             cD_LW = (a.ce_LW[i] - a.ce_LW[prev]) / dt * p.KD_LW
             a.cD_LW = cD_LW
+            a.cI_LW[i] = integrate(
+                a.cI_LW[prev],
+                increment,
+                (cP_LW + a.cI_LW[prev] + increment + cD_LW) * 100,
+                0.0,
+                100.0,
+                active=anti_windup(p, a, "f_awLW"),
+            )
 
             yLW = clamp((cP_LW + a.cI_LW[i] + cD_LW) * 100, 0.0, 100.0)
             v.FH[i] = yLW / 100 * p.FHmax
