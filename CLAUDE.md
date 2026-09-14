@@ -630,6 +630,13 @@ diesem Panel — das Feld mit der Beschriftung `F_T1` liest `v.FT2`.
   `load_project_state` meldet sie jetzt in `a.restarted_variables`.
   Umgekehrt sind E. coli 19 Pichia-Variablen zugeordnet, für die es keine
   Bilanz gibt. `xfail(strict=True)` in `test_organisms.py`.
+
+  **Gemeldet wurde es lange nur an ein Feld, das niemand las.**
+  `load_project_state` rechnet `a.restarted_variables` aus, und der einzige
+  Leser war ein Test. `ControlWindow._report_resumed_state()` schreibt es
+  jetzt beim Öffnen in den Log — ein Lauf, der still einen ODE-Zustand
+  zurücksetzt, ist ein Lauf, dessen Zahlen hinterher niemand mehr erklären
+  kann, und die einzige Stelle, die es weiß, muss es sagen.
 - **pO2 über 100 % ist kein Fehler.** Die Sonde wird gegen `pGcal` und
   `xOGcal` kalibriert (`cOL100 = pGcal·xOGcal/HO2`) und liest im Gleichgewicht
   `pG·xOGin/(pGcal·xOGcal)·100`. Projekt 519 begast mit 15 l/min Luft **plus
@@ -737,13 +744,31 @@ tunen.
   nicht mitgeändert, im Skript kommentiert.
 - **`xCGin` fehlt in `variableTab`.** Das Gegenstück `xOGin` ist vorhanden.
 
+### Eine Versionsnummer, drei Stellen, die sie zeigen
+
+`biofermentation.__version__` ist die Quelle. `pyproject.toml` hat keine
+eigene Nummer mehr — hatch liest sie über `[tool.hatch.version]` von dort —,
+der Startbildschirm und der Info-Tab zeigen sie, und
+`tools/make_launcher.py` stempelt sie in `CFBundleShortVersionString`.
+
+Vorher hielt jede Stelle eine Kopie, und so gehen sie auseinander: das Fenster
+sagte 3.0, das Paket 0.1.0, und das gebaute `.app`-Bündel nahm seinen Stempel
+vom Paket. `test_packaging.py` hält die drei zusammen.
+
 ### Offen aus Phase 0
 
 - **GitHub-Repository** anlegen und `main` pushen, damit die CI-Matrix läuft
   (Plan §0.2). Der Workflow liegt bereit und baut auf jeden `v*`-Tag beide
-  Installationsdateien.
+  Installationsdateien. **Bis dahin ist der Windows-Build nicht nur
+  ungetestet, sondern nie gebaut worden** — Cross-Compiling gibt es bei
+  PyInstaller nicht, die CI ist der einzige Weg dorthin.
 - **Lizenz** ist noch nicht festgelegt; `pyproject.toml` hat deshalb kein
-  `license`-Feld.
+  `license`-Feld. Der CC-BY-4.0-Absatz im Info-Tab ist die Lizenz der
+  **MATLAB-Anwendung** und wörtlich von dort übernommen; über den Python-Port
+  sagt er nichts. Dazu gehört die dritte Frage, die noch niemand beantwortet
+  hat: das gepackte Bündel enthält Qt, und PySide6 steht unter LGPLv3 — eine
+  Weitergabe schuldet den Lizenztext und die Möglichkeit, die Qt-Bibliotheken
+  auszutauschen. `docs/installation.md` erwähnt beides bisher nicht.
 
 ---
 

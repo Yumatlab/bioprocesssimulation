@@ -37,8 +37,15 @@ def interpreter() -> Path:
 
 
 def version() -> str:
-    for line in (REPO / "pyproject.toml").read_text(encoding="utf-8").splitlines():
-        if line.startswith("version"):
+    """The version, from the one place that holds it.
+
+    Read out of the source rather than imported: this script runs before
+    anything is installed, and pyproject.toml no longer carries a number of
+    its own — hatch reads it from here too.
+    """
+    source = REPO / "src" / "biofermentation" / "__init__.py"
+    for line in source.read_text(encoding="utf-8").splitlines():
+        if line.startswith("__version__"):
             return line.split("=", 1)[1].strip().strip('"')
     return "0.0"
 

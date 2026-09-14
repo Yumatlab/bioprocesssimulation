@@ -162,6 +162,7 @@ class ControlWindow(QMainWindow):
 
         self.load_from_state()
         self.load_log()
+        self._report_resumed_state()
         if self._settings_problem:
             self.note(f"Settings not used — {self._settings_problem}", "Error")
         if self._layout_problem:
@@ -540,6 +541,39 @@ class ControlWindow(QMainWindow):
             return
         if rows:
             self.log_view.load(rows)
+
+    def _report_resumed_state(self) -> None:
+        """Say what a resumed run could not bring back with it.
+
+        `load_project_state` works this out and then says nothing — the window
+        is where a session keeps its record, and for two years this was
+        recorded into a field that nothing read.
+
+        It matters because of what is in the list. `variable_handlingTab`
+        assigns neither organism the offgas fractions, so `xO2` and `xCO2`
+        never reach the database; a continued run restarts them at the
+        composition of air. They are ODE states. A run that quietly resets an
+        ODE state is a run whose numbers nobody can account for afterwards,
+        and the one place that knows has to say so.
+        """
+        state = self.runner.state
+        if state.idx == 0:
+            return  # nothing was resumed; there is nothing to report
+        restarted = list(state.a.get("restarted_variables") or ())
+        if restarted:
+            self.note(
+                f"Resumed at step {state.idx}: {', '.join(restarted)} are not stored for "
+                "this organism and restart from their initial values",
+                "Error",
+            )
+        skipped = list(state.a.get("skipped_variables") or ())
+        if skipped:
+            # The other direction, and harmless: the table is wider than the
+            # model, and those columns come back empty.
+            self.note(
+                f"Stored series this organism does not compute, left aside: {', '.join(skipped)}",
+                "Project",
+            )
 
     def load_from_state(self) -> None:
         state = self.runner.state

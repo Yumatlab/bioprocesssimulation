@@ -15,9 +15,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ... import __version__
 from ...resources import app_icon_path
 
-VERSION = "3.0"  # the Python port; the MATLAB application stopped at 2.2
+#: What the window says it is. Not its own number: the package, the .app
+#: bundle and this label have to agree, and the way they stop agreeing is by
+#: each holding a copy. The MATLAB application stopped at 2.2; this is the
+#: Python port that continues the count.
+VERSION = __version__
 
 
 class StartingScreen(QWidget):

@@ -1323,6 +1323,58 @@ def test_the_inoculated_lamp_is_on_before_the_first_step(qapp, db_copy):
     assert window.inoculate_button.isEnabled() is False
 
 
+def test_a_resumed_run_says_what_it_could_not_bring_back(qapp, db_copy):
+    """xO2 and xCO2 are ODE states and are not stored for either organism.
+
+    load_project_state has always worked this out; nothing read it. A run that
+    quietly restarts an ODE state is a run whose numbers cannot be accounted
+    for afterwards, so the window says it out loud.
+    """
+    from biofermentation.db import save_project
+    from biofermentation.db.models import VariableSeries
+
+    setup = load_phases(db_copy, PICHIA_PROJECT)
+    state, organism = load_project_state(db_copy, PICHIA_PROJECT)
+    runner = SimulationRunner(organism, state, phases=PhaseAutomaton.from_setup(setup))
+    for _ in range(3):
+        runner._on_tick()
+    save_project(
+        db_copy,
+        PICHIA_PROJECT,
+        series=VariableSeries(
+            t=state.trimmed()["t"], v=state.trimmed(), real_t=[""] * (state.idx + 1)
+        ),
+    )
+
+    resumed, organism = load_project_state(db_copy, PICHIA_PROJECT)
+    assert resumed.a.restarted_variables, "the fixture resumed nothing"
+    window = ControlWindow(
+        load_phases(db_copy, PICHIA_PROJECT), SimulationRunner(organism, resumed), db_copy
+    )
+    said = [entry.message for entry in window.log_view.entries if not entry.restored]
+    restarted = next(line for line in said if "restart from their initial values" in line)
+    for name in resumed.a.restarted_variables:
+        assert name in restarted
+
+
+def test_a_fresh_project_reports_nothing_about_resuming(qapp, db_copy):
+    """There is nothing to warn about when nothing was resumed."""
+    setup = load_phases(db_copy, PICHIA_PROJECT)
+    state, organism = load_project_state(db_copy, PICHIA_PROJECT)
+    assert state.idx == 0
+    window = ControlWindow(setup, SimulationRunner(organism, state), db_copy)
+    said = [entry.message for entry in window.log_view.entries if not entry.restored]
+    assert not any("restart from their initial values" in line for line in said)
+
+
+def test_the_window_shows_the_package_version(qapp):
+    """The window said 3.0 while the package said 0.1.0 — one number, please."""
+    import biofermentation
+    from biofermentation.gui.windows.starting_screen import VERSION
+
+    assert biofermentation.__version__ == VERSION
+
+
 def test_the_student_view_says_so_in_the_title(qapp, db_copy, monkeypatch):
     """A locked Δt with nothing to explain it reads as a defect."""
     from biofermentation.gui.settings import Settings

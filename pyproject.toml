@@ -4,7 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "biofermentation-sim"
-version = "0.1.0"
+# Read from src/biofermentation/__init__.py — see the note there.
+dynamic = ["version"]
 description = "Bioreactor process simulation with a plugin-based organism architecture"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -18,6 +19,9 @@ dependencies = [
     "pyqtgraph>=0.13",
     "PyYAML>=6.0",
 ]
+
+[tool.hatch.version]
+path = "src/biofermentation/__init__.py"
 
 [project.scripts]
 biofermentation = "biofermentation.gui.app:main"

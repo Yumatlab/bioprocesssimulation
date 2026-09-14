@@ -38,6 +38,31 @@ def specs():
         sys.path.remove(str(BUILD_DIR))
 
 
+# ------------------------------------------------------------ the version --
+
+
+def test_the_bundle_is_stamped_with_the_package_version():
+    """The .app takes its stamp from the same line the window reads.
+
+    Three places held a copy and two of them said 0.1.0 while the window said
+    3.0. pyproject.toml has no number of its own any more either — hatch
+    reads it from `biofermentation.__version__`, and so does this.
+    """
+    import biofermentation
+
+    sys.path.insert(0, str(BUILD_DIR.parent / "tools"))
+    try:
+        import make_launcher
+    finally:
+        sys.path.pop(0)
+
+    assert make_launcher.version() == biofermentation.__version__
+
+    pyproject = (BUILD_DIR.parent / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'dynamic = ["version"]' in pyproject
+    assert 'path = "src/biofermentation/__init__.py"' in pyproject
+
+
 # --------------------------------------------------------- the resources --
 
 
