@@ -29,7 +29,7 @@ class StartingScreen(QWidget):
 
     new_project_requested = Signal()
     load_project_requested = Signal()
-    model_configurator_requested = Signal()
+    settings_requested = Signal()
     exit_requested = Signal()
     #: An entry of the Library menu, by the name it carries.
     library_requested = Signal(str)
@@ -85,10 +85,11 @@ class StartingScreen(QWidget):
         self.library_button.clicked.connect(self._show_library)
         layout.addWidget(self.library_button)
 
-        self.model_configurator_button = self._button(
-            "Model Configurator", self.model_configurator_requested
-        )
-        layout.addWidget(self.model_configurator_button)
+        # Where the Model Configurator used to be. That one was never
+        # ported and sat there disabled; this is a button that does something.
+        self.settings_button = self._button("Settings…", self.settings_requested)
+        self.settings_button.setToolTip("Which tabs the control window shows, and for whom")
+        layout.addWidget(self.settings_button)
 
         layout.addSpacing(8)
         self.exit_button = self._button("Exit", self.exit_requested)

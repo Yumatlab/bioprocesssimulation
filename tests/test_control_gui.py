@@ -1167,3 +1167,51 @@ def test_the_bars_of_one_loop_share_a_scale(qapp):
     assert bar._scale == 2.0
     bar.set_value(1.0, 0.0)
     assert bar._scale == 1.0, "a zero scale would divide by zero on the next paint"
+
+
+# ------------------------------------------- what the settings switch off --
+
+
+def _window_with(db_copy, monkeypatch, settings):
+    """A control window built with these settings, whatever the machine has."""
+    from biofermentation.gui.windows import control_app
+
+    monkeypatch.setattr(control_app, "load_settings", lambda: (settings, ""))
+    setup = load_phases(db_copy, PICHIA_PROJECT)
+    state, organism = load_project_state(db_copy, PICHIA_PROJECT)
+    runner = SimulationRunner(organism, state, phases=PhaseAutomaton.from_setup(setup))
+    return ControlWindow(setup, runner, db_copy)
+
+
+def test_a_hidden_tab_is_not_in_the_tab_bar(qapp, db_copy, monkeypatch):
+    from biofermentation.gui.settings import Settings
+
+    window = _window_with(db_copy, monkeypatch, Settings(hidden_tabs={"Log", "Process Manager"}))
+    titles = {window.tabs.tabText(index) for index in range(window.tabs.count())}
+    assert "Log" not in titles
+    assert "Process Manager" not in titles
+    assert {"Control Options", "Controllers", "Variable Pool", "Information"} <= titles
+
+
+def test_a_hidden_tab_is_still_built(qapp, db_copy, monkeypatch):
+    """The window refreshes its pages by name; one that does not exist would
+    have to be checked for everywhere instead of once here."""
+    from biofermentation.gui.settings import Settings
+
+    window = _window_with(db_copy, monkeypatch, Settings(hidden_tabs={"Log"}))
+    window.note("still writing", "Process")
+    assert window.log_view.entries, "the log kept working while not shown"
+    assert window.pages["Log"] is window.log_view
+
+
+def test_the_student_view_locks_the_step_width_and_hides_the_speed(qapp, db_copy, monkeypatch):
+    from biofermentation.gui.settings import Settings
+
+    window = _window_with(db_copy, monkeypatch, Settings(student_view=True))
+    assert window.dt_box.isReadOnly() is True
+    assert window.dt_box.value() > 0, "shown, not removed"
+    assert window.speed_box.parent() is None, "the speed factor is not in the window at all"
+
+    ordinary = _window_with(db_copy, monkeypatch, Settings())
+    assert ordinary.dt_box.isReadOnly() is False
+    assert ordinary.speed_box.parent() is not None

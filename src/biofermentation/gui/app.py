@@ -62,14 +62,7 @@ class SimulationApp(QApplication):
         self.starting_screen.new_project_requested.connect(self.show_create_project)
         self.starting_screen.exit_requested.connect(self.quit)
         self.starting_screen.library_requested.connect(self.library_action)
-
-        # The model configurator is not ported. A button that emits into
-        # nothing is worse than one that says so.
-        self.starting_screen.model_configurator_button.setEnabled(False)
-        self.starting_screen.model_configurator_button.setToolTip(
-            "Not ported yet — models are edited in the database or through "
-            "an organism definition.yaml"
-        )
+        self.starting_screen.settings_requested.connect(self.show_settings)
 
     # ------------------------------------------------------ navigation --
 
@@ -160,6 +153,12 @@ class SimulationApp(QApplication):
 
         dialog = BioreactorManager(self.db_path, parent=self.starting_screen)
         dialog.exec()
+
+    def show_settings(self) -> None:
+        """What this installation shows. Read again when a project opens."""
+        from .dialogs.settings import SettingsDialog
+
+        SettingsDialog(self.starting_screen).exec()
 
     def manage_organisms(self) -> None:
         """Copy an organism and change its values — the kinetics stay put."""

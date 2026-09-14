@@ -306,6 +306,34 @@ abbrechen.
   zu zeigen. `confirm_leave()` läuft dabei wirklich; ein modaler Dialog in
   einer Fixture ist ein hängender Testlauf, und das ist zweimal passiert.
 
+### Was eine Installation zeigt
+
+`settings.yaml` neben der Datenbank, die dritte Datei dort nach `style.qss`
+und `control_options.yaml`. Geschrieben vom Dialog hinter **Settings…** auf
+dem Startbildschirm — wo vorher der Model Configurator saß, der nie portiert
+war und abgeschaltet herumstand.
+
+- **Tabs abschalten**: Controllers, Variable Pool, Process Manager und Log.
+  Control Options und Information stehen nicht zur Wahl — ein Fenster ohne
+  sie ist kein Kontrollfenster.
+- **Studierendenansicht**: Δt bleibt sichtbar, aber nicht änderbar, und der
+  Speedfactor wird gar nicht erst gezeigt. Ein Lauf, den alle mit derselben
+  Schrittweite gestartet haben, ist vergleichbar; einer, bei dem jede Maschine
+  ihren eigenen Faktor hatte, nicht. Der Speedfactor ändert am Ergebnis
+  nichts und an der Wartezeit alles — deshalb weg statt gesperrt.
+- **Ein abgeschalteter Tab wird trotzdem gebaut** und nur nicht eingehängt.
+  Das Fenster frischt seine Seiten beim Namen auf; eine Seite, die es nicht
+  gibt, müsste überall abgefragt werden statt einmal hier. Die Seiten hängen
+  dafür an `self.pages` — ein Widget ohne Elternteil und ohne Python-Referenz
+  wird eingesammelt und nimmt Log-Ansicht und Phasenraster mit.
+- **Eine kaputte Datei zeigt alles.** `load_settings` fängt jeden Fehler und
+  liefert die Vorgabe plus den Grund, den das Fenster in den Log schreibt:
+  Einstellungen, die etwas verstecken, dürfen nicht in Richtung Verstecken
+  scheitern.
+- **Gelesen wird beim Öffnen eines Projekts**, nicht laufend. Ein offenes
+  Fenster behält, womit es gebaut wurde, und der Dialog sagt das, statt so zu
+  tun als ob.
+
 ### Der Reglertab
 
 Die Anwendung rechnet jeden Anteil jedes Reglers in jedem Schritt — und zeigte

@@ -491,3 +491,77 @@ def test_a_checkbox_draws_a_visible_box(qapp):
     assert "border:" in body
     assert "background:" in body
     assert re.search(r"QCheckBox::indicator:checked[^{]*\{[^}]*background:", sheet, re.S)
+
+
+# ------------------------------------------------------- the settings file --
+
+
+def test_no_settings_file_shows_everything(tmp_path):
+    """Settings that hide things must not be able to fail towards hiding."""
+    from biofermentation.gui.settings import HIDEABLE_TABS, load_settings
+
+    settings, problem = load_settings(tmp_path / "settings.yaml")
+    assert problem == ""
+    assert settings.student_view is False
+    assert all(settings.shows(name) for name in HIDEABLE_TABS)
+
+
+def test_the_settings_round_trip(tmp_path):
+    from biofermentation.gui.settings import Settings, load_settings, save_settings
+
+    path = tmp_path / "settings.yaml"
+    save_settings(Settings(hidden_tabs={"Log", "Process Manager"}, student_view=True), path)
+
+    settings, problem = load_settings(path)
+    assert problem == ""
+    assert settings.hidden_tabs == {"Log", "Process Manager"}
+    assert settings.student_view is True
+    assert settings.shows("Controllers") is True
+    assert settings.shows("Log") is False
+
+
+def test_a_broken_settings_file_shows_everything_and_says_why(tmp_path):
+    from biofermentation.gui.settings import load_settings
+
+    path = tmp_path / "settings.yaml"
+    path.write_text("hidden_tabs: [Nonsense]\n", encoding="utf-8")
+    settings, problem = load_settings(path)
+    assert settings.hidden_tabs == set()
+    assert "unknown tab" in problem
+
+    path.write_text("just a string\n", encoding="utf-8")
+    settings, problem = load_settings(path)
+    assert settings.hidden_tabs == set()
+    assert "mapping" in problem
+
+
+def test_control_options_and_information_cannot_be_switched_off():
+    """A window without them is not a control window."""
+    from biofermentation.gui.settings import HIDEABLE_TABS
+
+    assert "Control Options" not in HIDEABLE_TABS
+    assert "Information" not in HIDEABLE_TABS
+
+
+def test_the_dialog_writes_what_its_boxes_say(tmp_path, qapp):
+    from biofermentation.gui.dialogs.settings import SettingsDialog
+    from biofermentation.gui.settings import load_settings
+
+    path = tmp_path / "settings.yaml"
+    dialog = SettingsDialog(path=path)
+    dialog.boxes["Log"].setChecked(False)
+    dialog.student_box.setChecked(True)
+    dialog.accept()
+
+    settings, problem = load_settings(path)
+    assert problem == ""
+    assert settings.hidden_tabs == {"Log"}
+    assert settings.student_view is True
+
+
+def test_the_starting_screen_offers_settings_where_the_configurator_was(qapp):
+    """That button was never ported and sat there disabled."""
+    screen = StartingScreen()
+    assert hasattr(screen, "settings_button")
+    assert not hasattr(screen, "model_configurator_button")
+    assert screen.settings_button.isEnabled()

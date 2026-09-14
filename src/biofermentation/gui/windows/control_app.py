@@ -39,6 +39,7 @@ from ...core.simulation_runner import SimulationRunner
 from ...db import load_project_log, save_project_with_backup
 from ...db.models import ProjectSetup
 from ...resources import app_icon_path
+from ..settings import load_settings
 from ..widgets import CONTROL_PANELS, ControllerView, ControlPanel, PhaseGrid, StatusLamp
 from ..widgets.log_view import LogView
 from ..widgets.variable_pool import VariablePool
@@ -90,6 +91,9 @@ class ControlWindow(QMainWindow):
         self.db_path = Path(db_path)
         self.figure_windows: list = []
         self.data_tables: list = []
+        # What this installation shows, read once here. A window keeps what it
+        # was built with; the dialog says so rather than pretending otherwise.
+        self.settings, self._settings_problem = load_settings()
         # Set once the closing question has been answered, so the answer is
         # not asked for twice on the way out.
         self._leave_confirmed = False
@@ -114,11 +118,22 @@ class ControlWindow(QMainWindow):
         outer.addWidget(self._build_run_column())
 
         self.panels: dict[str, ControlPanel] = {}
+        # Built either way, added only if the settings show it: the window
+        # refreshes them by name, and a tab that exists but is not shown is
+        # less trouble than one that does not exist at all.
         self.tabs.addTab(self._build_control_options(), "Control Options")
-        self.tabs.addTab(self._build_controllers(), "Controllers")
-        self.tabs.addTab(self._build_variable_pool(), "Variable Pool")
-        self.tabs.addTab(self._build_process_manager(), "Process Manager")
-        self.tabs.addTab(self._build_log(), "Log")
+        # Held on the window, not only in the tab bar: a page that is built
+        # and not added has no parent, and Python collecting it would take the
+        # log view and the phase grid down with it.
+        self.pages = {
+            "Controllers": self._build_controllers(),
+            "Variable Pool": self._build_variable_pool(),
+            "Process Manager": self._build_process_manager(),
+            "Log": self._build_log(),
+        }
+        for title, page in self.pages.items():
+            if self.settings.shows(title):
+                self.tabs.addTab(page, title)
         self.information_tab = self._build_information()
         self.tabs.addTab(self.information_tab, "Information")
         self._style_tab_pages()
@@ -134,6 +149,8 @@ class ControlWindow(QMainWindow):
 
         self.load_from_state()
         self.load_log()
+        if self._settings_problem:
+            self.note(f"Settings not used — {self._settings_problem}", "Error")
         if self._layout_problem:
             # Said here rather than in a box at startup: the tab is drawn
             # either way, and the log is where the session keeps its record.
@@ -368,7 +385,16 @@ class ControlWindow(QMainWindow):
         self.speed_box.setRange(1, 1000)
         self.speed_box.setValue(self.runner.speedfactor)
         self.speed_box.valueChanged.connect(self.runner.set_speedfactor)
-        form.addRow("Speed factor [x]", self.speed_box)
+        if self.settings.student_view:
+            # Shown but locked: the step width decides what the numbers mean,
+            # and a room that ran at one Δt can compare its results. The speed
+            # factor is not shown at all — it changes nothing about the result
+            # and everything about how long one waits for it.
+            self.dt_box.setReadOnly(True)
+            self.dt_box.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+            self.dt_box.setToolTip("Fixed for this installation — see Settings")
+        else:
+            form.addRow("Speed factor [x]", self.speed_box)
         layout.addLayout(form)
 
         layout.addStretch()
