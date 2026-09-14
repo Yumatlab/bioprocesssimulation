@@ -1,0 +1,7 @@
+key,value
+batch_end_step,5833
+deltat,0.0006
+organism,pichia_pastoris
+projectID,520
+source,Thesis_SimulationAppDB.db
+steps,14799

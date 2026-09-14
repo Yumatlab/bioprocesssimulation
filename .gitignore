@@ -1,0 +1,22 @@
+# Nur, was zwischen den beiden Anwendungen liegt oder über ihnen. Was zu
+# einer von beiden gehört, steht in deren eigener .gitignore — matlab/ und
+# python/ ignorieren jeweils ihr eigenes Zeug, und dadurch teilen sich die
+# beiden Zweige keine einzige Datei.
+
+# Die virtuelle Umgebung liegt über dem Projekt, damit sie einen Umzug des
+# Projektordners übersteht.
+.venv/
+venv/
+
+# Werkzeug-Zwischenstände
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+__pycache__/
+
+# Aus dem Template erzeugt, jederzeit reproduzierbar via db/repair.py
+SimulationAppDB_verification.db*
+
+# macOS
+.DS_Store
+._*

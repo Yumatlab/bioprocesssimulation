@@ -1,0 +1,89 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "biofermentation-sim"
+# Read from src/biofermentation/__init__.py — see the note there.
+dynamic = ["version"]
+description = "Bioreactor process simulation with a plugin-based organism architecture"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Philipp Yuma Iff" }]
+keywords = ["bioreactor", "fermentation", "simulation", "ode", "qt"]
+# The MIT licence covers this Python implementation. The CC BY 4.0 attribution
+# for the MATLAB application it is ported from travels in LICENSE and in the
+# Information tab; a packaged build also carries Qt under LGPLv3. See LICENSE.
+license = { file = "LICENSE" }
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+]
+
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "PySide6>=6.6",
+    "pyqtgraph>=0.13",
+    "PyYAML>=6.0",
+]
+
+[tool.hatch.version]
+path = "src/biofermentation/__init__.py"
+
+[project.scripts]
+biofermentation = "biofermentation.gui.app:main"
+
+[project.optional-dependencies]
+# pandas is required by the reference-run comparison in tests (plan 2.4).
+dev = [
+    "pytest>=8.0",
+    "pandas>=2.1",
+    "ruff>=0.5",
+]
+# Used by the GitHub Actions matrix in plan 7.2: pip install -e .[build]
+build = [
+    "pyinstaller>=6.3",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/biofermentation"]
+
+# The template database, the CSV default set and the stylesheet are part of
+# the package, not build artefacts. PyInstaller collects them through the
+# same paths (see build/specs.py).
+[tool.hatch.build.targets.wheel.force-include]
+"src/biofermentation/resources" = "biofermentation/resources"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF"]
+# The domain notation from the MATLAB model is kept verbatim (cXL, qXpX, NSt,
+# FR1, kLa, thetaL). Renaming it to snake_case would make every comparison
+# against the MATLAB reference run unreadable, so the pep8-naming rules that
+# would flag it are disabled deliberately.
+ignore = ["N803", "N806", "N815", "N816"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+# The Greek letters are the point of the file: parameterTab.tex writes
+# \alpha, \vartheta and \mu, and they have to come out as α, ϑ and µ.
+"src/biofermentation/gui/widgets/tex.py" = ["RUF001"]
+"src/biofermentation/gui/widgets/panel_specs.py" = ["RUF001"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "reference: requires a MATLAB reference run in tests/reference_data/",
+]

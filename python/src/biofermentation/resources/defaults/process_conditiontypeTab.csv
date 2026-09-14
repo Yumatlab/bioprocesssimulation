@@ -1,0 +1,7 @@
+process_conditiontypeID,conditiontype,start_end
+1,Variable condition,1
+2,End of previous phase,1
+3,Batch end (pO2 Slope),1
+5,Next phase condition,2
+6,Variable condition,2
+7,Timer,2

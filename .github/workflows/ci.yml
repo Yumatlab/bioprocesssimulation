@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  # Both installers on demand, from the Actions tab, without a release.
+  # Testing a build has to come before tagging the version it belongs to;
+  # tag-only meant tagging v3.0.0 to find out whether v3.0.0 runs on Windows.
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      # The application lives in python/; only this file has to stay at the
+      # top of the repository, because that is the only place GitHub looks
+      # for it. Everything it runs happens one directory down.
+      - run: pip install -e ".[dev]"
+        working-directory: python
+      - name: Lint
+        run: ruff check .
+        working-directory: python
+      # Qt needs an off-screen platform plugin on the CI runners.
+      - name: Test
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pytest
+        working-directory: python
+
+  # Plan section 7.2: every tag produces both installers, so neither has to
+  # be built by hand on a machine that happens to run the right system.
+  # Also on request, so a build can be tried before it is tagged.
+  build:
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            spec: build/windows.spec
+            artefact: BiofermentationSimulation-windows
+            path: python/dist/BiofermentationSimulation.exe
+          - os: macos-latest
+            spec: build/macos.spec
+            artefact: BiofermentationSimulation-macos
+            path: python/dist/Biofermentation Simulation.app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -e ".[build]"
+        working-directory: python
+      - name: Build
+        run: pyinstaller --noconfirm ${{ matrix.spec }}
+        working-directory: python
+      # A build that produces a file which cannot start is worse than none.
+      - name: Smoke test the build
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -c "import biofermentation.gui.app"
+        working-directory: python
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artefact }}
+          path: ${{ matrix.path }}
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artefacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artefacts/**
+          body: |
+            Neither build is signed. Windows warns about an unknown
+            publisher, macOS refuses the first double-click — see
+            docs/installation.md for how to allow them.
+          generate_release_notes: true

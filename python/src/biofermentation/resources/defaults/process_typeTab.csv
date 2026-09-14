@@ -1,0 +1,6 @@
+process_typeID,type,default_title,description
+1,Manual,Batch,Manual phase e.g. batch phase
+2,Stop,Stop,Stops cultivation
+3,Update Parameter Set,Update,Allows update of cyclic parameters
+4,Pulse Feed,Pulse Feed,Pumps a reservoir into the bioreactor at a constand feeding rate.
+5,Exponential Feed,Fed Batch,Starts open-loop feed control.

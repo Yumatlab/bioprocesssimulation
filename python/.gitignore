@@ -1,0 +1,80 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.python-version
+
+# --- Tests / tooling ---
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- PyInstaller ---
+# The spec files live in build/ (see plan 7.1), but PyInstaller's default
+# workpath is also ./build. Ignore its output directories, keep the specs.
+/build/*/
+/dist/
+*.manifest
+
+# --- Qt generated ---
+ui_*.py
+*_rc.py
+*.qmlc
+*.jsc
+
+# --- MATLAB side of the repository ---
+# Both branches of this repository carry a .gitignore, and this is the only
+# file the two have in common. Identical content on both sides means the
+# merge has nothing to resolve.
+#
+# The database rules are anchored to the root on purpose. The MATLAB side
+# wrote a bare `*.db`, which reads harmlessly there and would swallow
+# src/biofermentation/resources/SimulationAppDB_template.db over here — the
+# one .db in this repository that is meant to be tracked.
+/*.db
+/Archiv/*.db
+/figures/*.db
+# Output of the MATLAB Compiler: 110 MB, reproducible at any time.
+/BiofermentationSimulation/
+
+# --- SQLite runtime artefacts ---
+# The bundled template database IS tracked; only runtime files are ignored.
+*.db-wal
+*.db-shm
+*.db-journal
+*.backup.db
+*.pre-migration.db
+# Aus dem Template erzeugt, jederzeit reproduzierbar via db/repair.py
+SimulationAppDB_verification.db
+
+# --- Reference data (large MATLAB exports stay local unless small) ---
+# tests/reference_data/*.csv.gz is tracked on purpose - it is the only proof
+# that the port computes the same numbers.
+#
+# The database those exports were extracted FROM is not. 64 MB in a clone
+# that nobody needs twice: the CSVs are the reference, the database is only
+# how they were made (tests/reference_data/extract.py). It was removed from
+# the history before the first push; keep your copy here and it stays out.
+/additional_files/Thesis_SimulationAppDB.db
+
+# --- macOS ---
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# --- Windows ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# --- Editors ---
+.idea/
+.vscode/
+*.swp

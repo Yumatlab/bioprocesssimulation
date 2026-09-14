@@ -1,0 +1,11 @@
+key,value
+comparison_end_step,903
+deltat,0.000555555555555556
+feed_phase_reservoir,1
+feed_phase_start_step,402
+feed_phase_type,5
+inoculation_step,1
+organism,escherichia_coli
+projectID,716
+source,MyProject_11.txt
+steps,2983

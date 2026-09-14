@@ -1,0 +1,3 @@
+organismID,name,texname,description,function_file,initialization_file,reservoirs
+1,Escherichia coli,\textit{Escherichia coli},\N,Escherichia_coli,Escherichia_coli_Initialization,1
+2,Pichia pastoris,\textit{Pichia pastoris},\N,Pichia_pastoris,Pichia_pastoris_Initialization,2

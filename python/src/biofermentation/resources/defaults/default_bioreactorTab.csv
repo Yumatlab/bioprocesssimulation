@@ -1,0 +1,121 @@
+default_bioreactorID,bioreactorID,parameterID,value,description
+1,1,249,1469.0,Maximum value of kLa
+2,1,250,2.5,Minimum value of kLa
+3,1,251,11.0,Maximum volume in reactor
+4,1,252,5.0,Minimum volume in reactor
+5,1,253,1.0,Acid reservoir volume at t = 0 h
+6,1,254,1.0,Base reservoir volume at t = 0 h
+7,1,255,0.1,Maximum filtrate pump rate
+8,1,256,5.0,Maximum harvest pump rate
+9,1,257,20.0,Maximumm possible air aeration rate
+10,1,258,2.0,Maximum possible CO2 aeration rate
+11,1,259,27.0,Summed up maximum aeration rate
+12,1,260,5.0,Maximum possible N2 aeration rate
+13,1,261,5.0,Maximum possible O2 aeration rate
+14,1,262,0.5,Maximum titration rate of the acid pump
+15,1,263,0.5,Maximum titration rate of the alkali pump
+16,1,264,1500.0,Maximum possible stirrer speed
+17,1,265,0.0042,Time constant pH measurement system
+18,1,266,0.0025,Time constant pO2 measurement system 0.0025 h = 9 s
+19,1,267,0.0042,Time constant xCO2 measurement system
+20,1,268,0.0042,Time constant xO2 measurement system 0.0042 h = 15 s*/
+21,1,269,0.5,Surface of the heat exchanger
+22,1,270,1.13,Surface double jacket - liquid phase
+23,1,271,1.4,Surface double jacket - environment
+24,1,272,0.13,Surface double jacket/reactor interior
+25,1,273,3700.0,Heat transfer coefficient of cooling-water
+26,1,274,2000.0,Heat transfer coefficient double jacket-wall
+27,1,275,5000.0,Heat transfer coefficient of the heating medium
+28,1,276,4000.0,Heat transfer coefficient liquid - wall
+29,1,277,3700.0,Heat transfer coefficient of the temperated water
+30,1,278,1000.0,Heat transfer coefficient of the temperature medium
+31,1,279,10.0,Heat transfer coefficient environment - wall
+32,1,280,0.077,Surface liquid - environment
+33,1,281,0.139,Specific heat capacity of the wall
+34,1,282,0.003,Exchanging diameter of the heat exchanger
+35,1,283,0.004,Diameter double jacket inner wall
+36,1,284,0.004,Diameter double jacket outer wall
+37,1,285,0.001,Wall diameter between H and Th
+38,1,286,0.004,Wall-diameter liquid - environment
+39,1,287,4.036,Proportionality coefficient microorganism heat evolution
+40,1,288,2.72e-08,Proportionality coefficient stirrer heat evolution
+41,1,289,46.0,Thermal conductivity of the exchange wall
+42,1,290,46.0,Coefficient of thermal conductivity double jacket inner wall
+43,1,291,46.0,Coefficient of thermal conductivity double jacket outer wall
+44,1,292,380.0,Thermal conductivity of the wall between H and Th
+45,1,293,46.0,Thermal conductivity liquid - environment
+46,1,294,1.0,Mass of the cooling system
+47,1,295,23.5,Liquid mass in double jacket
+48,1,296,1500.0,Maximum cooling-water mass flux 8
+49,1,297,1500.0,Maximum steam heating flux
+50,1,298,1.0,Mass of cooling system
+51,1,299,56.0,Mass double jacket outside +0.5 double jacket inside
+52,1,300,24.0,Mass reactor wall -0.5 double jacket inside
+53,1,301,10000.0,Maximum electrical heating power (10 l reactor)
+54,1,302,1.6831,Density of heating system
+55,1,303,998.2,Density of water at 20°C
+56,1,304,1.0,Density of liquid in reactor
+57,1,305,15.0,Temperature cooling-water inlet
+58,1,306,134.0,Temperature of steam at inlet (saturated steam)
+59,1,307,25.0,Environmental temperature in reactor
+60,1,308,0.0003,Volume of heating system
+61,2,249,1469.0,Maximum value of kLa
+62,2,250,2.5,Minimum value of kLa
+63,2,251,11.0,Maximum volume in reactor
+64,2,252,5.0,Minimum volume in reactor
+65,2,253,1.0,Acid reservoir volume at t = 0 h
+66,2,254,1.0,Base reservoir volume at t = 0 h
+67,2,255,0.1,Maximum filtrate pump rate
+68,2,256,5.0,Maximum harvest pump rate
+69,2,257,10.0,Maximumm possible air aeration rate
+70,2,258,2.0,Maximum possible CO2 aeration rate
+71,2,259,17.0,Summed up maximum aeration rate
+72,2,260,5.0,Maximum possible N2 aeration rate
+73,2,261,5.0,Maximum possible O2 aeration rate
+74,2,262,1.0,Maximum titration rate of the acid pump
+75,2,263,1.0,Maximum titration rate of the alkali pump
+76,2,264,1500.0,Maximum possible stirrer speed
+77,2,265,0.0042,Time constant pH measurement system
+78,2,266,0.0025,Time constant pO2 measurement system 0.0025 h = 9 s
+79,2,267,0.0042,Time constant xCO2 measurement system
+80,2,268,0.0042,Time constant xO2 measurement system 0.0042 h = 15 s*/
+81,2,269,0.5,Surface of the heat exchanger
+82,2,270,1.13,Surface double jacket - liquid phase
+83,2,271,1.4,Surface double jacket - environment
+84,2,272,0.13,Surface double jacket/reactor interior
+85,2,273,3700.0,Heat transfer coefficient of cooling-water
+86,2,274,2000.0,Heat transfer coefficient double jacket-wall
+87,2,275,5000.0,Heat transfer coefficient of the heating medium
+88,2,276,4000.0,Heat transfer coefficient liquid - wall
+89,2,277,3700.0,Heat transfer coefficient of the temperated water
+90,2,278,1000.0,Heat transfer coefficient of the temperature medium
+91,2,279,10.0,Heat transfer coefficient environment - wall
+92,2,280,0.077,Surface liquid - environment
+93,2,281,0.139,Specific heat capacity of the wall
+94,2,282,0.003,Exchanging diameter of the heat exchanger
+95,2,283,0.004,Diameter double jacket inner wall
+96,2,284,0.004,Diameter double jacket outer wall
+97,2,285,0.001,Wall diameter between H and Th
+98,2,286,0.004,Wall-diameter liquid - environment
+99,2,287,4.036,Proportionality coefficient microorganism heat evolution
+100,2,288,2.72e-08,Proportionality coefficient stirrer heat evolution
+101,2,289,46.0,Thermal conductivity of the exchange wall
+102,2,290,46.0,Coefficient of thermal conductivity double jacket inner wall
+103,2,291,46.0,Coefficient of thermal conductivity double jacket outer wall
+104,2,292,380.0,Thermal conductivity of the wall between H and Th
+105,2,293,46.0,Thermal conductivity liquid - environment
+106,2,294,1.0,Mass of the cooling system
+107,2,295,23.5,Liquid mass in double jacket
+108,2,296,150.0,Maximum cooling-water mass flux 8
+109,2,297,6.0,Maximum steam heating flux
+110,2,298,1.0,Mass of cooling system
+111,2,299,56.0,Mass double jacket outside +0.5 double jacket inside
+112,2,300,24.0,Mass reactor wall -0.5 double jacket inside
+113,2,301,2000.0,Maximum electrical heating power (10 l reactor)
+114,2,308,0.0003,Volume of heating system
+115,2,302,1.6831,Density of heating system
+116,2,303,998.2,Density of water at 20°C
+117,2,304,1.0,Density of liquid in reactor
+118,2,305,15.0,Temperature cooling-water inlet
+119,2,306,134.0,Temperature of steam at inlet (saturated steam)
+120,2,307,25.0,Environmental temperature in reactor
