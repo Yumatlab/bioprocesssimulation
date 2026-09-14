@@ -593,6 +593,39 @@ diesem Panel — das Feld mit der Beschriftung `F_T1` liest `v.FT2`.
   weg. In allen vier pO2-Modi bleibt pO2 jetzt unter der Grenze, die sein
   eigenes Gasgemisch zulässt.
 
+### Die Verknüpfung auf den Quellbaum
+
+`tools/make_launcher.py` baut ein `.app`-Bündel in `~/Applications`, das den
+Interpreter *dieser Arbeitskopie* startet — nicht der Verteilungsbau, sondern
+das, was man zum Entwickeln und zum Unterrichten aus einem Checkout heraus
+will. Drei Dinge daran sind teuer erkauft:
+
+- **Die ausführbare Datei eines Bündels muss ein Mach-O sein.** Ein
+  Shell-Skript startet von Hand tadellos und im Finder gar nicht:
+  LaunchServices liest die Architekturen aus dem Hauptprogramm, ein Skript hat
+  keine, und eine Anwendung ohne jede Architekturangabe gilt als Intel-App.
+  Unter macOS 26, wo Rosetta ausläuft, öffnet der Doppelklick daraufhin Apples
+  „Rosetta installieren"-Seite; der Interpreter wird nie erreicht, es gibt
+  keine Logzeile und nichts, woran man es sieht. Nachweisen lässt es sich in
+  einer Zeile — `mdls -name kMDItemExecutableArchitectures "…/Some.app"` gibt
+  bei einer laufenden App `x86_64, arm64` und beim Skriptbündel **nichts**;
+  `codesign -dvv` nennt das Format dann „app bundle with generic" statt „app
+  bundle with Mach-O universal". Der Starter ist deshalb ein kurzes C-Programm
+  für beide Architekturen. Das Skript bleibt als Notnagel für eine Maschine
+  ohne Compiler.
+- **Die Architektur wird vererbt.** Der Interpreter eines venv ist universal,
+  und ein über LaunchServices gestartetes Bündel erbt die Architekturvorliebe
+  dessen, der es angefordert hat. numpys Erweiterungsmodule gibt es nur für
+  eine; passt sie nicht, scheitert der Import und das Fenster kommt nie.
+  `LSRequiresNativeExecution` im Plist und `sysctl.proc_translated` im Starter
+  sind Gürtel und Hosenträger. **Nicht** `uname -m`: unter Rosetta antwortet
+  das x86_64 und wählt damit genau die falsche Hälfte.
+- **Das Bündel wird beschrieben, nicht ersetzt.** Ein neu angelegtes Bündel
+  bekommt eine neue Inode, und alles, was auf die alte zeigt — ein
+  Dock-Eintrag zuerst —, zeigt danach ins Leere. Dazu eine Ad-hoc-Signatur
+  (ohne jede Signatur weist Gatekeeper das Bündel ab) und `lsregister -f`,
+  damit Finder und Spotlight es sofort kennen.
+
 ### Offen aus Phase 7
 
 - **Der Windows-Build ist ungetestet.** Cross-Compiling gibt es bei

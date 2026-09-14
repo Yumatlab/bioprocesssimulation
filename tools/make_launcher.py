@@ -43,8 +43,62 @@ def version() -> str:
     return "0.0"
 
 
+#: The C the launcher is built from. It does two things — write a timestamp
+#: into the log and exec the interpreter — and exists in this form for one
+#: reason: it has to be a Mach-O. See `_build_launcher`.
+LAUNCHER_C = r"""
+/* Written by tools/make_launcher.py — edit that, not this. */
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
+#include <sys/sysctl.h>
+
+/* Am I running under Rosetta? The hardware is not asked, the process is:
+   this binary carries a native slice, so being translated at all means
+   something forced it, and the interpreter must be pulled back by hand or
+   numpy's extension modules will not load. */
+static int translated(void) {
+    int value = 0;
+    size_t size = sizeof(value);
+    if (sysctlbyname("sysctl.proc_translated", &value, &size, NULL, 0) != 0)
+        return 0;
+    return value;
+}
+
+int main(int argc, char *argv[]) {
+    /* A bundle that dies before its first window has nowhere to say why. */
+    freopen(LOGFILE, "a", stdout);
+    freopen(LOGFILE, "a", stderr);
+    time_t now = time(NULL);
+    char stamp[64];
+    strftime(stamp, sizeof stamp, "%Y-%m-%d %H:%M:%S", localtime(&now));
+    fprintf(stderr, "=== %s ===\n", stamp);
+    fflush(stderr);
+
+    char **args = calloc((size_t)argc + 6, sizeof *args);
+    int n = 0;
+    if (translated()) {
+        args[n++] = (char *)"/usr/bin/arch";
+        args[n++] = (char *)"-arm64";
+    }
+    args[n++] = (char *)INTERPRETER;
+    args[n++] = (char *)"-m";
+    args[n++] = (char *)MODULE;
+    for (int i = 1; i < argc; i++)
+        args[n++] = argv[i];
+    args[n] = NULL;
+
+    execv(args[0], args);
+    fprintf(stderr, "could not start %s: ", args[0]);
+    perror(NULL);
+    return 127;
+}
+"""
+
+
 def make_macos_app(target: Path) -> Path:
-    """A minimal .app bundle: Info.plist, a launch script and the icon.
+    """A minimal .app bundle: Info.plist, a launcher and the icon.
 
     macOS reads the bundle around a process, so the Dock entry gets the name
     and the icon from here even though what actually runs is a Python.
@@ -58,36 +112,7 @@ def make_macos_app(target: Path) -> Path:
     macos.mkdir(parents=True, exist_ok=True)
     resources.mkdir(parents=True, exist_ok=True)
 
-    launcher = macos / "launch"
-    launcher.write_text(
-        "#!/bin/sh\n"
-        "# Written by tools/make_launcher.py — edit that, not this.\n"
-        "#\n"
-        "# Two things this script does that look superfluous and are not:\n"
-        "#\n"
-        "# It forces the native architecture on Apple Silicon. The interpreter\n"
-        "# of a venv is a universal binary, and a bundle started through\n"
-        "# LaunchServices inherits the architecture preference of whoever\n"
-        "# asked for it — which can be x86_64. numpy\'s extension modules are\n"
-        "# built for one architecture, so the import fails and the window never\n"
-        "# appears.\n"
-        "#\n"
-        "# The hardware is asked, not the process: under Rosetta `uname -m`\n"
-        "# answers x86_64, so deciding from it would pick exactly the wrong\n"
-        "# slice. hw.optional.arm64 is a property of the machine.\n"
-        "#\n"
-        "# The log is the other half: a bundle that dies before its first\n"
-        "# window has nowhere to say why. Everything the application prints\n"
-        "# ends up in that file.\n"
-        f'exec >>"{LOG}" 2>&1\n'
-        'echo "=== $(date) ==="\n'
-        'if [ "$(/usr/sbin/sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then\n'
-        f'    exec /usr/bin/arch -arm64 "{interpreter()}" -m biofermentation.gui.app "$@"\n'
-        "fi\n"
-        f'exec "{interpreter()}" -m biofermentation.gui.app "$@"\n',
-        encoding="utf-8",
-    )
-    launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    _build_launcher(macos / "launch")
 
     icon = REPO / "src" / "biofermentation" / "resources" / "icons" / "icon.icns"
     if icon.is_file():
@@ -105,7 +130,7 @@ def make_macos_app(target: Path) -> Path:
         # Without this the window is drawn at half resolution and every label
         # in it looks like a screenshot of a label.
         "NSHighResolutionCapable": True,
-        # Never under Rosetta: see the note in the launch script.
+        # Never under Rosetta: see the note in the launcher.
         "LSRequiresNativeExecution": True,
         "LSMinimumSystemVersion": "11.0",
     }
@@ -113,6 +138,89 @@ def make_macos_app(target: Path) -> Path:
     _sign(bundle)
     _register(bundle)
     return bundle
+
+
+def _build_launcher(launcher: Path) -> None:
+    """Compile the launcher, and fall back to a shell script if that fails.
+
+    **The executable of a bundle has to be a Mach-O.** A shell script works
+    when it is started by hand and fails in the Finder: LaunchServices reads
+    the architectures out of the main executable, a script has none, and an
+    application that declares no architecture is taken for an Intel one.
+    Under macOS 26, where Rosetta is on its way out, that means the
+    double-click opens Apple's "install Rosetta" page and the interpreter is
+    never reached — no log line, no window, nothing to go on. `codesign` says
+    the same thing in its own words: "app bundle with generic".
+
+    The proof is one command, and it is worth keeping:
+
+        mdls -name kMDItemExecutableArchitectures "…/Some.app"
+
+    An app that runs answers x86_64 and arm64. The script bundle answered
+    with an empty list.
+
+    So the launcher is a hundred lines of C, built for both architectures, and
+    the shell script stays as the fallback for a machine with no compiler —
+    there it can at least be started from a terminal.
+    """
+    source = launcher.parent / "launch.c"
+    source.write_text(LAUNCHER_C, encoding="utf-8")
+    common = [
+        "/usr/bin/clang",
+        "-O2",
+        f'-DINTERPRETER="{interpreter()}"',
+        '-DMODULE="biofermentation.gui.app"',
+        f'-DLOGFILE="{LOG}"',
+        "-o",
+        str(launcher),
+        str(source),
+    ]
+    # Both slices if the SDK still carries them; on a machine that dropped
+    # the x86_64 one, a native-only launcher is still a Mach-O and still
+    # declares an architecture, which is the whole point.
+    for architectures in (["-arch", "arm64", "-arch", "x86_64"], []):
+        built = subprocess.run(
+            common[:1] + architectures + common[1:], capture_output=True, text=True, check=False
+        )
+        if built.returncode == 0:
+            source.unlink(missing_ok=True)
+            print(f"  built for {_architectures(launcher)}")
+            return
+    print(f"  could not compile the launcher: {(built.stderr or built.stdout).strip()}")
+    print("  falling back to a shell script — the Finder may ask for Rosetta")
+    source.unlink(missing_ok=True)
+    _write_launch_script(launcher)
+
+
+def _architectures(binary: Path) -> str:
+    result = subprocess.run(
+        ["/usr/bin/lipo", "-archs", str(binary)], capture_output=True, text=True, check=False
+    )
+    return result.stdout.strip() or "an unknown architecture"
+
+
+def _write_launch_script(launcher: Path) -> None:
+    """The fallback. Startable from a terminal, not reliably from the Finder."""
+    launcher.write_text(
+        "#!/bin/sh\n"
+        "# Written by tools/make_launcher.py — edit that, not this.\n"
+        "#\n"
+        "# The fallback for a machine without a compiler. A script is not a\n"
+        "# Mach-O, so LaunchServices reads no architecture out of this bundle\n"
+        "# and may take it for an Intel application; see _build_launcher.\n"
+        "#\n"
+        "# The hardware is asked, not the process: under Rosetta `uname -m`\n"
+        "# answers x86_64, so deciding from it would pick exactly the wrong\n"
+        "# slice. hw.optional.arm64 is a property of the machine.\n"
+        f'exec >>"{LOG}" 2>&1\n'
+        'echo "=== $(date) ==="\n'
+        'if [ "$(/usr/sbin/sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then\n'
+        f'    exec /usr/bin/arch -arm64 "{interpreter()}" -m biofermentation.gui.app "$@"\n'
+        "fi\n"
+        f'exec "{interpreter()}" -m biofermentation.gui.app "$@"\n',
+        encoding="utf-8",
+    )
+    launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
 def _sign(bundle: Path) -> None:
