@@ -5,6 +5,10 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  # Both installers on demand, from the Actions tab, without a release.
+  # Testing a build has to come before tagging the version it belongs to;
+  # tag-only meant tagging v3.0.0 to find out whether v3.0.0 runs on Windows.
+  workflow_dispatch:
 
 jobs:
   test:
@@ -30,8 +34,9 @@ jobs:
 
   # Plan section 7.2: every tag produces both installers, so neither has to
   # be built by hand on a machine that happens to run the right system.
+  # Also on request, so a build can be tried before it is tagged.
   build:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: test
     runs-on: ${{ matrix.os }}
     strategy:
