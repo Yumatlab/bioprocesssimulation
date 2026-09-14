@@ -27,6 +27,21 @@ ui_*.py
 *.qmlc
 *.jsc
 
+# --- MATLAB side of the repository ---
+# Both branches of this repository carry a .gitignore, and this is the only
+# file the two have in common. Identical content on both sides means the
+# merge has nothing to resolve.
+#
+# The database rules are anchored to the root on purpose. The MATLAB side
+# wrote a bare `*.db`, which reads harmlessly there and would swallow
+# src/biofermentation/resources/SimulationAppDB_template.db over here — the
+# one .db in this repository that is meant to be tracked.
+/*.db
+/Archiv/*.db
+/figures/*.db
+# Output of the MATLAB Compiler: 110 MB, reproducible at any time.
+/BiofermentationSimulation/
+
 # --- SQLite runtime artefacts ---
 # The bundled template database IS tracked; only runtime files are ignored.
 *.db-wal
