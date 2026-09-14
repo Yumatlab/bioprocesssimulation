@@ -400,6 +400,21 @@ Prozess, Projekt, Fehler) steht immer da.
 - **Operationen starten ausgeblendet.** Sie sind die häufigsten Einträge und
   die uninteressantesten für die Frage, die jemand an einen Log stellt.
 
+### Wer in `p` schreibt, muss die Panels anfassen
+
+`refresh()` füllt nur Messwerte nach — und zwar mit Absicht: es läuft nach
+jedem Block, und ein Sollwertfeld neu zu setzen, während jemand hineintippt,
+nähme ihm die halb getippte Zahl weg. Sollwerte, Modi und Schalter liest
+`ControlPanel.load()`, und das lief bisher nur beim Öffnen des Fensters und
+nach einem Dialog.
+
+**Eine Phase schreibt aber auch in `p`.** Eine „Update Parameter Set"-Phase
+setzte `Mode_feed` auf Closed loop, und der Tab zeigte weiter „Manual" — die
+eine Stelle, an der jemand nachsieht, was der Prozess gerade tut, zeigte das
+Gegenteil. `load_panels()` hängt jetzt an `_phase_changed`; die Parameter sind
+zu diesem Zeitpunkt schon angewandt, weil `check_start` sie schreibt und der
+Runner erst danach sendet.
+
 ### Ein wieder geöffnetes Projekt ist schon beimpft
 
 `a` wird nicht gespeichert, und `initialize` setzt `inoc_occ` nur für einen

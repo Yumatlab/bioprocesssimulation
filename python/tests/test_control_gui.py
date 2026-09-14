@@ -448,6 +448,36 @@ def test_a_pending_phase_is_editable_again_once_the_process_stands(window):
     assert upcoming.edit_button.isEnabled() is True
 
 
+def test_a_phase_that_changes_a_mode_moves_the_panel(window):
+    """Project_3 set Mode_feed to closed loop through an "Update Parameter
+    Set" phase, and the tab went on showing Manual.
+
+    A phase writes straight into p. refresh() only fills in measured values,
+    and ControlPanel.load was otherwise reached only through a dialog — so
+    nothing re-read the setpoints the automaton had just changed. The tab is
+    the one place someone looks to find out what the process is doing.
+    """
+    phase = window.setup.phases[-1]
+    phase.statusID = PhaseStatus.UPCOMING
+    phase.typeID = PhaseType.PARAMETER_UPDATE
+    panel = window.panels["Feed Control"]
+    state = window.runner.state
+    state.p["Mode_feed"] = 0.0
+    state.p["pHw"] = 6.0
+    window.load_panels()
+    assert panel.mode_selector.currentData() == 0
+
+    phase.parameters = {"Mode_feed": 1.0, "pHw": 7.4}
+    with window.runner.editing() as editable:
+        for name, value in phase.parameters.items():
+            editable.p[name] = value
+    window._phase_changed(len(window.setup.phases) - 1)
+
+    assert panel.mode_selector.currentData() == 1, "the mode selector followed"
+    ph_row = window.panels["pH-Control"].rows["pHw"]
+    assert ph_row.setpoint.value() == pytest.approx(7.4), "and so did the setpoint"
+
+
 def test_the_arrow_forces_the_next_phase(window):
     for phase in window.setup.phases:
         phase.statusID = PhaseStatus.UPCOMING
