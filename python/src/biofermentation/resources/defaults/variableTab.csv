@@ -1,0 +1,79 @@
+variableID,name,shorttex,longtex,unit,tex_unit,description
+1,cXL,c_{XL},c_{XL},g/l,gl^{-1},
+2,cS1L,c_{S1L},c_{S1L},g/l,gl^{-1},
+3,cS2L,c_{S2L},c_{S2L},g/l,gl^{-1},
+4,cS3L,c_{S3L},c_{S3L},g/l,gl^{-1},
+5,qXpX,μ,μ,1/h,h^{-1},
+6,cP1X,c_{P1X},c_{P1X},g/l,gl^{-1},
+7,cP1L,c_{P1L},c_{P1L},g/l,gl^{-1},
+8,pO2,pO_{2},pO_{2},%,%,
+9,NSt,N_{St},N_{St},rpm,rpm,
+10,FnG,F_{nG},F_{nG},l/min,lmin^{-1},
+11,FnAIR,F_{nAIR},F_{nAIR},l/min,lmin^{-1},
+12,FnO2,F_{nO_2},F_{nO_2},l/min,lmin^{-1},
+13,FnN2,F_{nN_2},F_{nN_2},l/min,lmin^{-1},
+14,FnCO2,F_{nCO_2},F_{nCO_2},l/min,lmin^{-1},
+15,pHL,pH_{L},pH_{L},-,-,
+16,thetaL,\vartheta_{L},\vartheta_{L},°C,°C,
+17,pG,p_G,p_G,pa,pa,
+18,xOGin,x_{OGin},x_{OGin},-,-,
+19,xOG,x_{OG},x_{OG},-,-,
+20,xCG,x_{CG},x_{CG},-,-,
+21,xOL,x_{OL},x_{OL},-,-,
+22,cOL,c_{OL},c_{OL},g/l,gl^{-1},
+23,RQ,RQ,RQ,mol/mol,molmol^{-1},
+24,QO2max,Q_{O2max},Q_{O2max},g/(lh),g(lh)^{-1},
+25,QCO2max,Q_{CO2max},Q_{CO2max},g/(lh),g(lh)^{-1},
+26,OTR,OTR,OTR,g/(lh),g(lh)^{-1},
+27,CTR,CTR,CTR,g/(lh),g(lh)^{-1},
+28,OUR,OUR,OUR,g/(lh),g(lh)^{-1},
+29,kLa,k_La,k_La,1/h,h^{-1},
+30,OURm,OURm,OURm,g/(lh),g(lh)^{-1},
+31,FH,F_{H},F_{H},l/h,lh^{-1},
+32,CAlLtot,C_{AlLtot},C_{AlLtot},mol/l,moll^{-1},
+33,Vacid,V_{acid},added acid,l,l,
+34,Vbase,V_{base},added base,l,l,
+35,AAF,A_{AF},added antifoam,l,l,
+36,VL,V_{L},V_{L},l,l,
+37,VT1,V_{T1},V_{T1},l,l,
+38,VT2,V_{T2},V_{T2},l,l,
+39,FT1,F_{T1},F_{T1},l/h,lh^{-1},Pump rate acid
+40,FT2,F_{T2},F_{T2},l/h,lh^{-1},Pump rate base
+41,CAcLtot,C_{AcLtot},C_{AcLtot},mol/l,moll^{-1},
+42,pHLm,pH_{Lm},pH_{Lm},-,-,
+43,thetaLm,\vartheta_{Lm},\vartheta_{Lm},°C,°C,
+44,pO2m,pO_{2m},pO_{2m},%,%,
+45,hF,hF,hF,%,%,
+46,CCLtot,C_{CLtot},C_{CLtot},mol/l,moll^{-1},
+47,CB1Ltot,C_{B1Ltot},C_{B1Ltot},mol/l,moll^{-1},
+48,CB2Ltot,C_{B2Ltot},C_{B2Ltot},mol/l,moll^{-1},
+49,pH,pH,pH,-,-,
+50,thetaD,\vartheta_{D},\vartheta_{D},°C,°C,
+52,VR1,V_{R1},V_{R1},l,l,
+53,VR2,V_{R2},V_{R2},l,l,
+54,VR3,V_{R3},V_{R3},l,l,
+55,FR1,F_{R1},F_{R1},l/h,lh^{-1},
+56,FR2,F_{R2},F_{R2},l/h,lh^{-1},
+57,FR3,F_{R3},F_{R3},l/h,lh^{-1},
+61,t,t,t,h,h,
+62,VR1in,V_{R1in},V_{R1in},l,l,
+63,VR2in,V_{R2in},V_{R2in},l,l,
+64,VR3in,V_{R3in},V_{R3in},l,l,
+65,qS2pXind,q_{S2/Xind},q_{S2/Xind},1/h,h^{-1},AOX induction
+66,qS2pXscript,q_{S2/Xscript},q_{S2/Xscript},1/h,h^{-1},AOX induction
+67,qP1pXscriptw,q_{P1/Xscriptw},q_{P1/Xscriptw},1/h,h^{-1},AOX induction
+68,qS2pXtrans,q_{S2/Xtrans},q_{S2/Xtrans},1/h,h^{-1},AOX induction
+69,qS2pXact,q_{S2/Xact},q_{S2/Xact},1/h,h^{-1},AOX induction
+70,qS2pX,q_{S2/X},q_{S2/X},1/h,h^{-1},AOX induction
+71,qP1pXind,q_{P1/Xind},q_{P1/Xind},1/h,h^{-1},Protein expression
+72,qP1pXback,q_{P1/Xback},q_{P1/Xback},1/h,h^{-1},Protein expression
+73,qP1pXscript,q_{P1/Xscript},q_{P1/Xscript},1/h,h^{-1},Protein expression
+74,qP1pXtrans,q_{P1/Xtrans},q_{P1/Xtrans},1/h,h^{-1},Protein expression
+75,qP1pXact,q_{P1/Xact},q_{P1/Xact},1/h,h^{-1},Protein expression
+76,qP1pX,q_{P1/X},q_{P1/X},1/h,h^{-1},Protein expression
+77,cS1Lm,c_{S1Lm},c_{S1Lm},g/l,gl^{-1},
+78,cS2Lm,c_{S2Lm},c_{S2Lm},g/l,gl^{-1},
+79,cS3Lm,c_{S3Lm},c_{S3Lm},g/l,gl^{-1},
+80,QS1in,Q_{S1in},Q_{S1in},g/(lh),g(lh)^{-1},\N
+81,QS2in,Q_{S2in},Q_{S2in},g/(lh),g(lh)^{-1},\N
+82,QS3in,Q_{S3in},Q_{S3in},g/(lh),g(lh)^{-1},\N

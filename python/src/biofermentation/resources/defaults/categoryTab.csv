@@ -1,0 +1,20 @@
+categoryID,name,section,reading_rate
+1,Setpoint,Parameters,cyclic
+2,Initial value,Parameters,once
+3,Calibration,Parameters,once
+4,Substrate reservoir,Parameters,once
+5,Feed control,Parameters,cyclic
+6,pH control,Parameters,once
+7,Modes,Parameters,cyclic
+8,Flags,Parameters,cyclic
+9,Controller gain,Parameters,cyclic
+10,General,General,once
+11,Cell growth,Organism,once
+12,Growth temperature,Organism,once
+13,Foam,Organism,once
+14,pH,Organism,once
+15,Settings,Settings,invisible
+16,Pichia induction/protein expression,Parameters,once
+17,Vessel,Bioreactor,once
+18,Instrumentation,Bioreactor,once
+19,Temperature control,Bioreactor,once

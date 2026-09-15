@@ -1,0 +1,46 @@
+MIT License
+
+Copyright (c) 2026 Philipp Yuma Iff
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+--------------------------------------------------------------------------
+Where this software comes from, and what else is in the package
+--------------------------------------------------------------------------
+
+This is the Python port of the Biofermentation Simulation MATLAB App Designer
+application (Version 2.2) by Philipp Yuma Iff, which is licensed under the
+Creative Commons Attribution 4.0 International License
+(http://creativecommons.org/licenses/by/4.0/). That application continues the
+work of the previous developer of this software, Lena Sophia Kaletsch, who
+developed Version 1.3 of the Biofermentation Simulation App (01.03.2024); it
+rests in turn on the BIOSIM program conceived by Prof. Dr.-Ing. R. Luttmann.
+The software was developed for the laboratory of Bioprocess Automation at the
+University of Applied Sciences Hamburg.
+
+The MIT licence above covers this Python implementation. The attribution
+required by CC BY 4.0 for the works it derives from is given here and in the
+Information tab of the application, and has to travel with any copy.
+
+A packaged build (the single-file executable produced by PyInstaller) also
+contains third-party libraries under their own licences, chief among them Qt
+by way of PySide6, which is distributed under the GNU Lesser General Public
+License version 3. Redistributing such a build carries the obligations of
+that licence — see docs/installation.md.

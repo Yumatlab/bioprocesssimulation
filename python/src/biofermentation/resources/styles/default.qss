@@ -1,0 +1,390 @@
+/* Look and feel of the application.
+ *
+ * Qt Style Sheets are CSS for widgets. This file can be edited without
+ * touching a line of Python — change a colour, restart, done. Put your own
+ * copy next to the database as style.qss and it is used instead; see
+ * gui/style.py.
+ *
+ * Every rule that sets a background also sets a colour, and the other way
+ * round. A style sheet only defines what it names; whatever it leaves out
+ * comes from the platform palette, and on a Mac in dark mode that meant
+ * white text on the white grounds set here. gui/style.py additionally gives
+ * the application its own light palette, so the two cannot drift apart.
+ *
+ * The selectors are widget classes and object names. Object names are set in
+ * the window code with setObjectName(), and the ones worth styling are:
+ *   #runButton      the big Run/Pause button
+ *   #phasePanel     one panel of the Process Manager
+ *   #controlPanel   one controller panel of the Control Options tab
+ *   #tabPage        a page of the Control App's tab widget
+ *   #logTerminal    the Log tab
+ */
+
+QWidget {
+    color: #1a1a1a;
+}
+
+QMainWindow, QDialog {
+    background: #f2f2f2;
+    color: #1a1a1a;
+}
+
+QLabel, QCheckBox, QRadioButton, QGroupBox {
+    background: transparent;
+    color: #1a1a1a;
+}
+
+/* Styling QCheckBox at all takes the box away — the tick was still drawn but
+ * an unticked entry showed nothing at all, so a list of them looked empty.
+ * Once ::indicator is styled the style draws no tick either, hence the
+ * filled square for the checked state. */
+QCheckBox::indicator,
+QTreeWidget::indicator,
+QTreeView::indicator,
+QRadioButton::indicator {
+    width: 13px;
+    height: 13px;
+    border: 1px solid #8a8a8a;
+    border-radius: 3px;
+    background: white;
+}
+
+QRadioButton::indicator {
+    border-radius: 7px;
+}
+
+QCheckBox::indicator:checked,
+QTreeWidget::indicator:checked,
+QTreeView::indicator:checked,
+QRadioButton::indicator:checked {
+    background: #2f7fd1;
+    border-color: #1d63a8;
+}
+
+QCheckBox::indicator:hover,
+QTreeWidget::indicator:hover,
+QTreeView::indicator:hover {
+    border-color: #2f7fd1;
+}
+
+QCheckBox::indicator:disabled,
+QTreeWidget::indicator:disabled,
+QTreeView::indicator:disabled {
+    background: #ededed;
+    border-color: #c8c8c8;
+}
+
+QLabel:disabled, QCheckBox:disabled, QRadioButton:disabled {
+    color: #9a9a9a;
+}
+
+QToolTip {
+    background: #ffffe1;
+    color: #1a1a1a;
+    border: 1px solid #b4b4b4;
+    padding: 3px;
+}
+
+QGroupBox {
+    font-weight: bold;
+    border: 1px solid #b4b4b4;
+    border-radius: 4px;
+    margin-top: 10px;
+    padding-top: 8px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top center;
+    padding: 0 6px;
+    color: #1a1a1a;
+}
+
+/* ------------------------------------------------------------ buttons -- */
+
+QPushButton {
+    padding: 4px 10px;
+    border: 1px solid #adadad;
+    border-radius: 3px;
+    background: #f0f0f0;
+    color: #1a1a1a;
+}
+
+QPushButton:hover:enabled {
+    background: #e3efff;
+    border-color: #6ba4e0;
+}
+
+QPushButton:disabled {
+    color: #9a9a9a;
+    background: #f6f6f6;
+    border-color: #cfcfcf;
+}
+
+/* A checkable button — Inoculate, Auto Update — must look pressed when it
+ * is. Styling QPushButton at all takes the native macOS rendering away, and
+ * with it the only thing that showed the checked state. */
+QPushButton:checked {
+    background: #2f7fd1;
+    border-color: #1d63a8;
+    color: white;
+    font-weight: bold;
+}
+
+QPushButton:checked:hover:enabled {
+    background: #3b8ee0;
+    border-color: #1d63a8;
+}
+
+QPushButton:pressed {
+    background: #d8d8d8;
+}
+
+QPushButton#runButton {
+    font-size: 16px;
+    font-weight: bold;
+}
+
+/* ------------------------------------------------------------- inputs -- */
+
+QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox, QTextEdit, QPlainTextEdit {
+    padding: 2px 4px;
+    border: 1px solid #b4b4b4;
+    border-radius: 3px;
+    background: white;
+    color: #202020;
+    selection-background-color: #2f7fd1;
+    selection-color: white;
+}
+
+QLineEdit:disabled,
+QDoubleSpinBox:disabled,
+QSpinBox:disabled,
+QComboBox:disabled,
+QTextEdit:disabled {
+    background: #ededed;
+    color: #9a9a9a;
+}
+
+/* A field the surface reports rather than sets — the measured value beside a
+ * setpoint, or F_Rmax, which belongs to the reservoir and not to the moment.
+ * It has to look different from one that can be typed into. */
+QLineEdit[readOnly="true"],
+QDoubleSpinBox[readOnly="true"],
+QSpinBox[readOnly="true"] {
+    background: #f4f4f4;
+    color: #303030;
+}
+
+/* Styling a QComboBox at all switches macOS off the native rendering. Two
+ * things then have no colour of their own: the text of the current entry in
+ * the closed box, and the highlight in the open popup. Both were white on
+ * white — the selection could not be read anywhere in the application. */
+QComboBox {
+    background: white;
+    color: #202020;
+}
+
+QComboBox:on {
+    background: #eef5fd;
+    color: #202020;
+}
+
+/* The drop-down button is deliberately not styled. Touching ::drop-down or
+ * ::down-arrow makes Qt stop drawing the arrow itself, and a style sheet
+ * cannot put a decent one back without an image file — the CSS triangle
+ * trick comes out as a dash. Fusion draws a proper one, so it is left to it. */
+
+QComboBox QAbstractItemView {
+    background: white;
+    color: #202020;
+    border: 1px solid #adadad;
+    selection-background-color: #2f7fd1;
+    selection-color: white;
+    outline: none;
+}
+
+QComboBox QAbstractItemView::item {
+    min-height: 22px;
+    padding: 2px 6px;
+    color: #202020;
+}
+
+QComboBox QAbstractItemView::item:selected {
+    background: #2f7fd1;
+    color: white;
+}
+
+/* ------------------------------------------------------------- tables -- */
+
+QTableView, QTableWidget, QTreeWidget, QTreeView, QListView {
+    background: white;
+    alternate-background-color: #f7f7f7;
+    color: #1a1a1a;
+    gridline-color: #d8d8d8;
+    selection-background-color: #2f7fd1;
+    selection-color: white;
+}
+
+QHeaderView::section {
+    padding: 4px;
+    border: none;
+    border-right: 1px solid #d0d0d0;
+    border-bottom: 1px solid #b4b4b4;
+    background: #f2f2f2;
+    color: #1a1a1a;
+    font-weight: bold;
+}
+
+QScrollBar:vertical, QScrollBar:horizontal {
+    background: #f2f2f2;
+    border: none;
+}
+
+QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+    background: #c4c4c4;
+    border-radius: 5px;
+    min-height: 24px;
+    min-width: 24px;
+}
+
+QScrollBar::handle:hover {
+    background: #a8a8a8;
+}
+
+QScrollBar::add-line, QScrollBar::sub-line {
+    height: 0;
+    width: 0;
+}
+
+/* --------------------------------------------------------------- menu -- */
+
+QMenuBar {
+    background: #f2f2f2;
+    color: #1a1a1a;
+}
+
+QMenuBar::item {
+    padding: 4px 10px;
+    background: transparent;
+    color: #1a1a1a;
+}
+
+QMenuBar::item:selected {
+    background: #2f7fd1;
+    color: white;
+}
+
+QMenu {
+    background: white;
+    color: #1a1a1a;
+    border: 1px solid #adadad;
+}
+
+QMenu::item {
+    padding: 4px 24px 4px 20px;
+}
+
+QMenu::item:selected {
+    background: #2f7fd1;
+    color: white;
+}
+
+QMenu::item:disabled {
+    color: #9a9a9a;
+}
+
+QMenu::separator {
+    height: 1px;
+    background: #d8d8d8;
+    margin: 4px 8px;
+}
+
+QStatusBar {
+    background: #f2f2f2;
+    color: #4a4a4a;
+}
+
+/* --------------------------------------------------------------- tabs -- */
+
+/* The page is white, like the active tab above it — the two read as one
+ * sheet of paper rather than a grey box under a white flap. */
+QTabWidget::pane {
+    border: 1px solid #b4b4b4;
+    border-radius: 3px;
+    top: -1px;
+    background: white;
+}
+
+/* The pages themselves. #tabPage is set in control_app._style_tab_pages,
+ * which also lets a plain QWidget draw a styled background at all. */
+QWidget#tabPage {
+    background: white;
+    color: #1a1a1a;
+}
+
+QScrollArea#tabPage {
+    border: none;
+    background: white;
+    color: #1a1a1a;
+}
+
+/* The viewport is its own widget and paints over the scroll area. It is also
+ * pointed at the Base palette role in control_app._style_tab_pages, because
+ * neither this rule nor a transparent viewport reaches it reliably. */
+QScrollArea#tabPage > QWidget > QWidget {
+    background: white;
+    color: #1a1a1a;
+}
+
+/* QGroupBox on white needs no ground of its own, only its frame. */
+QTabWidget QGroupBox {
+    background: transparent;
+}
+
+QTabBar::tab {
+    padding: 7px 18px;
+    margin-right: 2px;
+    border: 1px solid #c0c0c0;
+    border-bottom: none;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    background: #e8e8e8;
+    color: #4a4a4a;
+}
+
+QTabBar::tab:hover:!selected {
+    background: #f0f0f0;
+}
+
+QTabBar::tab:selected {
+    background: white;
+    color: #1a1a1a;
+    font-weight: bold;
+    /* One pixel over the pane border, so the active tab joins the page. */
+    margin-bottom: -1px;
+    padding-bottom: 8px;
+}
+
+/* The log tab reads like a terminal. The border is what separates it from
+   the white tab page: without a visible edge the dark field looks like a
+   hole in the window rather than a surface of its own. */
+QTextEdit#logTerminal {
+    background: #1e1f22;
+    color: #d6d6d6;
+    border: 1px solid #4a4f57;
+    border-radius: 6px;
+    padding: 4px;
+    selection-background-color: #2f7fd1;
+    selection-color: white;
+}
+
+QTextEdit#logTerminal QScrollBar:vertical {
+    background: #1e1f22;
+    width: 12px;
+}
+
+QTextEdit#logTerminal QScrollBar::handle:vertical {
+    background: #4a4f57;
+    border-radius: 5px;
+}

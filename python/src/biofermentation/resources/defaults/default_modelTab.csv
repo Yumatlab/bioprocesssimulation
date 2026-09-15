@@ -1,0 +1,417 @@
+default_modelparameterID,organismID,parameterID,value,description
+1,1,1,400.0,Setpoint for agitation speed
+2,1,2,6.7,Value of pH Setpoint
+3,1,3,20.0,Value of pO2 setpoint
+4,1,4,32.0,Value of temperature Setpoint
+5,1,5,14.0,Liquid weight setpoint
+6,1,6,6.0,Value of chosen aeration rate
+7,1,7,7.5,Aeration rate AIR extern
+8,1,8,0.0,Aeration rate O2 extern
+9,1,9,0.0,Aeration rate N2 extern
+10,1,10,0.0,Aeration rate CO2 extern
+11,1,11,0.5,Pressure setpoint
+12,1,12,20.0,Harvest rate
+13,1,13,0.5,Substrate concentration setpoint for reservoir 1
+14,1,16,0.1,Pump rate setpoint for reservoir 1
+15,1,19,3.0,Initial cell concentration t = 0 h
+16,1,20,100.0,Partial pressure of dissolved oxygen at t = 0 h
+17,1,21,7.5,Initial pH at t = 0 h
+18,1,22,10.0,Initial volumme in reactor
+19,1,23,32.0,Initial temperature in liquid phase at t = 0 h
+20,1,24,32.0,Initial temperature in double jacket at t = 0 h
+21,1,25,5.0,Initial glucose concentration t = 0 h
+22,1,26,0.0,Initial glycerine concentration t = 0 h
+23,1,27,0.0,Initial acetate concentration t = 0 h
+24,1,28,0.0,Product concentration in liquid at t = 0 h
+25,1,29,0.0,Product concentration in cells at t = 0 h
+26,1,30,0.014735071,O2-concentration in liquid phase at t = 0 h
+27,1,31,150000.0,Pressure at calibration
+28,1,32,0.2094,Molar concentration of oxygen at calibration
+29,1,33,0.004,Molar concentration of carbon dioxide at calibration
+30,1,34,200.0,Glucose concentration in reservoir
+31,1,35,0.0,Gylcerin concentration in reservoir
+32,1,36,0.0,Methanol concentration in reservoir
+33,1,37,0.0,Concentration of cells in glucose reservoir
+34,1,38,5.0,Glucose reservoir volume
+35,1,39,1.25,Glucose reservoir density
+36,1,40,0.0,Dissolved oxygen concentration in reservoir
+37,1,41,0.0,Concentration of product in glucose reservoir
+38,1,42,0.0,Total CO2 concentration in reservoir
+39,1,61,0.1,Pulse feed factor of reservoir 1
+40,1,62,0.5,Maximum pump rate of reservoir 1
+41,1,63,0.1,Growth rate set value for fed-batch 1
+42,1,70,1.0,Feed control reservoir index
+43,1,71,0.0,Produced acid in liquid phase t = 0 h
+44,1,72,0.0,Titration acid in liquid phase t = 0 h
+45,1,73,0.05,Ammonia concentration in liquid phase t = 0 h
+46,1,74,0.098,Molar buffer acid concentration in liquid phase t = 0 h
+47,1,75,0.03,Molar buffer base concentration in liquid phase t = 0 h
+48,1,76,2.44,pH-acid reservoir
+49,1,77,16.47,pH-base reservoir concentration (ammonia)
+50,1,78,0.0,Total CO2 concentration in acid reservoir
+51,1,79,0.0,Total CO2 concentration in base reservoir
+52,1,80,0.0,Dissolved O2 concentration in acid reservoir
+53,1,81,0.0,Dissolved O2 concentration in base reservoir
+54,1,82,0.0154,1. titration acid dissociation constant (H2SO3 to HSO3-)
+55,1,83,1.02e-07,2. tritration acid dissociation constant (HSO3- to SO3--)
+56,1,84,1.76e-05,Ammonia (pH base) dissociation constant (NH3 to NH4+)
+57,1,85,0.00462,Stripping constant ammonia
+58,1,86,0.00752,1. buffer dissociation constant (H3PO4 to H2PO4-)
+59,1,87,6.23e-08,2. buffer dissociation constant (H2PO4- to HPO4--)
+60,1,88,2.2e-13,3. buffer dissociation constant (HPO4-- to PO4---)
+61,1,89,1.76e-05,Acetate (product) dissociation constant (CH3COOH to CH3COO-)
+62,1,90,82.0,Molar mass of titration acid
+63,1,91,17.0,Molar mass of ammonia
+64,1,92,1.0,"pH control mode (1: auto, 0: manual)"
+65,1,93,1.0,"Temperature control mode (1: auto, 0: manual)"
+66,1,94,1.0,"pO2 control mode (1: auto, 0: manual)"
+67,1,95,0.0,Signal for liquid weight harvest control
+68,1,96,0.0,"Feed control mode (1: feed control, 0: manual)"
+69,1,97,0.0,Signal for inoculation at start of simulation
+70,1,98,1.0,Signal for stirrer to be turned on/off
+71,1,99,1.0,Signal for aeration to be turned on/off
+72,1,100,1.0,Signal for aeration with AIR
+73,1,101,1.0,Signal for aeration with O2
+74,1,102,0.0,Signal for aeration with N2
+75,1,103,0.0,Signal for aeration with CO2
+76,1,104,0.0,Signal for acid addition
+77,1,105,0.0,Signal for alkali addition
+78,1,106,0.0,Signal for antifoam addition
+79,1,107,1.0,Signal for heating
+80,1,108,1.0,Signal for cooling
+81,1,109,0.0,Signal for harvest to be turned on/off
+82,1,110,0.0,Signal for feed to be turned on/off
+83,1,112,0.0,Signal for open-loop feed control with reservoir 1
+84,1,114,10000.0,Gain of P part of pH master controller
+85,1,115,1.0,Gain of P part of acid pH slave controller
+86,1,116,-1.0,Gain of P part of base pH slave controller
+87,1,117,20.0,
+88,1,118,8.0,Gain of P part of temperature master controller
+89,1,119,0.1,Gain of I part of temperature master controller
+90,1,120,10.0,Gain of P part of temperature heating slave controller
+91,1,121,0.01,Gain of P part of temperature heating slave controller
+92,1,122,20.0,
+93,1,123,1.0,Gain of P part of agitation controller
+94,1,124,60.0,Gain of I part of agitation controller
+95,1,125,5.0,Gain of P part of aeration controller
+96,1,126,0.002,Gain of D part of agitation controller
+97,1,127,500.0,Gain of I part of aeration controller
+98,1,128,0.005,Gain of D part of aeration controller
+99,1,129,0.012,Gain of P part of gasmix controller
+100,1,130,1.0,Gain of I part of gasmix controller
+101,1,131,1e-05,Gain of D part of gasmix controller
+102,1,132,-2.0,Gain of P part of feed controller
+103,1,133,-15.0,Gain of I part of feed controller
+104,1,134,-0.009,Gain of D part of feed controller
+105,1,135,25.0,
+106,1,136,10.0,Gain of P part of liquid weight controller
+107,1,137,0.3,Gain of I part of liquid weight controller
+108,1,138,1.0,Gain of D part of liquid weight controller
+109,1,139,15.0,Gain of P part of feed controller of reservoir 1
+110,1,140,500.0,Gain of I part of feed controller of reservoir 1
+111,1,141,0.02,Gain of D part of feed controller of reservoir 1
+112,1,148,100.0,
+113,1,151,0.0,Setpoint for difference between measured pH and wanted pH
+114,1,152,0.2094,Molar concentration of oxygen in AIR
+115,1,153,0.0004,Molar concentration of carbondioxide in AIR
+116,1,154,22.412,Gas volume under normal conditions
+117,1,155,273.15,Gas temperature under normal conditions
+118,1,156,8314.0,Gas constant
+119,1,157,101330.0,Gas pressure under normal conditions
+120,1,158,32.0,Molar mass of O2
+121,1,159,44.0,Molar mass of CO2
+122,1,160,1500.0,Mass flux in temperature cycle
+123,1,161,0.001002,Viscosity of water
+124,1,162,0.001,Viscosity at cXLeta
+125,1,163,100.0,Refering cell concentration
+126,1,164,1440000.0,O2 Henry constant
+127,1,165,1448000.0,O2 Henry constant under normal conditions
+128,1,166,30010.0,CO2 Henry constant
+129,1,167,30010.0,CO2 Henry constant under normal conditions
+130,1,168,-0.02723,Normed parameter of O2 Bunsen coefficient
+131,1,169,0.0005627,Normed parameter of O2 Bunsen coefficient
+132,1,170,-6.597e-06,Normed parameter of O2 Bunsen coefficient
+133,1,171,3.28e-08,Normed parameter of O2 Bunsen coefficient
+134,1,172,-0.03889,Normed parameter of CO2 Bunsen coefficient
+135,1,173,0.0009442,Normed parameter of CO2 Bunsen coefficient
+136,1,174,-1.328e-05,Normed parameter of CO2 Bunsen coefficient
+137,1,175,8.11e-08,Normed parameter of CO2 Bunsen coefficient
+138,1,176,4.31e-07,1. CO2 dissociation constant
+139,1,177,5.61e-11,2. CO2 dissociation constant
+140,1,178,0.5,Parameter for kLa calculation
+141,1,179,0.5,Parameter for kLa calculation
+142,1,180,-0.05,Parameter for kLa calculation
+143,1,181,1.167,Specific heat capacity of water
+144,1,182,2170.0,Evaporation enthalpie of water
+145,1,183,1e-07,pH norm concentration
+146,1,184,0.46,Maximum specific growth rate glucose
+147,1,185,0.21921,Yield coefficient of gram cells per gram substrate
+148,1,186,0.553,Substrate growth yield coefficient glucose
+149,1,187,0.2,Product yield coefficient glucose
+150,1,188,0.06,Spcific substrate maintenance rate glucose
+151,1,189,0.04,Substrate limitation constant glucose
+152,1,190,0.0018,Inhibition of glycerine uptake in presence of glucose
+153,1,191,0.35,Maximum specific growth rate glycerol
+154,1,193,0.4,Substrate growth yield coefficient glycerine
+155,1,194,0.1,Product yield coefficient glycerine
+156,1,196,0.05,Substrate limitation constant glycerol
+157,1,197,0.1,Maximum specific growth rate acetate
+158,1,199,0.2,Substrate growth yield coefficient acetate
+159,1,200,1.0,Product yield coefficient acetate
+160,1,202,0.06,Substrate limitation constant acetate
+161,1,203,0.0018,Inhibition of acetate uptake in presence of glucose
+162,1,204,0.003,Inhibition of acetate uptake due to glycerine
+163,1,205,0.40601,Yield coefficient of gram cells per gram oxygen
+164,1,206,1.367,Oxygen growth yield coefficient
+165,1,207,1.375,Cell internal respiratory behavior
+166,1,208,0.005,Specific O2 maintenance rate
+167,1,209,0.69,Relation CO2/O2 transition
+168,1,210,0.0004,Oxygen limitation constant
+169,1,211,0.0005,Inhibition of acetate production due to O2
+170,1,212,60.0,Molar mass of product
+171,1,213,0.0,Titration acid yield coefficient cells
+172,1,214,0.185,Ammonia yield coefficient cells
+173,1,215,32.0,"Added by me, working point of cascade temperature slave controller"
+174,1,216,35.0,Optimal temperature required for growth
+175,1,217,5.0,Minimum liquid temperature required for growth
+176,1,218,47.0,Maximum liquid temperature required for growth
+177,1,219,100.0,Antifoam-activity gain per addition step Ttast
+178,1,220,4.0,Cell antifoam adsorption constant
+179,1,221,0.09,Foam consistency factor
+180,1,222,0.1,Cellspecific foam build up rate
+181,1,223,0.0125,Time constant of foam formation at cXL = 0 g/l
+182,1,224,8.333e-05,Addition unit Ttast
+183,1,225,0.975,Activity decline due to antifoam addition
+184,1,226,6.8,Optimal pH required for growth
+185,1,227,4.0,Minimum pH required for growth
+186,1,228,9.0,Maximum pH required for growth
+187,1,229,2.0,Calculation interval
+188,1,230,1.0,Speed factor of simulation
+190,1,232,0.0,Inoculation flag
+191,2,1,400.0,Setpoint for agitation speed
+192,2,2,4.8,Value of pH Setpoint
+193,2,3,20.0,Value of pO2 setpoint
+194,2,4,30.0,Value of temperature Setpoint
+195,2,5,14.0,Liquid weight setpoint
+196,2,6,6.0,Value of chosen aeration rate
+197,2,7,7.5,Aeration rate AIR extern
+198,2,8,0.0,Aeration rate O2 extern
+199,2,9,0.0,Aeration rate N2 extern
+200,2,10,0.0,Aeration rate CO2 extern
+201,2,11,0.5,Pressure setpoint
+202,2,12,20.0,Harvest rate
+203,2,13,5.0,Substrate concentration setpoint for reservoir 1
+204,2,14,2.0,Substrate concentration setpoint for reservoir 2
+205,2,16,0.155,Pump rate setpoint for reservoir 1
+206,2,17,0.05,Pump rate setpoint for reservoir 2
+207,2,19,3.0,Initial cell concentration t = 0 h
+208,2,20,100.0,Partial pressure of dissolved oxygen at t = 0 h
+209,2,21,5.0,Initial pH at t = 0 h
+210,2,22,5.0,Initial volumme in reactor
+211,2,23,30.0,Initial temperature in liquid phase at t = 0 h
+212,2,24,30.0,Initial temperature in double jacket at t = 0 h
+213,2,25,25.0,Initial glucose concentration t = 0 h
+214,2,26,0.0,Initial glycerine concentration t = 0 h
+215,2,27,0.0,Initial acetate concentration t = 0 h
+216,2,28,0.0,Product concentration in liquid at t = 0 h
+217,2,29,0.0,Product concentration in cells at t = 0 h
+218,2,30,0.014735071,O2-concentration in liquid phase at t = 0 h
+219,2,31,150000.0,Pressure at calibration
+220,2,32,0.2094,Molar concentration of oxygen at calibration
+221,2,33,0.004,Molar concentration of carbon dioxide at calibration
+222,2,34,150.0,Gylcerin concentration in reservoir 1
+223,2,35,0.0,Methanol concentration in reservoir1
+224,2,37,0.0,Concentration of cells in glycerol reservoir
+225,2,38,3.0,Glycerol reservoir volume
+226,2,39,1.263,Glycerol reservoir density
+227,2,40,0.0,Dissolved oxygen concentration in reservoir
+228,2,41,0.0,Concentration of product in glycerol reservoir
+229,2,42,0.0,Total CO2 concentration in reservoir
+230,2,43,0.0,Gylcerin concentration in reservoir 2
+231,2,44,792.0,Methanol concentration in reservoir 2
+232,2,46,0.0,Concentration of cells in methanol reservoir
+233,2,47,2.0,Methanol reservoir volume
+234,2,48,0.79,Methanol reservoir density
+235,2,49,0.0,Dissolved oxygen concentration in reservoir
+236,2,50,0.0,Concentration of product in methanol reservoir
+237,2,51,0.0,Total CO2 concentration in reservoir
+238,2,61,0.5,Pulse feed factor of reservoir 1
+239,2,62,0.5,Maximum pump rate of reservoir 1
+240,2,63,0.1,Growth rate set value for fed-batch 1
+241,2,64,0.5,Pulse feed factor of reservoir 2
+242,2,65,0.5,Maximum pump rate of reservoir 2
+243,2,66,0.05,Growth rate set value for fed-batch 2
+244,2,70,1.0,Feed control reservoir index
+245,2,71,0.0,Produced acid in liquid phase t = 0 h
+246,2,72,0.0,Titration acid in liquid phase t = 0 h
+247,2,73,0.05,Ammonia concentration in liquid phase t = 0 h
+248,2,74,0.098,Molar buffer acid concentration in liquid phase t = 0 h
+249,2,75,0.03,Molar buffer base concentration in liquid phase t = 0 h
+250,2,76,2.44,pH-acid reservoir
+251,2,77,16.47,pH-base reservoir concentration (ammonia)
+252,2,78,0.0,Total CO2 concentration in acid reservoir
+253,2,79,0.0,Total CO2 concentration in base reservoir
+254,2,80,0.0,Dissolved O2 concentration in acid reservoir
+255,2,81,0.0,Dissolved O2 concentration in base reservoir
+256,2,82,0.0154,1. titration acid dissociation constant (H2SO3 to HSO3-)
+257,2,83,1.02e-07,2. tritration acid dissociation constant (HSO3- to SO3--)
+258,2,84,1.76e-05,Ammonia (pH base) dissociation constant (NH3 to NH4+)
+259,2,85,0.00462,Stripping constant ammonia
+260,2,86,0.00752,1. buffer dissociation constant (H3PO4 to H2PO4-)
+261,2,87,6.23e-08,2. buffer dissociation constant (H2PO4- to HPO4--)
+262,2,88,2.2e-13,3. buffer dissociation constant (HPO4-- to PO4---)
+263,2,89,1.76e-05,Acetate (product) dissociation constant (CH3COOH to CH3COO-)
+264,2,90,82.0,Molar mass of titration acid
+265,2,91,17.0,Molar mass of ammonia
+266,2,92,1.0,"pH control mode (1: Auto, 0: Manual)"
+267,2,93,1.0,"Temperature control mode (1: Auto, 0: Manual)"
+268,2,94,1.0,"pO2 control mode (1: pO2-Agitation, 2: pO2-Aeration, 3: pO2-Gasmix, 4: pO2-Feed, 0: Manual)"
+269,2,95,0.0,"Liquid weight harvest mode (1: Harvest, 0: Manual)"
+270,2,96,0.0,"Feed control mode (1: Feed Control, 0: Manual)"
+271,2,97,0.0,Signal for inoculation at start of simulation
+272,2,98,1.0,Signal for stirrer to be turned on/off
+273,2,99,1.0,Signal for aeration to be turned on/off
+274,2,100,1.0,Signal for aeration with AIR
+275,2,101,1.0,Signal for aeration with O2
+276,2,102,0.0,Signal for aeration with N2
+277,2,103,0.0,Signal for aeration with CO2
+278,2,104,0.0,Signal for acid addition
+279,2,105,0.0,Signal for alkali addition
+280,2,106,0.0,Signal for antifoam addition
+281,2,107,1.0,Signal for heating
+282,2,108,1.0,Signal for cooling
+283,2,109,0.0,Signal for harvest to be turned on/off
+284,2,110,0.0,Signal for feed to be turned on/off
+285,2,112,0.0,Signal for open-loop feed control with reservoir 1
+286,2,113,0.0,Signal for open-loop feed control with reservoir 2
+287,2,114,10000.0,Gain of P part of pH master controller
+288,2,115,1.0,Gain of P part of acid pH slave controller
+289,2,116,-1.0,Gain of P part of base pH slave controller
+290,2,117,20.0,
+291,2,118,8.0,Gain of P part of temperature master controller
+292,2,119,0.1,Gain of I part of temperature master controller
+293,2,120,10.0,Gain of P part of temperature heating slave controller
+294,2,121,0.01,Gain of P part of temperature heating slave controller
+295,2,122,20.0,
+296,2,123,10.0,Gain of P part of agitation controller
+297,2,124,1000.0,Gain of I part of agitation controller
+298,2,125,20.0,Gain of P part of aeration controller
+299,2,126,0.015,Gain of D part of agitation controller
+300,2,127,1000.0,Gain of I part of aeration controller
+301,2,128,0.0188,Gain of D part of aeration controller
+302,2,129,0.4,Gain of P part of gasmix controller
+303,2,130,0.003,Gain of I part of gasmix controller
+304,2,131,0.0005,Gain of D part of gasmix controller
+305,2,132,-2.0,Gain of P part of feed controller
+306,2,133,-15.0,Gain of I part of feed controller
+307,2,134,-0.009,Gain of D part of feed controller
+308,2,135,25.0,
+309,2,136,10.0,Gain of P part of liquid weight controller
+310,2,137,0.3,Gain of I part of liquid weight controller
+311,2,138,1.0,Gain of D part of liquid weight controller
+312,2,139,15.0,Gain of P part of feed controller of reservoir 1
+313,2,140,500.0,Gain of I part of feed controller of reservoir 1
+314,2,141,0.02,Gain of D part of feed controller of reservoir 1
+315,2,142,-2.0,Gain of P part of feed controller of reservoir 2
+316,2,143,-15.0,Gain of I part of feed controller of reservoir 2
+317,2,144,-0.009,Gain of D part of feed controller of reservoir 2
+318,2,148,100.0,
+319,2,149,600.0,
+320,2,151,0.0,Setpoint for difference between measured pH and wanted pH
+321,2,152,0.2094,Molar concentration of oxygen in AIR
+322,2,153,0.0004,Molar concentration of carbondioxide in AIR
+323,2,154,22.412,Gas volume under normal conditions
+324,2,155,273.15,Gas temperature under normal conditions
+325,2,156,8314.0,Gas constant
+326,2,157,101330.0,Gas pressure under normal conditions
+327,2,158,32.0,Molar mass of O2
+328,2,159,44.0,Molar mass of CO2
+329,2,160,1500.0,Mass flux in temperature cycle
+330,2,161,0.001002,Viscosity of water
+331,2,162,0.001,Viscosity at cXLeta
+332,2,163,100.0,Refering cell concentration
+333,2,164,1440000.0,O2 Henry constant
+334,2,165,1448000.0,O2 Henry constant under normal conditions
+335,2,166,30010.0,CO2 Henry constant
+336,2,167,30010.0,CO2 Henry constant under normal conditions
+337,2,168,-0.02723,Normed parameter of O2 Bunsen coefficient
+338,2,169,0.0005627,Normed parameter of O2 Bunsen coefficient
+339,2,170,-6.597e-06,Normed parameter of O2 Bunsen coefficient
+340,2,171,3.28e-08,Normed parameter of O2 Bunsen coefficient
+341,2,172,-0.03889,Normed parameter of CO2 Bunsen coefficient
+342,2,173,0.0009442,Normed parameter of CO2 Bunsen coefficient
+343,2,174,-1.328e-05,Normed parameter of CO2 Bunsen coefficient
+344,2,175,8.11e-08,Normed parameter of CO2 Bunsen coefficient
+345,2,176,4.31e-07,1. CO2 dissociation constant
+346,2,177,5.61e-11,2. CO2 dissociation constant
+347,2,178,0.5,Parameter for kLa calculation
+348,2,179,0.5,Parameter for kLa calculation
+349,2,180,-0.05,Parameter for kLa calculation
+350,2,181,1.167,Specific heat capacity of water
+351,2,182,2170.0,Evaporation enthalpie of water
+352,2,183,1e-07,pH norm concentration
+353,2,184,0.4,Maximum specific growth rate glycerol (my1max Cornelissen)
+354,2,185,0.7235,Yield coefficient of gram cells per gram glycerol
+355,2,186,0.67,Substrate growth yield coefficient glycerol
+356,2,187,0.0,Product yield coefficient glycerol
+357,2,188,0.0268,Spcific substrate maintenance rate glycerol
+358,2,189,0.01327,Substrate limitation constant glycerol
+359,2,190,0.01233,Inhibition of methanol uptake in presence of glycerol
+360,2,191,0.01,Maximum specific growth rate methanol (my1max Yuma)
+361,2,192,0.2771,Yield coefficient of gram cells per gram methanol
+362,2,193,0.2,Substrate growth yield coefficient methanol
+363,2,195,0.02,Spcific substrate maintenance rate methanol
+364,2,196,0.7429,Substrate limitation constant methanol
+365,2,206,1.773,Oxygen growth yield coefficient
+367,2,207,1.375,Cell internal respiratory behavior
+369,2,208,0.0117,Specific O2 maintenance rate
+371,2,209,0.69,Relation CO2/O2 transition
+372,2,210,0.0004,Oxygen limitation constant
+373,2,211,0.0005,Inhibition of product production due to O2
+374,2,212,28200.0,Molar mass of product eGFP
+375,2,213,0.0,Titration acid yield coefficient cells
+376,2,214,0.185,Ammonia yield coefficient cells
+377,2,215,32.0,"Added by me, working point of cascade temperature slave controller"
+378,2,216,30.0,Optimal temperature required for growth
+379,2,217,5.0,Minimum liquid temperature required for growth
+380,2,218,47.0,Maximum liquid temperature required for growth
+381,2,219,100.0,Antifoam-activity gain per addition step Ttast
+382,2,220,4.0,Cell antifoam adsorption constant
+383,2,221,0.09,Foam consistency factor
+384,2,222,0.1,Cellspecific foam build up rate
+385,2,223,0.0125,Time constant of foam formation at cXL = 0 g/l
+386,2,224,8.333e-05,Addition unit Ttast
+387,2,225,0.975,Activity decline due to antifoam addition
+388,2,226,4.8,Optimal pH required for growth
+389,2,227,2.0,Minimum pH required for growth
+390,2,228,9.0,Maximum pH required for growth
+391,2,229,2.0,Calculation interval
+392,2,230,1.0,Speed factor of simulation
+394,2,232,0.0,Inoculation flag
+395,2,233,104.0,
+396,2,234,15.04,
+397,2,235,0.1348,
+398,2,236,76.6,
+399,2,237,5.463,
+400,2,238,6.0,Order of limitation
+401,2,239,4.0,Order of turn-off
+402,2,240,0.3106,Regulator amplification of the transcription regulator
+403,2,241,21.29,
+404,2,242,19.58,
+405,2,243,0.00162,Turn-off concentration
+406,2,244,0.001,Turn-on concentration
+407,2,245,1.073e-05,
+408,2,246,5.139e-05,
+409,2,247,0.3303,Genetic AOX potential
+410,2,248,5.367,
+411,2,309,40.0,Methanol toxicity concentration [5%v/v]
+412,2,310,15.0,Slope of toxicity turn on function
+413,2,311,0.5,Methanol death rate
+414,1,321,0.0,\N
+415,2,321,0.0,\N
+416,1,322,0.0,\N
+417,2,322,0.0,\N
+418,1,323,0.0,\N
+419,2,323,0.0,\N
+420,1,324,0.0,\N
+421,2,324,0.0,\N
