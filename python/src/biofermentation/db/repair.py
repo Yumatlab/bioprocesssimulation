@@ -199,6 +199,111 @@ def remove_dead_parameters(
     return report
 
 
+#: The anti-windup switches, one per controller that has an integrator whose
+#: output is limited. The pH controller has none — it is a P controller with
+#: a dead band — so it has no switch either.
+ANTI_WINDUP_PARAMETERS = (
+    {"name": "f_awpO2", "tex": "aw_{pO_2}", "order": 20},
+    {"name": "f_awtemp", "tex": "aw_{\\vartheta}", "order": 21},
+    {"name": "f_awLW", "tex": "aw_{LW}", "order": 22},
+    {"name": "f_awfeed", "tex": "aw_{feed}", "order": 23},
+)
+
+#: Where a flag belongs: categoryTab row 'Flags', section 'Parameters',
+#: reading_rate 'cyclic' — changeable while the simulation runs, which is the
+#: whole point of a switch a student is meant to try out mid-run.
+FLAG_CATEGORY = "Flags"
+
+
+def add_flags(
+    db_path: Path | str,
+    parameters: tuple[dict, ...] = ANTI_WINDUP_PARAMETERS,
+    *,
+    dry_run: bool = True,
+) -> dict:
+    """Add switch parameters and give every model and project a value of 0.
+
+    The counterpart of `remove_dead_parameters`, and built the same way: one
+    transaction, idempotent, a dry run by default.
+
+    A parameter that exists in `parameterTab` but nowhere else is invisible —
+    the dialogs read a project's own set. So each new flag is written into
+    `default_modelTab` for every organism, `model_parameterTab` for every
+    model and `project_parameterTab` for every project, always as 0. Nothing
+    changes behaviour by being added; the switch has to be thrown.
+    """
+    report = {"added": [], "rows": 0, "applied": not dry_run}
+    with get_connection(db_path, readonly=True) as conn:
+        category = conn.execute(
+            "SELECT categoryID FROM categoryTab WHERE name = ?", (FLAG_CATEGORY,)
+        ).fetchone()
+        if category is None:
+            raise LookupError(f"the database has no {FLAG_CATEGORY!r} category")
+        category_id = category["categoryID"]
+        missing = [
+            entry
+            for entry in parameters
+            if conn.execute(
+                "SELECT COUNT(*) FROM parameterTab WHERE name = ?", (entry["name"],)
+            ).fetchone()[0]
+            == 0
+        ]
+        report["added"] = [entry["name"] for entry in missing]
+    if dry_run or not missing:
+        return report
+
+    with get_connection(db_path) as conn:
+        next_id = (conn.execute("SELECT MAX(parameterID) FROM parameterTab").fetchone()[0] or 0) + 1
+        organisms = [r["organismID"] for r in conn.execute("SELECT organismID FROM organismTab")]
+        models = [r["modelID"] for r in conn.execute("SELECT modelID FROM modelTab")]
+        # Whole projects only. Nine projects in the productive database were
+        # left half-created by the MATLAB path — 732 has 42 contiguous rows
+        # ending exactly on the highest id ever assigned, and that contiguity
+        # *is* the evidence of an interrupted write. Appending four rows with
+        # high ids would break it and erase the only remaining record of what
+        # that path did. A project nobody can open does not need a switch.
+        broken = {row["projectID"] for row in find_broken_projects(db_path)}
+        projects = [
+            r["projectID"]
+            for r in conn.execute("SELECT projectID FROM projectTab")
+            if r["projectID"] not in broken
+        ]
+        for entry in missing:
+            conn.execute(
+                "INSERT INTO parameterTab (parameterID, categoryID, name, tex, unit,"
+                " tex_unit, type, internal_order, external_order)"
+                " VALUES (?, ?, ?, ?, '', '', 'switch', ?, ?)",
+                (next_id, category_id, entry["name"], entry["tex"], entry["order"],
+                 800 + entry["order"]),
+            )
+            report["rows"] += 1
+            for organism_id in organisms:
+                conn.execute(
+                    "INSERT INTO default_modelTab (organismID, parameterID, value)"
+                    " VALUES (?, ?, 0)",
+                    (organism_id, next_id),
+                )
+                report["rows"] += 1
+            for model_id in models:
+                conn.execute(
+                    "INSERT INTO model_parameterTab (modelID, parameterID, value) VALUES (?, ?, 0)",
+                    (model_id, next_id),
+                )
+                report["rows"] += 1
+            for project_id in projects:
+                conn.execute(
+                    "INSERT INTO project_parameterTab (projectID, parameterID, value)"
+                    " VALUES (?, ?, 0)",
+                    (project_id, next_id),
+                )
+                report["rows"] += 1
+            next_id += 1
+        violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        raise RuntimeError(f"adding flags left foreign key violations: {violations}")
+    return report
+
+
 def repair(
     db_path: Path | str,
     *,

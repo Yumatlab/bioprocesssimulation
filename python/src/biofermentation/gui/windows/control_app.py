@@ -624,10 +624,20 @@ class ControlWindow(QMainWindow):
                 "Project",
             )
 
-    def load_from_state(self) -> None:
-        state = self.runner.state
+    def load_panels(self) -> None:
+        """Re-read every panel from p: modes, setpoints, switches, reservoir.
+
+        Called whenever something other than the panel itself has written into
+        the parameter set — a dialog, or a phase. `refresh()` deliberately
+        does not do this: it runs after every block, and re-reading a spin box
+        the operator is typing into would take the half-typed number away.
+        """
+        p = self.runner.state.p
         for panel in self.panels.values():
-            panel.load(state.p)
+            panel.load(p)
+
+    def load_from_state(self) -> None:
+        self.load_panels()
         self.refresh_phases()
         self.refresh()
 
@@ -811,8 +821,7 @@ class ControlWindow(QMainWindow):
                     f" to {self._named(name, value)}",
                     "Parameter Value Change",
                 )
-        for panel in self.panels.values():
-            panel.load(self.runner.state.p)
+        self.load_panels()
         self.refresh()
 
     def _drain_phase_log(self) -> None:
@@ -838,6 +847,13 @@ class ControlWindow(QMainWindow):
         of the two had to go, and it was this one.
         """
         self._drain_phase_log()
+        # A phase writes into p — setpoints, modes, the feed reservoir — and
+        # until now nothing re-read them. An "Update Parameter Set" phase that
+        # switched the feed to closed loop left the tab showing Manual, and
+        # the tab is the one place someone looks to find out what the process
+        # is doing. The parameters are already applied when this signal
+        # arrives: check_start writes them, then the runner emits.
+        self.load_panels()
         self.refresh_phases()
 
     def force_start(self, index: int) -> None:

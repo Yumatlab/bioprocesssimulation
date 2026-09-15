@@ -27,6 +27,12 @@ ui_*.py
 *.qmlc
 *.jsc
 
+# --- Erzeugte Dokumentation ---
+# docs/*.md ist die Quelle, docs/pdf/ ist der Satz davon. Jederzeit neu
+# erzeugbar mit tools/make_pdfs.py, und als Binärdatei in der Historie nur
+# Rauschen - jede Textänderung wäre ein neues PDF.
+/docs/pdf/
+
 # --- MATLAB side of the repository ---
 # Both branches of this repository carry a .gitignore, and this is the only
 # file the two have in common. Identical content on both sides means the

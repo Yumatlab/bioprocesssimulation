@@ -806,3 +806,15 @@ model_parameterID,modelID,parameterID,value,description
 23330,5,306,134.0,Temperature of steam at inlet (saturated steam)
 23331,5,307,25.0,Environmental temperature in reactor
 23332,5,308,0.0003,Volume of heating system
+23333,1,321,0.0,\N
+23334,2,321,0.0,\N
+23335,5,321,0.0,\N
+23336,1,322,0.0,\N
+23337,2,322,0.0,\N
+23338,5,322,0.0,\N
+23339,1,323,0.0,\N
+23340,2,323,0.0,\N
+23341,5,323,0.0,\N
+23342,1,324,0.0,\N
+23343,2,324,0.0,\N
+23344,5,324,0.0,\N
