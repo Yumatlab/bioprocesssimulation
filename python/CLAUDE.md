@@ -323,6 +323,12 @@ abbrechen.
   Tippen. Im Original feuert jedes Feld sein eigenes `UPDATE` — auch auf dem
   Weg zum Löschen.
 - **Löschen fragt ein zweites Mal.** Es ist nicht zurückzunehmen.
+- **Ein Test, der eine Wanduhr befragt, prüft die Maschine, nicht den Code.**
+  `test_the_timer_actually_runs` wartete 60 ms und verlangte danach einen
+  gerechneten Schritt; auf dem Windows-Runner reichte das nicht, weil der
+  erste Tick eine ODE löst. Gewartet wird jetzt **auf die Bedingung**, mit
+  großzügiger Frist — eine langsame Maschine wird damit langsamer statt rot,
+  und ein wirklich toter Timer fällt weiter auf.
 - **In Tests beantwortet `conftest.py` den Dialog** mit "verwerfen", ohne ihn
   zu zeigen. `confirm_leave()` läuft dabei wirklich; ein modaler Dialog in
   einer Fixture ist ein hängender Testlauf, und das ist zweimal passiert.
@@ -704,6 +710,16 @@ Accessibility-Baum kommen von Qt, von uns kommt nur die Optik.
   (`_open_at_a_sensible_size`) — 1420 × 680 war eine einmal hingeschriebene
   Zahl und lag unter dem, was der Tab braucht (936 × 672), das Fenster ging
   also von sich aus gerollt auf.
+- **Ein einziges nicht umbrechendes `QLabel` macht ein ganzes Fenster
+  unverkleinerbar.** Ein `QLabel` ohne `setWordWrap(True)` meldet seine volle
+  Zeile als Mindestbreite, und die Überschrift des Info-Tabs ist die längste
+  Zeile der Anwendung. Sie wanderte über die About-Box, den Info-Tab und das
+  Tab-Widget in das Minimum des Fensters: **1716 px auf dem Windows-Runner**
+  gegen einen 1440-px-Bildschirm — und hier 1086 statt 848. Der Scrollbereich
+  von Control Options hilft dagegen nichts, weil der Engpass in einem anderen
+  Tab saß. Gefunden hat es die CI, gesucht werden musste er von Hand: die
+  Meldung sagte nur „1716 <= 1440". **Der Test nennt jetzt den Tab**, bevor er
+  das Fenster misst.
 - **Pixelgenaue Layoutzusagen halten nur auf einem System.** Die Feldbreiten
   liegen hier innerhalb von 2 px beieinander, unter Windows bei 140/144/148 —
   ein Raster verteilt seine Restpixel, und wie viele übrig bleiben, hängt an

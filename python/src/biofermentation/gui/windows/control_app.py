@@ -608,6 +608,13 @@ class ControlWindow(QMainWindow):
             "(Python port of the MATLAB App Designer application 2.x)"
         )
         heading.setTextFormat(Qt.TextFormat.RichText)
+        # **Without this the whole window cannot be made narrow.** A QLabel
+        # that does not wrap reports its full line as its minimum, and this
+        # one is the longest line in the application: 541 px here, more in a
+        # wider font. It travelled up through the About box, the Information
+        # tab and the tab widget into the window's own minimum — measured
+        # 1716 px on a Windows runner against a 1440 px screen.
+        heading.setWordWrap(True)
         layout.addWidget(heading)
 
         body = QLabel(ABOUT_TEXT)

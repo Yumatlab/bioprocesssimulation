@@ -901,9 +901,43 @@ def test_the_control_window_fits_a_normal_screen(window):
     promises to fit the screen, and Control Options scrolls when the two
     disagree. That is what this checks, and it is the reason the tab sits in
     a scroll area.
+
+    **The tab is named before the window is measured.** When this failed on
+    Windows at 1716 px it said "1716 <= 1440" and nothing else; the cause was
+    the Information tab, whose heading did not wrap and reported its whole
+    line as a minimum. A failure that names the tab saves that search.
     """
-    assert window.minimumSizeHint().width() <= 1440
+    from PySide6.QtWidgets import QTabWidget
+
+    tabs = window.centralWidget().findChild(QTabWidget)
+    widest = {
+        tabs.tabText(i): tabs.widget(i).minimumSizeHint().width() for i in range(tabs.count())
+    }
+    over = {name: width for name, width in widest.items() if width > 1440}
+    assert not over, f"these tabs cannot be made narrow enough: {over}"
+
+    assert window.minimumSizeHint().width() <= 1440, widest
     assert window.width() <= 1440
+
+
+def test_the_about_heading_wraps(window):
+    """One label that does not wrap is enough to break the promise above.
+
+    A QLabel without word wrap reports its full line as its minimum width,
+    and this is the longest line in the application. It travelled up through
+    the About box, the Information tab and the tab widget into the window's
+    own minimum — 1716 px against a 1440 px screen on a Windows runner, and
+    1086 instead of 848 here.
+    """
+    from PySide6.QtWidgets import QLabel
+
+    headings = [
+        label
+        for label in window.information_tab.findChildren(QLabel)
+        if "Biofermentation Simulation" in label.text() and "Version" in label.text()
+    ]
+    assert headings, "the About box has no heading any more"
+    assert all(label.wordWrap() for label in headings)
 
 
 def test_pressing_inoculate_during_a_run_disables_it_at_once(window):

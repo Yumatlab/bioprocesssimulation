@@ -16,7 +16,6 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
 from biofermentation.core.simulation_runner import SimulationRunner
@@ -271,12 +270,27 @@ def test_signals_report_every_step_and_every_block(runner):
 
 
 def test_the_timer_actually_runs(qapp, runner):
+    """The timer advances the simulation by itself — not: within 60 ms.
+
+    It used to wait a fixed 60 ms and then assert that a step had happened.
+    That is a promise about a machine, not about this code, and a Windows CI
+    runner broke it: the first tick has to solve an ODE step, and there the
+    budget ran out before it finished. Waiting for the condition instead
+    makes a slow machine slower rather than wrong; the generous deadline is
+    only there so a genuinely dead timer still fails.
+    """
+    import time
+
     runner.start()
     assert runner.running is True
-    QTimer.singleShot(60, qapp.quit)
-    qapp.exec()
+
+    deadline = time.monotonic() + 10.0
+    while runner.state.idx == 0 and time.monotonic() < deadline:
+        qapp.processEvents()
+        time.sleep(0.005)
+
     runner.pause()
-    assert runner.state.idx > 0
+    assert runner.state.idx > 0, "the timer never advanced the simulation"
     assert runner.running is False
 
 
