@@ -188,6 +188,35 @@ In closed-loop mode a PID controller drives the pump so that `cS1L` is held at
 **above** the setpoint, the pump stands still until the organism has used up
 the excess.
 
+### Anti-windup
+
+Three of the panels carry a switch at the foot of their **Parameters** dialog:
+pO2-Control, Liquid Weight and Feed Control.
+
+**What it does.** An integrator keeps adding up the deviation. While the
+manipulated variable already sits at its limit — the pump at its maximum, the
+stirrer at its ceiling — adding more changes nothing in the process but does
+change the controller: the integral runs up, and when the deviation finally
+turns round the controller keeps pushing the wrong way until it has unwound
+again. With the switch on, the integral stops growing exactly while the output
+is at its limit and the deviation would push it further out, and it resumes the
+moment the deviation turns.
+
+**Off is the default, in every project.** The integrator that runs on is the
+structure of the MATLAB version, and the verified reference run was recorded
+with it. Switching this on changes the numbers — deliberately.
+
+**It is `cyclic`**, so it can be thrown during a run. That is the interesting
+way to use it: open the **Controllers** tab, watch the I bar of one loop grow
+while its manipulated variable is stuck, and throw the switch.
+
+Two panels have no switch, for two different reasons. **pH-Control** has no
+integrator at all — it is a P controller with a dead band. **Temperature-Control**
+has one, but its output never comes near the stops of the split range: measured
+between −2.3 and +3.2 over a two-hour batch against a setpoint 12 K away, on a
+loop whose stops sit at −10 and +10000. There is nothing there to wind up, and a
+switch that changes nothing would only suggest otherwise.
+
 ---
 
 ## 5. How a process runs: phases

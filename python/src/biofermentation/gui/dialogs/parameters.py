@@ -43,7 +43,7 @@ from PySide6.QtWidgets import (
 
 from ...control import PHASE_PARAMETERS, PhaseType
 from ..values import ModeTable, decimals_for, format_value, modes_of
-from ..widgets.indicators import select_data
+from ..widgets.indicators import SlideSwitch, select_data
 from ..widgets.tex import tex_label, tex_to_html
 
 #: reading_rate values that stay editable once the simulation has started.
@@ -96,6 +96,56 @@ class ModeBox(QComboBox):
         return 0
 
 
+class SwitchBox(QWidget):
+    """A flag as the switch it is, answering the calls a spin box answers.
+
+    Same bargain as `ModeBox`: `value`, `setValue`, `decimals` and
+    `valueChanged`, so `_EditorBase` collects it without knowing what it
+    holds. `decimals()` is 0 — off and on are a whole number apart, and
+    `_differs` therefore compares at half of one.
+
+    A flag in a numeric field reads as a measurement. 0 and 1 are not a
+    quantity; they are a position, and the switch is the shape of a position.
+    """
+
+    valueChanged = Signal(float)
+
+    def __init__(self, value: float, on: str = "On", off: str = "Off", parent=None):
+        super().__init__(parent)
+        self._on, self._off = on, off
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(10)
+        self.switch = SlideSwitch()
+        # set_state_now, not setChecked: a switch that slides over on its own
+        # while a dialog opens looks like somebody threw it.
+        self.switch.set_state_now(bool(value))
+        self.label = QLabel()
+        row.addWidget(self.switch)
+        row.addWidget(self.label)
+        row.addStretch()
+        self.switch.toggled.connect(self._changed)
+        self._changed(self.switch.isChecked())
+
+    def _changed(self, checked: bool) -> None:
+        self.label.setText(self._on if checked else self._off)
+        self.valueChanged.emit(self.value())
+
+    def value(self) -> float:
+        return 1.0 if self.switch.isChecked() else 0.0
+
+    def setValue(self, value: float) -> None:  # noqa: N802 - the spin box API
+        self.switch.set_state_now(bool(value))
+        self._changed(self.switch.isChecked())
+
+    def decimals(self) -> int:
+        return 0
+
+    def setEnabled(self, enabled: bool) -> None:  # noqa: N802 - Qt API
+        super().setEnabled(enabled)
+        self.switch.setEnabled(enabled)
+
+
 def _field(value: float, name: str = "", modes: ModeTable | None = None):
     """The editor for one parameter: a list of modes, or a number."""
     labels = modes_of(name, modes)
@@ -128,6 +178,10 @@ def _mark_changed(widget, changed: bool) -> None:
     is a child: painting that green takes the selection highlight with it —
     the trap default.qss already spends a paragraph on.
     """
+    if isinstance(widget, SwitchBox):
+        # A switch already says which way it is pointing. Painting it green
+        # as well would be the second answer to a question it has answered.
+        return
     if not changed:
         widget.setStyleSheet("")
         return
@@ -223,6 +277,10 @@ class ControllerParametersDialog(_EditorBase):
             if form.rowCount():
                 layout.addWidget(box)
 
+        if spec.anti_windup:
+            layout.addWidget(self._anti_windup_box(spec, p, editable=editable))
+            shown += 1
+
         if not shown:
             layout.addWidget(QLabel("This controller has no adjustable parameters."))
         if not editable:
@@ -230,6 +288,53 @@ class ControllerParametersDialog(_EditorBase):
 
         layout.addStretch()
         layout.addWidget(self._button_box())
+
+    def _anti_windup_box(self, spec, p, *, editable: bool) -> QGroupBox:
+        """The one switch this loop has, and what throwing it does.
+
+        It sits here rather than on the panel because it belongs with the
+        gains: it changes how the integrator behaves, not what the operator
+        asks the process for. And it is off by default in every project —
+        the integrator that runs on is the MATLAB structure, and the verified
+        E. coli run was recorded with it.
+        """
+        name = spec.anti_windup
+        box = QGroupBox("Anti-windup")
+        column = QVBoxLayout(box)
+
+        if name not in p:
+            # A project whose parameter set predates the switch. Saying so is
+            # better than leaving the group out: an absent control is
+            # indistinguishable from one nobody found.
+            missing = QLabel(
+                "This project has no anti-windup switch. Its parameter set was "
+                "copied before the switch existed; a project created now has one."
+            )
+            missing.setWordWrap(True)
+            missing.setStyleSheet("color: #8a6d1a;")
+            column.addWidget(missing)
+            return box
+
+        widget = SwitchBox(p[name], on="Holds at the limit", off="Keeps integrating")
+        widget.setEnabled(editable)
+        self._boxes[name] = widget
+        self._original[name] = float(p[name])
+        form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.FieldsStayAtSizeHint)
+        form.addRow(_rich("Integrator:"), widget)
+        column.addLayout(form)
+
+        note = QLabel(
+            "On, the integral term stops growing while the manipulated variable "
+            "is already at its limit and the deviation would push it further "
+            "out — and resumes the moment the deviation turns round. Off is how "
+            "the MATLAB version computes, and how the verified reference run "
+            "was recorded: switching this on changes the numbers."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet("color: #6a6a6a;")
+        column.addWidget(note)
+        return box
 
 
 class ParameterDialog(_EditorBase):

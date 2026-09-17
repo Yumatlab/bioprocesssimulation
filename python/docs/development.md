@@ -314,10 +314,10 @@ look at first for a version 4:
 
 **Technically:**
 
-- **Anti-windup is half finished.** The controller building block and the four
-  database parameters (`f_awpO2`, `f_awtemp`, `f_awLW`, `f_awfeed`) are there and
-  take effect; the controls in the controller dialog and in the settings are
-  missing, and the Pichia model is not wired up yet.
+- **Anti-windup reaches E. coli only.** Three loops have a switch in their
+  Parameters dialog (pO2, liquid weight, feed) and the E. coli model reads all
+  three. The Pichia model is not wired up, and `f_awtemp` has no reader — see
+  the manual, "Anti-windup", for the measurement behind that.
 - **`PhaseFeedEditor`** from the MATLAB version is not ported.
 - **Two plot settings have no effect**: `axisyoffset` and
   `axisylabeloffsetabove`/`-below`.

@@ -879,10 +879,58 @@ Zwei Dinge, die dabei zu wissen sind:
   Begasung durch 99, Gasmischung durch `1 - xOAIR` ≈ 0,79. Zwei
   Größenordnungen Unterschied; `KP_gasmix` stand trotzdem auf 0,4 wie ein
   Faktor für die andere Skala.
-- **Der Integrator hat kein Anti-Windup.** Er integriert weiter, während der
-  Ausgang am Anschlag klemmt. Das ist die MATLAB-Struktur und bleibt so; die
-  Verstärkungen sind so gewählt, dass der Aufzug beim Sprung von 100 % auf
-  den Sollwert klein genug bleibt, dass der Regler sich wieder erholt.
+- **Der Integrator hat Anti-Windup, aber abgeschaltet.** Er integriert
+  weiter, während der Ausgang am Anschlag klemmt — das ist die
+  MATLAB-Struktur und die Vorgabe; die Verstärkungen sind so gewählt, dass der
+  Aufzug beim Sprung von 100 % auf den Sollwert klein genug bleibt, dass der
+  Regler sich wieder erholt. Einschalten lässt es sich je Regelkreis, siehe
+  unten.
+
+### Ein Schalter je Regelkreis, im Dialog der Verstärkungen
+
+`shared.integrate()` kann den Integrator anhalten, `anti_windup(p, a, flag)`
+beantwortet, ob er darf. Bedienbar war das nicht: die vier Flags standen nur
+als Zahlenfeld im großen Parameterdialog, und in der Datenbank eines Anwenders
+standen sie gar nicht.
+
+- **`PanelSpec.anti_windup` nennt den Flag je Panel**, und
+  `ControllerParametersDialog` baut daraus eine Gruppe „Anti-windup" unter den
+  Verstärkungen. Dorthin gehört er: er ändert, wie der Integrator sich
+  verhält, nicht was der Bediener vom Prozess verlangt.
+- **`SwitchBox` ist dieselbe Abmachung wie `ModeBox`** — `value`, `setValue`,
+  `decimals`, `valueChanged` —, also sammelt `_EditorBase` ihn ein, ohne zu
+  wissen, was er hält. Ein Flag als Zahlenfeld liest sich wie eine Messung;
+  0 und 1 sind keine Menge, sondern eine Stellung.
+- **Drei Kreise haben einen Schalter, zwei nicht, und die zwei aus
+  verschiedenen Gründen.** pH hat keinen Integrator (P-Regler mit Totband).
+  Der Temperatur-Master hat einen, **erreicht seine Anschläge aber nie**:
+  gemessen über zwei Stunden Batch gegen einen 12 K entfernten Sollwert liegt
+  sein Ausgang zwischen −2,3 und +3,2, die Anschläge der Split Range bei
+  −100/`KP_temp2c` = −10 und +100/`KP_temp2h` = +10000. Auch mit
+  tausendfachem `KI_temp1` ändert sich daran nichts — die innere Schleife
+  nimmt die Auslenkung auf. `f_awtemp` hat deshalb keinen Leser und das Panel
+  keinen Schalter; ein Bedienelement, das nachweislich nichts tut, ist
+  schlechter als keines. `test_the_temperature_master_stays_away_from_its_stops`
+  hält die Messung fest: wer die Kaskade neu abstimmt, bis der Master doch
+  anschlägt, bekommt einen roten Test statt einer stillen Lücke.
+- **Der Test liest die Flags aus der Modellquelle**, statt sie ein zweites Mal
+  aufzuzählen: `anti_windup(p, a, "…")` per Regex gegen `PanelSpec`. Ein
+  umbenannter Flag ergäbe sonst einen Schalter, der einen Parameter schreibt,
+  den niemand liest — und das fällt nie auf, der Lauf rechnet einfach weiter
+  wie vorher.
+- **Gemessen, was der Schalter bewirkt** (Projekt 716, zwei Stunden, Δt = 2 s):
+  mit `f_awpO2` = 1 steigt pO2 von 29,8 auf 32,1 %, `cXL` von 5,805 auf 5,898
+  und der I-Anteil des Rührerreglers von 0,118 auf 0,145. Das ist keine
+  Verbesserung, die versprochen wird — es ist ein anderer Lauf.
+- **`_ensure_switch_parameters` beim Start**, wie `ensure_columns` und
+  `ensure_indexes`. Die Datenbank eines Anwenders ist eine Kopie der Vorlage
+  von seinem ersten Start; die vier Flags fehlten darin, und ohne sie hat der
+  Schalter nichts zu schreiben. Eingetragen wird überall 0 — genau das, was
+  ein fehlender Parameter schon bedeutete —, gemessen 28 Zeilen in 0,00 s auf
+  der produktiven Datei, und beim zweiten Start keine.
+- **Ein Projekt ohne den Parameter sagt es.** Die Gruppe erscheint trotzdem,
+  mit einem Satz statt eines Schalters: ein fehlendes Bedienelement ist von
+  einem nicht gefundenen nicht zu unterscheiden.
 
 **Pichia bleibt außen vor.** Dort steht pO2 über die ganze Laufzeit über
 100 % — die oben genannte Überschwingung der Sauerstoffbilanz, nicht die

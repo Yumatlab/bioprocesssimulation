@@ -1533,3 +1533,111 @@ def test_the_new_model_dialog_suggests_a_name_and_then_leaves_it_alone(qapp, db)
     dialog.name_edit.textEdited.emit("My own name")
     dialog.organism_box.setCurrentIndex(1)
     assert dialog.name_edit.text() == "My own name"
+
+
+# ------------------------------------------------ the anti-windup switch --
+
+
+def _controller_dialog(window, title: str):
+    from biofermentation.gui.dialogs.parameters import ControllerParametersDialog
+
+    spec = next(s for s in CONTROL_PANELS if s.title == title)
+    return spec, ControllerParametersDialog(
+        spec, window.runner.state.p, reservoirs=window.setup.info.reservoirs or 1
+    )
+
+
+def test_each_controller_that_can_wind_up_carries_its_own_switch(window):
+    """One switch per loop, in the dialog the gains live in.
+
+    It belongs with the gains rather than on the panel: it changes how the
+    integrator behaves, not what the operator asks the process for.
+    """
+    from biofermentation.gui.dialogs.parameters import SwitchBox
+
+    for title in ("pO2-Control", "Liquid Weight", "Feed Control"):
+        spec, dialog = _controller_dialog(window, title)
+        assert spec.anti_windup, title
+        widget = dialog._boxes.get(spec.anti_windup)
+        assert isinstance(widget, SwitchBox), f"{title} has no switch"
+        assert widget.value() == 0.0, "off is the default in every project"
+
+    for title in ("pH-Control", "Temperature-Control"):
+        spec, dialog = _controller_dialog(window, title)
+        assert spec.anti_windup is None
+        assert not any("f_aw" in name for name in dialog._boxes), title
+
+
+def test_throwing_the_switch_is_the_only_change_it_reports(window):
+    """An untouched switch is not a change, a thrown one is exactly one."""
+    spec, dialog = _controller_dialog(window, "Feed Control")
+    dialog.accept()
+    assert dialog.changes == {}, "opening and confirming changes nothing"
+
+    spec, dialog = _controller_dialog(window, "Feed Control")
+    dialog._boxes[spec.anti_windup].switch.setChecked(True)
+    dialog.accept()
+    assert dialog.changes == {spec.anti_windup: 1.0}
+
+
+def test_the_switch_says_which_way_it_points(window):
+    """0 and 1 are a position, not a quantity — so the label reads as one."""
+    spec, dialog = _controller_dialog(window, "pO2-Control")
+    widget = dialog._boxes[spec.anti_windup]
+    assert "integrat" in widget.label.text().lower()
+    widget.switch.setChecked(True)
+    assert "limit" in widget.label.text().lower()
+    assert widget.value() == 1.0
+
+
+def test_a_project_without_the_parameter_says_so_instead_of_hiding_it(window, qapp):
+    """An absent control is indistinguishable from one nobody found."""
+    from PySide6.QtWidgets import QLabel
+
+    from biofermentation.gui.dialogs.parameters import ControllerParametersDialog
+
+    spec = next(s for s in CONTROL_PANELS if s.title == "Feed Control")
+    older = {name: value for name, value in window.runner.state.p.items() if name != "f_awfeed"}
+    dialog = ControllerParametersDialog(spec, older, reservoirs=1)
+
+    assert spec.anti_windup not in dialog._boxes
+    said = [
+        label.text()
+        for label in dialog.findChildren(QLabel)
+        if "anti-windup switch" in label.text()
+    ]
+    assert said, "the dialog is silent about the missing switch"
+
+
+def test_an_older_database_is_given_the_switches_when_it_is_opened(db):
+    """The database a student already has is a copy of an older template.
+
+    Adding the four flags changes no behaviour — every row is written as 0,
+    which is what a missing parameter already meant — but without them the
+    switch in the dialog has nothing to write to.
+    """
+    from biofermentation.db import get_connection
+    from biofermentation.gui.app import _ensure_switch_parameters
+
+    with get_connection(db) as conn:
+        for table in ("project_parameterTab", "model_parameterTab", "default_modelTab"):
+            conn.execute(
+                f"DELETE FROM {table} WHERE parameterID IN "
+                "(SELECT parameterID FROM parameterTab WHERE name LIKE 'f_aw%')"
+            )
+        conn.execute("DELETE FROM parameterTab WHERE name LIKE 'f_aw%'")
+
+    added = _ensure_switch_parameters(db)
+    assert sorted(added) == ["f_awLW", "f_awfeed", "f_awpO2", "f_awtemp"]
+
+    with get_connection(db, readonly=True) as conn:
+        values = [
+            row[0]
+            for row in conn.execute(
+                "SELECT pp.value FROM project_parameterTab pp JOIN parameterTab p "
+                "ON p.parameterID = pp.parameterID WHERE p.name LIKE 'f_aw%'"
+            )
+        ]
+    assert values and set(values) == {0.0}, "added as off, so nothing computes differently"
+    # Idempotent: opening the application twice adds them once.
+    assert _ensure_switch_parameters(db) == []

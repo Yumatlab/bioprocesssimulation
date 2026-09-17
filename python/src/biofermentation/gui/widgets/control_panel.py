@@ -90,6 +90,10 @@ class PanelSpec:
     parameter_groups: list[ParameterGroup] = field(default_factory=list)
     #: Per reservoir instead of once, as the feed gains are.
     parameter_groups_per_reservoir: list[ParameterGroup] = field(default_factory=list)
+    #: The parameter that switches this loop's anti-windup, or None when the
+    #: loop has no integrator to wind up. The pH master is a P controller with
+    #: a dead band, so it is the one panel without one.
+    anti_windup: str | None = None
 
 
 class ControlPanel(QGroupBox):

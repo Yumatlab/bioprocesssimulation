@@ -73,6 +73,10 @@ TEMPERATURE_PANEL = PanelSpec(
         ),
         ParameterGroup("Sensor", [("tauthetaL", "\\tau_{\\vartheta_{L}} [s]")]),
     ],
+    # No anti-windup switch: this master has an integrator, but its output
+    # never reaches the stops of the split range — measured [-2.3, +3.2] on a
+    # loop whose stops are at -10 and +10000. A switch that provably changes
+    # nothing is worse than none. See `model.py`, `_temperature_control`.
 )
 
 PO2_PANEL = PanelSpec(
@@ -103,6 +107,9 @@ PO2_PANEL = PanelSpec(
         _pid("Feed", "feedpO2"),
         ParameterGroup("Sensor", [("taupO2", "\\tau_{pO_{2}} [s]")]),
     ],
+    # One switch for all four pO2 controllers: they are one loop with four
+    # manipulated variables, and the model reads the one flag in all of them.
+    anti_windup="f_awpO2",
 )
 
 LIQUID_WEIGHT_PANEL = PanelSpec(
@@ -115,6 +122,7 @@ LIQUID_WEIGHT_PANEL = PanelSpec(
     ],
     switches=[SwitchSpec("f_harvest", "Harvest", modes=(0,))],
     parameter_groups=[_pid("Liquid Weight Controller", "LW")],
+    anti_windup="f_awLW",
 )
 
 FEED_PANEL = PanelSpec(
@@ -144,6 +152,7 @@ FEED_PANEL = PanelSpec(
     switches=[SwitchSpec("f_feed", "Feed")],
     # One block per reservoir; the project says how many there are.
     parameter_groups_per_reservoir=[_pid("Reservoir {n}", "feedR{n}")],
+    anti_windup="f_awfeed",
 )
 
 CONTROL_PANELS = (

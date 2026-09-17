@@ -19,6 +19,7 @@ from ..control import PhaseAutomaton
 from ..core.runner import DEFAULT_DT, load_project_state
 from ..core.simulation_runner import SimulationRunner
 from ..db import ensure_columns, ensure_indexes, load_phases
+from ..db.repair import add_flags
 from ..organisms import discover_organisms
 from ..resources import app_icon_path, default_database
 from .settings import load_settings
@@ -53,6 +54,27 @@ def _ensure_cascade_indexes(db_path) -> list[str]:
         return []
 
 
+def _ensure_switch_parameters(db_path) -> list[str]:
+    """Give an older database the four anti-windup switches.
+
+    The same case as `_ensure_cascade_indexes`: a user's database is a copy of
+    the template taken when they first ran the program, and it can be older
+    than the code. Here that is not a slow deletion but a control that cannot
+    be reached — the controller dialogs offer the switch, `p.get(flag, 0)`
+    reads it as off, and nothing says why it is missing.
+
+    Adding it changes no behaviour: every row is written as 0, which is
+    exactly what a missing parameter already meant. The switch has to be
+    thrown.
+
+    A failure here must not stop the application from opening.
+    """
+    try:
+        return add_flags(db_path, dry_run=False)["added"]
+    except Exception:
+        return []
+
+
 class SimulationApp(QApplication):
     """Owns the windows and the running simulation."""
 
@@ -73,6 +95,7 @@ class SimulationApp(QApplication):
 
         self.db_path = Path(db_path) if db_path else default_database()
         self._new_indexes = _ensure_cascade_indexes(self.db_path)
+        self._new_switches = _ensure_switch_parameters(self.db_path)
         # A user's database is a copy of the template taken when they first
         # ran the program; it can be older than the schema this code expects.
         ensure_columns(self.db_path)

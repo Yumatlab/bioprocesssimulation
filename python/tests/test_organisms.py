@@ -860,3 +860,126 @@ def test_each_gas_flag_writes_its_own_flow(registry, organism):
     ).read_text(encoding="utf-8")
     assert "v.FnO2[i] = p.FnO2w if p.f_O2 == 1 else 0.0" in source
     assert "v.FnAIR[i] = p.FnAIRw if p.f_air == 1 else 0.0" in source
+
+
+# ----------------------------------------------------------- anti-windup --
+#
+# A switch nobody could reach until the controller dialogs grew one, and a
+# behaviour nothing measured until now.
+
+
+def test_the_integrator_only_freezes_when_it_would_push_further_out():
+    """Conditional integration: hold at the limit, resume the moment it turns.
+
+    The three cases that matter are the limit reached with the increment
+    pointing further out (freeze), the same limit with the increment pointing
+    back (carry on), and inside the range (carry on regardless).
+    """
+    from biofermentation.organisms.shared import integrate
+
+    # At the upper limit, still pushing up: the integral keeps what it had.
+    assert integrate(5.0, 2.0, output=120.0, low=0.0, high=100.0, active=True) == 5.0
+    # At the same limit, but the deviation has turned round.
+    assert integrate(5.0, -2.0, output=120.0, low=0.0, high=100.0, active=True) == 3.0
+    # Below the lower limit, pushing further down.
+    assert integrate(-5.0, -2.0, output=-20.0, low=0.0, high=100.0, active=True) == -5.0
+    # Inside the range nothing is held.
+    assert integrate(5.0, 2.0, output=50.0, low=0.0, high=100.0, active=True) == 7.0
+
+
+def test_without_the_switch_the_integrator_runs_on_as_matlab_does():
+    """Off is the default and the structure the reference run was recorded with."""
+    from biofermentation.organisms.shared import anti_windup, integrate
+
+    assert integrate(5.0, 2.0, output=120.0, low=0.0, high=100.0, active=False) == 7.0
+    # A project that has never heard of the parameter reads as off.
+    assert anti_windup({}, {}, "f_awpO2") is False
+    assert anti_windup({"f_awpO2": 0.0}, {}, "f_awpO2") is False
+    assert anti_windup({"f_awpO2": 1.0}, {}, "f_awpO2") is True
+
+
+def test_the_installation_can_forbid_what_the_project_allows():
+    """Two switches, and the second can only take away."""
+    from biofermentation.organisms.shared import anti_windup
+
+    p = {"f_awfeed": 1.0}
+    assert anti_windup(p, {"antiwindup_allowed": True}, "f_awfeed") is True
+    assert anti_windup(p, {"antiwindup_allowed": False}, "f_awfeed") is False
+    # And it cannot give: a project with the flag off stays off.
+    assert anti_windup({"f_awfeed": 0.0}, {"antiwindup_allowed": True}, "f_awfeed") is False
+
+
+def test_every_flag_the_model_reads_has_a_switch_in_a_dialog():
+    """The panels offer exactly the flags the E. coli model asks for.
+
+    Read out of the source rather than listed twice: a renamed flag would
+    otherwise leave a switch that writes a parameter nothing reads, and that
+    is invisible — the run simply goes on computing the old way.
+    """
+    import re
+
+    from biofermentation.gui.widgets.panel_specs import CONTROL_PANELS
+
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src/biofermentation/organisms/escherichia_coli/model.py"
+    ).read_text(encoding="utf-8")
+    read = set(re.findall(r'anti_windup\(p, a, "([^"]+)"\)', source))
+    offered = {spec.anti_windup for spec in CONTROL_PANELS if spec.anti_windup}
+    assert read == offered, (
+        f"read but not offered: {read - offered}; offered but unread: {offered - read}"
+    )
+
+
+def test_only_the_loops_that_can_wind_up_have_a_switch():
+    """Two panels have none, for two different reasons.
+
+    pH is a P controller with a dead band — there is no integrator. The
+    temperature master has one, but its output never reaches the stops of the
+    split range: measured [-2.3, +3.2] over a two-hour batch against a
+    setpoint 12 K away, on a loop whose stops sit at -10 and +10000. A switch
+    that provably changes nothing is worse than none.
+    """
+    from biofermentation.gui.widgets.panel_specs import PH_PANEL, TEMPERATURE_PANEL
+
+    assert PH_PANEL.anti_windup is None
+    assert not any(
+        "KI_pH" in name for group in PH_PANEL.parameter_groups for name, _ in group.parameters
+    )
+    assert TEMPERATURE_PANEL.anti_windup is None
+    # It does have an integral gain — the reason is the limit, not the term.
+    assert any(
+        "KI_temp" in name
+        for group in TEMPERATURE_PANEL.parameter_groups
+        for name, _ in group.parameters
+    )
+
+
+def test_the_temperature_master_stays_away_from_its_stops(registry):
+    """The measurement the missing switch rests on, so it cannot rot.
+
+    If somebody re-tunes the cascade until this master does saturate, this
+    test fails and the switch has to be wired after all.
+    """
+    import numpy as np
+
+    from biofermentation.core.runner import build_state, run_steps
+    from biofermentation.db import load_phases
+    from biofermentation.organisms import get_organism
+
+    p = dict(load_phases(TEMPLATE_DB, 716).p) | {
+        "f_Inoc": 1.0,
+        "f_InocStart": 1.0,
+        "thetaLw": 20.0,  # 12 K below the start, so the loop pushes hard
+    }
+    model = get_organism("escherichia_coli")
+    state = build_state(p, model, dt=2 / 3600)
+    run_steps(state, model, 600)
+
+    a = state.a
+    integral = np.asarray(a.cI_Part)[1 : state.idx + 1]
+    offsets = float(a.cP_Part) + integral + p["thetaDJ_WP"] - float(a.thetaDJ)
+    cooling_stop = -100.0 / p["KP_temp2c"]
+    heating_stop = 100.0 / p["KP_temp2h"]
+    assert offsets.min() > cooling_stop, "the cooling stop is reached — wire f_awtemp"
+    assert offsets.max() < heating_stop

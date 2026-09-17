@@ -613,6 +613,14 @@ class EscherichiaColi(OrganismModel):
             a.ce[i] = a.cE / (p.thetaLmaxgr - p.thetaLmingr)
 
             a.cP_Part = a.ce[i] * p.KP_temp1
+            # **No anti-windup here, and that is measured, not assumed.** The
+            # master's output is a jacket setpoint offset; the split range puts
+            # its stops at -100/KP_temp2c = -10 K (cooling) and +100/KP_temp2h
+            # (heating). Over a two-hour batch against a setpoint 12 K away the
+            # offset stayed inside [-2.3, +3.2] — the inner loop takes the
+            # excursion, so this integrator has nothing to wind up against.
+            # Raising KI_temp1 a thousandfold does not change that. `f_awtemp`
+            # therefore has no reader and the panel offers no switch.
             a.cI_Part[i] = a.cI_Part[prev] + (a.ce[i] + a.ce[prev]) / 2 * dt * p.KI_temp1
 
             wDJ = a.cP_Part + a.cI_Part[i] + p.thetaDJ_WP
