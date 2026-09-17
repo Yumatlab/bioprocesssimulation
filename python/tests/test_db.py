@@ -660,6 +660,89 @@ def test_a_deletion_that_is_not_cancelled_still_deletes(db_copy: Path):
     assert _count(db_copy, "SELECT COUNT(*) FROM projectTab WHERE projectID = 519") == 0
 
 
+def _stored_times(db_path: Path, project_id: int) -> list[float]:
+    """The process times a project has rows for, in order."""
+    import sqlite3
+
+    with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+        return [
+            round(row[0], 6)
+            for row in conn.execute(
+                "SELECT process_time FROM timeTab WHERE projectID = ? ORDER BY 1",
+                (project_id,),
+            )
+        ]
+
+
+def test_the_storage_interval_thins_what_is_written(db_copy: Path):
+    """Every n-th step is stored; the computation still runs at Δt.
+
+    That is the point of it: a step every 2 s is 1 800 rows per variable per
+    hour, and the resolution of the stored history has nothing to do with the
+    resolution the controllers need.
+    """
+    import numpy as np
+
+    from biofermentation.db import save_project
+    from biofermentation.db.models import VariableSeries
+
+    n = 21
+    t_axis = np.arange(n, dtype=float) * 0.001
+    series = VariableSeries(
+        t=t_axis, v={"t": t_axis, "cXL": np.arange(n, dtype=float)}, real_t=[""] * n
+    )
+    written = save_project(db_copy, 733, series=series, storage_interval=5)
+    # 0, 5, 10, 15, 20 — and 20 is also the last, so it is not counted twice.
+    assert written["times"] == 5
+
+    assert _stored_times(db_copy, 733) == [0.0, 0.005, 0.01, 0.015, 0.02]
+
+
+def test_the_last_step_is_stored_whatever_the_interval(db_copy: Path):
+    """A resumed run starts at the newest stored point.
+
+    Ending on step 18 with an interval of 5 would otherwise store up to 15 and
+    throw three steps of work away without saying so.
+    """
+    import numpy as np
+
+    from biofermentation.db import save_project
+    from biofermentation.db.models import VariableSeries
+
+    n = 19  # letzter Index 18, kein Vielfaches von 5
+    t_axis = np.arange(n, dtype=float) * 0.001
+    series = VariableSeries(t=t_axis, v={"t": t_axis}, real_t=[""] * n)
+    save_project(db_copy, 733, series=series, storage_interval=5)
+
+    stored = _stored_times(db_copy, 733)
+    assert stored[-1] == 0.018, "the last computed step is missing"
+    assert stored == [0.0, 0.005, 0.01, 0.015, 0.018]
+
+
+def test_a_second_save_keeps_the_grid_and_adds_only_what_is_new(db_copy: Path):
+    """Zweimal speichern verschiebt das Raster nicht.
+
+    Die Auswahl hängt am Index des Schritts, nicht an seiner Stelle im
+    jeweiligen Stapel — sonst finge der zweite Durchgang neu zu zählen an.
+    Und fortgesetzt wird nach der zuletzt gespeicherten Prozesszeit, nicht
+    nach der Zeilenzahl: gezählt stimmte nur, solange jeder Schritt gespeichert
+    wurde.
+    """
+    import numpy as np
+
+    from biofermentation.db import save_project
+    from biofermentation.db.models import VariableSeries
+
+    def run(n):
+        axis = np.arange(n, dtype=float) * 0.001
+        return VariableSeries(t=axis, v={"t": axis}, real_t=[""] * n)
+
+    save_project(db_copy, 733, series=run(11), storage_interval=5)
+    save_project(db_copy, 733, series=run(21), storage_interval=5)
+
+    assert _stored_times(db_copy, 733) == [0.0, 0.005, 0.01, 0.015, 0.02]
+
+
 def test_the_cascade_has_an_index_to_walk_along(db_copy: Path):
     """Ohne die läuft ein Löschvorgang gegen eine Wand.
 

@@ -271,9 +271,8 @@ class SelectProjectWindow(QWidget):
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
-        # Über den Fortschrittsdialog: eine nicht migrierte Datenbank
-        # braucht dafür eine halbe Minute, und ein totes Fenster sieht
-        # aus wie ein Absturz.
+        # Through the progress dialog: a database that has not been migrated
+        # takes half a minute for this, and a dead window looks like a crash.
         from ..dialogs.deleting import delete_with_progress
 
         delete_with_progress(self, self.db_path, project["projectID"], project["name"])

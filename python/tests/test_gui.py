@@ -580,6 +580,28 @@ def test_the_refresh_survives_a_round_trip(tmp_path):
     assert back.refresh_seconds == 0.5
 
 
+def test_the_stored_resolution_survives_a_round_trip(tmp_path):
+    from biofermentation.gui.settings import Settings, load_settings, save_settings
+
+    path = tmp_path / "settings.yaml"
+    save_settings(Settings(storage_interval=5), path)
+    back, problem = load_settings(path)
+    assert problem == ""
+    assert back.storage_interval == 5
+    assert back.storage_seconds(2.0) == 10.0, "fünf Schritte zu 2 s"
+
+
+def test_a_stored_resolution_of_zero_is_refused(tmp_path):
+    """Jeder nullte Schritt ist kein Schritt — und wäre eine leere Zeitreihe."""
+    from biofermentation.gui.settings import load_settings
+
+    path = tmp_path / "settings.yaml"
+    path.write_text("storage_interval: 0\n", encoding="utf-8")
+    settings, problem = load_settings(path)
+    assert "storage_interval" in problem
+    assert settings.storage_interval == 1, "die Vorgabe, nicht die kaputte Datei"
+
+
 def test_control_options_and_information_cannot_be_switched_off():
     """A window without them is not a control window."""
     from biofermentation.gui.settings import HIDEABLE_TABS
@@ -596,12 +618,14 @@ def test_the_dialog_writes_what_its_boxes_say(tmp_path, qapp):
     dialog = SettingsDialog(path=path)
     dialog.boxes["Log"].setChecked(False)
     dialog.student_box.setChecked(True)
+    dialog.storage_box.setValue(5)
     dialog.accept()
 
     settings, problem = load_settings(path)
     assert problem == ""
     assert settings.hidden_tabs == {"Log"}
     assert settings.student_view is True
+    assert settings.storage_interval == 5
 
 
 def test_the_starting_screen_offers_settings_where_the_configurator_was(qapp):

@@ -429,6 +429,46 @@ auch, wie oft der Bildschirm sich rührt.
   nicht mehr zu bedienen. `load_settings` prüft 0,05 bis 600 s und fällt
   sonst auf die Vorgabe zurück, mit Begründung für den Log.
 
+### Δt rechnet, das Speicherintervall schreibt
+
+Δt war bis hierhin für zwei Dinge zuständig, die nichts miteinander zu tun
+haben: wie fein gerechnet wird, und wie viele Zeilen in der Datei landen. Wer
+die Datei kleiner haben wollte, musste Δt vergrößern — **und bezahlte mit der
+Regelung**: pO2-RMS 9,1 bei Δt = 2 s, 25,3 bei 10 s, 37,0 bei 20 s, 120,9 bei
+60 s (pH und Temperatur bleiben flach). Die pO2-Verstärkungen sind bei 2 s
+bestimmt worden; ein anderes Δt ist ein anderer Prozess.
+
+`Settings.storage_interval` trennt die beiden Fragen. Jeder n-te *berechnete*
+Schritt wird geschrieben, gerechnet wird weiter jeder.
+
+- **Der letzte Schritt wird immer geschrieben**, unabhängig vom Intervall.
+  Ein fortgesetzter Lauf beginnt beim jüngsten gespeicherten Punkt; wäre der
+  nicht der letzte gerechnete, verschwände jedes Mal ein Stück Prozess.
+- **Ausgedünnt wird nach Index, nicht nach Zeit.** `i % step == 0` über die
+  ganze Reihe hält das Raster über mehrere Speichervorgänge hinweg stabil —
+  sonst bekäme jeder Speichervorgang seinen eigenen Versatz und die Reihe
+  wäre nach dem dritten Mal nicht mehr äquidistant.
+- **`_save_series` fragt `MAX(process_time)`, nicht `COUNT(*)`.** Die alte
+  Fassung nahm die Zeilenzahl in `timeTab` als Index in die Speicherarrays —
+  das trägt nur, solange jeder Schritt gespeichert wird. Mit Ausdünnung wären
+  bei jedem weiteren Speichern genau die falschen Schritte geschrieben worden.
+  Das ist **keine** Existenzprüfung; die Konvention „`COUNT(*)` statt `MAX()`"
+  weiter oben gilt für die Frage „gibt es das?", hier geht es um „wie weit
+  sind wir gekommen?".
+- **Gefragt wird zweimal**: in den Einstellungen als Vorgabe, und im
+  Schließen-Dialog für den Lauf in der Hand. Der Moment des Speicherns ist
+  der einzige, in dem jemand weiß, wie lang der Lauf geworden ist — und der
+  letzte, in dem die Entscheidung noch möglich ist.
+- **Ein ausgedünnter Speichervorgang sagt es.** „Saved 5040 time points (one
+  step in 5)" — fehlende Zeilen sehen sonst aus wie verlorene Zeilen, und
+  diese Datenbank hat schon einmal welche verloren. Formuliert wird mit „one
+  step in n", nicht mit „every nth step": die Zahl kommt aus einem Spinfeld,
+  englische Ordinalzahlen kommen dort nicht heraus.
+- **Der Einstellungsdialog kennt kein Δt.** Er wird vom Startbildschirm
+  geöffnet, wo kein Projekt offen ist; `EXAMPLE_DT` steht deshalb als
+  *Beispiel* in der Erklärung, statt als Tatsache. Der Schließen-Dialog kennt
+  es und rechnet in Sekunden.
+
 ### Was im Log steht, und was man davon sieht
 
 Drei Sorten Einträge und zwei Schalter darüber. **Parameter Value Change** ist

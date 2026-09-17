@@ -6,6 +6,7 @@ may be edited during a run is decided by the database, not by the widget.
 """
 
 import shutil
+import sqlite3
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +20,7 @@ from biofermentation.control import PhaseAutomaton, PhaseType
 from biofermentation.core.runner import DEFAULT_DT, load_project_state
 from biofermentation.core.simulation_runner import SimulationRunner
 from biofermentation.db import load_phases
+from biofermentation.db.models import ProjectInfo
 from biofermentation.db.plots import load_plot_styles, load_plot_template
 from biofermentation.gui.dialogs.export import ExportDialog, write_table, write_text_table
 from biofermentation.gui.dialogs.parameters import (
@@ -1071,7 +1073,6 @@ def test_closing_with_delete_asks_a_second_time(window, db, monkeypatch):
 
 def test_the_export_button_leaves_the_dialog_open(qapp):
     """Exporting is not a decision about the project; one is still due."""
-    from biofermentation.db.models import ProjectInfo
     from biofermentation.gui.dialogs.closing import Choice, ClosingDialog
 
     info = ProjectInfo(
@@ -1293,3 +1294,81 @@ def test_a_name_that_is_taken_is_refused_for_organisms(organisms, monkeypatch):
 
     organisms.name_edit.setText("Pichia pastoris")
     assert organisms.save() is False
+
+
+# ------------------------------------------- the resolution that is stored --
+
+
+def _stored_times(db_path) -> list[float]:
+    with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+        return [
+            row[0]
+            for row in conn.execute(
+                "SELECT process_time FROM timeTab WHERE projectID = ? ORDER BY 1", (PROJECT,)
+            )
+        ]
+
+
+def test_the_closing_dialog_offers_the_stored_resolution(qapp):
+    """It defaults to the setting and says what the number costs.
+
+    The moment of saving is the last one at which the decision can be made,
+    and the only one at which somebody knows how long the run turned out to
+    be — so the dialog asks again rather than only obeying the setting.
+    """
+    from biofermentation.gui.dialogs.closing import ClosingDialog
+
+    info = ProjectInfo(
+        projectID=1,
+        name="Demo",
+        description="",
+        author="",
+        created_on=None,
+        recent_use=None,
+        organismID=1,
+        organism_name="E. coli",
+        function_file="Escherichia_coli",
+        initialization_file=None,
+        reservoirs=1,
+        bioreactorID=1,
+        bioreactor_name="BIOSTAT ED",
+        modelID=1,
+    )
+    dialog = ClosingDialog(info, storage_interval=5, dt_seconds=2.0)
+    assert dialog.storage_interval() == 5
+    assert "10 s" in dialog.storage_note.text(), "5 steps of 2 s is one point every 10 s"
+
+    dialog.storage_box.setValue(1)
+    assert dialog.storage_box.suffix() == " step", "not 'per 1 steps'"
+    assert "everything" in dialog.storage_note.text()
+
+
+def test_saving_writes_only_every_n_th_step_when_asked(window, db, monkeypatch):
+    """Δt stays what it is; only the number of rows written changes.
+
+    The run is unaffected — every step is computed and plotted. What the file
+    keeps is this question, and it is asked where the answer is known.
+    """
+    from biofermentation.gui.dialogs.closing import Choice, ClosingDialog
+
+    before = _stored_times(db)
+    for _ in range(6):
+        window.runner._on_tick()
+    state = window.runner.state
+    computed = state.idx + 1
+
+    def exec_(self):
+        self.storage_box.setValue(3)
+        self.choice = Choice.SAVE
+        return int(ClosingDialog.DialogCode.Accepted)
+
+    monkeypatch.setattr(ClosingDialog, "exec", exec_)
+    window.close()
+
+    after = _stored_times(db)
+    new = after[len(before) :]
+    assert len(new) == 3, f"{computed} computed points at every third, got {len(new)}"
+    assert new[1] - new[0] == pytest.approx(3 * state.dt, rel=1e-9), "an even grid"
+    # Whatever the interval, the newest step is stored: a run that is picked
+    # up again has to carry on from where it actually stopped.
+    assert new[-1] == pytest.approx(state.v.t[computed - 1], abs=1e-9)

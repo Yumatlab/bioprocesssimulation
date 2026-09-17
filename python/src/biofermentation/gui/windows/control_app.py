@@ -1008,12 +1008,22 @@ class ControlWindow(QMainWindow):
 
         was_running = self.runner.running
         self.runner.pause()
-        dialog = ClosingDialog(self.setup.info, running=was_running, parent=self)
+        dialog = ClosingDialog(
+            self.setup.info,
+            running=was_running,
+            storage_interval=self.settings.storage_interval,
+            dt_seconds=float(self.runner.state.p.get("deltatsec", 0) or 0),
+            parent=self,
+        )
         dialog.export_requested.connect(lambda: self.export_project(parent=dialog))
         dialog.exec()
 
         if dialog.choice is Choice.SAVE:
-            self.save(announce=False, info=dialog.info_fields())
+            self.save(
+                announce=False,
+                info=dialog.info_fields(),
+                storage_interval=dialog.storage_interval(),
+            )
         elif dialog.choice is Choice.DELETE:
             if not self._confirm_delete():
                 if was_running:
@@ -1022,9 +1032,8 @@ class ControlWindow(QMainWindow):
             if delete_with_progress(
                 self, self.db_path, self.setup.info.projectID, self.setup.info.name
             ) is None:
-                # Abgebrochen heißt: nichts gelöscht. Dann bleibt das
-                # Fenster stehen, statt ein Projekt zu schließen, das
-                # es noch gibt.
+                # Cancelled means nothing was deleted. The window then stays
+                # where it is rather than closing a project that still exists.
                 if was_running:
                     self.runner.start()
                 return False
@@ -1090,13 +1099,24 @@ class ControlWindow(QMainWindow):
         }
         self._apply_changes(changes, "Controller gains reset")
 
-    def save(self, announce: bool = True, info: dict[str, str] | None = None) -> None:
+    def save(
+        self,
+        announce: bool = True,
+        info: dict[str, str] | None = None,
+        storage_interval: int | None = None,
+    ) -> None:
         """The one write at session end, with the backup of plan 1.3.
 
         announce = False for the automatic save on exit, which must not stop
         to be acknowledged. `info` carries the three fields of the closing
         dialog; without it only recent_use is stamped.
+
+        `storage_interval` writes every n-th computed step instead of all of
+        them. The closing dialog asks for it; every other way of saving takes
+        the setting this window was opened with.
         """
+        every = self.settings.storage_interval if storage_interval is None else storage_interval
+        every = max(1, int(every))
         was_running = self.runner.running
         self.runner.pause()
         state = self.runner.state
@@ -1113,6 +1133,7 @@ class ControlWindow(QMainWindow):
             phases=self.setup.phases,
             log=rows,
             info=info,
+            storage_interval=every,
         )
         # The ids the write handed out; without them the next save would
         # store the same entries again.
@@ -1121,9 +1142,12 @@ class ControlWindow(QMainWindow):
             self.setup.info.name = info.get("name") or self.setup.info.name
             self.setup.info.author = info.get("author", self.setup.info.author)
             self.setup.info.description = info.get("description", self.setup.info.description)
+        # A thinned save must say so. Rows that are missing on purpose look
+        # exactly like rows that went missing.
+        thinned = f" (one step in {every})" if every > 1 else ""
         message = (
-            f"Saved {result['times']} time points and {result['parameters']} "
-            f"parameters — backup {backup.name}"
+            f"Saved {result['times']} time points{thinned} and "
+            f"{result['parameters']} parameters — backup {backup.name}"
         )
         self.note(message, "Project")
         self.statusBar().showMessage(message, 10_000)
@@ -1135,7 +1159,7 @@ class ControlWindow(QMainWindow):
                 self,
                 "Project saved",
                 f"{self.setup.info.name} saved.\n\n"
-                f"{result['times']} time points, {result['parameters']} parameters, "
+                f"{result['times']} time points{thinned}, {result['parameters']} parameters, "
                 f"{result['phases']} phases, {result['log']} new log entries.\n"
                 f"Backup: {backup.name}",
             )

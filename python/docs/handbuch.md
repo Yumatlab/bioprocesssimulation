@@ -295,9 +295,15 @@ lesen beim Öffnen, einmal schreiben am Ende.
 ### Schließen
 
 Jeder Weg aus einem Projekt heraus führt über denselben Dialog: Name, Autor,
-Beschreibung, und dann **Save**, **Discard**, **Delete**, **Export** oder
-**Cancel**. Export schließt den Dialog nicht — eine Entscheidung über das
-Projekt steht ja noch aus. Löschen fragt ein zweites Mal.
+Beschreibung, die gespeicherte Auflösung, und dann **Save**, **Discard**,
+**Delete**, **Export** oder **Cancel**. Export schließt den Dialog nicht —
+eine Entscheidung über das Projekt steht ja noch aus. Löschen fragt ein
+zweites Mal.
+
+Das Feld **„Store one point per … steps"** ist mit der Einstellung aus
+**Settings…** vorbelegt und lässt sich hier für diesen einen Lauf ändern; der
+Text daneben sagt, was der Wert bei diesem Δt bedeutet. Siehe „Gespeicherte
+Auflösung" weiter unten.
 
 Es ist immer nur ein Projekt gleichzeitig geöffnet.
 
@@ -320,7 +326,7 @@ Datenbank teilen.
 |---|---|
 | `style.qss` | Farben, Abstände, Schriften |
 | `control_options.yaml` | Anordnung der Regelpanels und Art der Modusauswahl |
-| `settings.yaml` | welche Tabs erscheinen, Studierendenansicht |
+| `settings.yaml` | welche Tabs erscheinen, Studierendenansicht, Refresh, gespeicherte Auflösung |
 
 `control_options.yaml` legt **Settings → Panel layout…** im Kontrollfenster an
 und öffnet sie. Eine fehlerhafte Datei wirft nie den Tab weg: die Anwendung
@@ -342,19 +348,48 @@ Unter **Settings…** steht die Checkbox **„Refreshrate an Δt koppeln"**.
 Angehakt — die Vorgabe — rechnet die Anwendung einen Schritt je Taktschlag:
 ein Speedfactor von 1 läuft dann in Echtzeit, egal wie Δt eingestellt ist.
 
-Der Haken lohnt sich, wenn Sie **Δt vergrößern wollen**. Δt bestimmt, wie
-viele Messwerte gespeichert werden — bei 2 s sind das 1800 Zeitpunkte je
-Stunde und Variable, bei 10 s nur noch 360. Gekoppelt bewegt sich der
-Bildschirm dann aber auch nur noch alle zehn Sekunden.
-
 Nehmen Sie den Haken heraus, wird das Feld darunter aktiv und bestimmt den
 Takt. **Das ändert auch das Tempo:** bei Δt = 10 s und 2 s Refresh schreitet
 der Prozess je Taktschlag zehn Sekunden voran, geschlagen wird aber alle zwei
 — der Lauf ist fünffach schneller als die Wirklichkeit. Das Verhältnis Δt zu
 Refresh *ist* der Faktor.
 
-Kurz: **Δt bestimmt, wie viel gespeichert wird, der Refresh, wie oft man es
-sieht.**
+Kurz: **Δt bestimmt, wie fein gerechnet wird, der Refresh, wie oft man es
+sieht.** Wie viel davon in der Datei landet, ist eine dritte Frage — der
+nächste Abschnitt.
+
+### Gespeicherte Auflösung
+
+Ein Lauf über 14 Stunden bei Δt = 2 s sind 25 200 Zeitpunkte und, mal 56
+Variablen, rund 1,44 Millionen Messwerte. Das ist der Grund, warum Projekte
+groß werden.
+
+**Δt zu vergrößern ist dafür der falsche Hebel.** Die Regler sind auf Δt = 2 s
+eingestellt, und ein größeres Δt verschlechtert die Regelung messbar: die
+pO2-Abweichung (RMS) liegt bei Δt = 2 s bei 9, bei 20 s bei 37 und bei 60 s
+bei 121. Sie bekämen eine kleinere Datei und einen anderen Prozess.
+
+Deshalb steht unter **Settings…** die Gruppe **Stored resolution** mit dem
+Feld **„Store one point per … steps"**:
+
+- **1 Schritt** — die Vorgabe, alles wird gespeichert.
+- **5 Schritte** — jeder fünfte Zeitpunkt wird gespeichert, bei Δt = 2 s also
+  einer alle 10 Sekunden. Die Datei wird etwa fünfmal kleiner.
+
+**Am Lauf ändert das nichts.** Gerechnet, geregelt und geplottet wird jeder
+Schritt; nur beim Schreiben wird ausgedünnt. Der letzte gerechnete Schritt
+wird immer gespeichert, egal welcher Wert eingestellt ist — sonst startete ein
+fortgesetzter Lauf nicht dort, wo er aufgehört hat.
+
+**Beim Speichern lässt sich der Wert noch einmal ändern.** Im Schließen-Dialog
+steht dasselbe Feld, vorbelegt mit der Einstellung. Das ist der einzige
+Moment, in dem jemand weiß, wie lang der Lauf tatsächlich geworden ist.
+
+**Was ein ausgedünntes Projekt beim Laden zeigt:** genau die gespeicherten
+Punkte. Plot, Datentabelle und Export haben dann die gröbere Auflösung — die
+Zwischenschritte sind nicht verloren gegangen, sie wurden bewusst nicht
+geschrieben. Der fortgesetzte Lauf rechnet wieder mit dem vollen Δt weiter.
+Wenn Sie einen Lauf für eine Auswertung brauchen, lassen Sie den Wert auf 1.
 
 ### Studierendenansicht
 

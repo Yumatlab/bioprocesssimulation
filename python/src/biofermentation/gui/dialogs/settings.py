@@ -1,7 +1,8 @@
 """The settings dialog of the starting screen.
 
-Two things, and both are about the room rather than about the run: which tabs
-of the control window exist, and whether the run controls can be touched.
+Four things, and none of them changes a number the simulation computes: which
+tabs of the control window exist, whether the run controls can be touched, how
+often the screen is redrawn, and how much of a run is written down.
 
 They are set before a project is opened and read when the control window
 builds itself — a window that is already open keeps what it was built with,
@@ -18,10 +19,17 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QSpinBox,
     QVBoxLayout,
 )
 
 from ..settings import HIDEABLE_TABS, Settings, load_settings, save_settings
+
+#: The step width the explanation counts with. Δt belongs to a project, and
+#: this dialog is opened from the starting screen, where none is open — so the
+#: sentence names it as an example instead of pretending to know it. 2 s is
+#: what the projects of this application are configured with.
+EXAMPLE_DT = 2.0
 
 
 class SettingsDialog(QDialog):
@@ -108,6 +116,34 @@ class SettingsDialog(QDialog):
         self.couple_box.toggled.connect(self._follow_coupling)
         self._follow_coupling(self.couple_box.isChecked())
 
+        store = QGroupBox("Stored resolution")
+        store_layout = QVBoxLayout(store)
+        store_row = QHBoxLayout()
+        self.storage_box = QSpinBox()
+        self.storage_box.setRange(1, 3600)
+        self.storage_box.setValue(settings.storage_interval)
+        self.storage_box.setMaximumWidth(120)
+        store_row.addWidget(QLabel("Store one point per"))
+        store_row.addWidget(self.storage_box)
+        store_row.addStretch()
+        store_layout.addLayout(store_row)
+
+        self.storage_note = _note("")
+        store_layout.addWidget(self.storage_note)
+        store_layout.addWidget(
+            _note(
+                "Δt is what the controllers are tuned for and is not the place "
+                "to save room — this is. The run itself is unchanged: every "
+                "step is computed and plotted, only fewer are written to the "
+                "file. What a reopened project can show is what was stored. "
+                "This is the default; the closing dialog offers it again for "
+                "the run in hand."
+            )
+        )
+        self.storage_box.valueChanged.connect(self._describe_storage)
+        self._describe_storage(self.storage_box.value())
+        layout.addWidget(store)
+
         layout.addWidget(
             _note("Takes effect the next time a project is opened, not in a window already open.")
         )
@@ -127,6 +163,31 @@ class SettingsDialog(QDialog):
             "Follows Δt — the box above unties them" if coupled else ""
         )
 
+    def _describe_storage(self, interval: int) -> None:
+        """Say what the number means in points, not in factors.
+
+        The dialog belongs to the starting screen and has no project, so there
+        is no Δt to read; EXAMPLE_DT stands in for one and is named as an
+        example rather than presented as the setting.
+        """
+        # "per 1 step", "per 5 steps" — a spin box has one suffix, so it is
+        # set with the value rather than once.
+        self.storage_box.setSuffix(" step" if interval == 1 else " steps")
+        per_hour = 3600 / (EXAMPLE_DT * interval)
+        if interval == 1:
+            self.storage_note.setText(
+                f"Every computed step is stored. At Δt = {EXAMPLE_DT:g} s that is "
+                f"{per_hour:,.0f} points per hour and variable."
+            )
+        else:
+            # "one step in 5" rather than "every 5th step": the number comes
+            # from a spin box, and English ordinals do not.
+            self.storage_note.setText(
+                f"One step in {interval} is stored. At Δt = {EXAMPLE_DT:g} s that is one "
+                f"point every {EXAMPLE_DT * interval:g} s, {per_hour:,.0f} per hour and "
+                f"variable — one row in every {interval}."
+            )
+
     def settings(self) -> Settings:
         """What the boxes currently say."""
         return Settings(
@@ -134,6 +195,7 @@ class SettingsDialog(QDialog):
             student_view=self.student_box.isChecked(),
             couple_refresh_to_dt=self.couple_box.isChecked(),
             refresh_seconds=self.refresh_box.value(),
+            storage_interval=self.storage_box.value(),
         )
 
     def accept(self) -> None:

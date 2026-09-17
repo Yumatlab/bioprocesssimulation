@@ -47,9 +47,23 @@ class Settings:
     couple_refresh_to_dt: bool = True
     #: The refresh in seconds, used only when the two are uncoupled.
     refresh_seconds: float = 2.0
+    #: Store only every n-th computed step. 1 is everything, which is what
+    #: the application has always done.
+    #:
+    #: This is about file size, not about accuracy. Δt is the step the
+    #: controllers are tuned for and must not be raised to save room — pO2
+    #: control measured RMS 9 at Δt = 2 s and 121 at 60 s. How often a step is
+    #: *written down* is a separate question, and 14 hours at Δt = 2 s came to
+    #: 1 443 624 values. Every fifth step is a fifth of the file and the same
+    #: simulation.
+    storage_interval: int = 1
 
     def shows(self, tab: str) -> bool:
         return tab not in self.hidden_tabs
+
+    def storage_seconds(self, dt_seconds: float) -> float:
+        """What the interval means in process time, for a label to say."""
+        return max(1, int(self.storage_interval)) * float(dt_seconds or 0)
 
     def interval_ms(self, dt_seconds: float) -> int:
         """How long the timer waits between ticks, in milliseconds.
@@ -66,6 +80,7 @@ class Settings:
             "student_view": bool(self.student_view),
             "couple_refresh_to_dt": bool(self.couple_refresh_to_dt),
             "refresh_seconds": float(self.refresh_seconds),
+            "storage_interval": int(self.storage_interval),
         }
 
 
@@ -103,11 +118,17 @@ def load_settings(path: Path | None = None) -> tuple[Settings, str]:
             raise ValueError(
                 f"refresh_seconds is {refresh} — it has to lie between 0.05 and 600"
             )
+        interval = int(document.get("storage_interval", 1))
+        if not 1 <= interval <= 10_000:
+            raise ValueError(
+                f"storage_interval is {interval} — it has to lie between 1 and 10000"
+            )
         return Settings(
             hidden_tabs=set(hidden),
             student_view=bool(document.get("student_view", False)),
             couple_refresh_to_dt=bool(document.get("couple_refresh_to_dt", True)),
             refresh_seconds=refresh,
+            storage_interval=interval,
         ), ""
     except (ValueError, yaml.YAMLError, OSError) as error:
         return Settings(), f"{path.name}: {error}"
@@ -128,6 +149,8 @@ def save_settings(settings: Settings, path: Path | None = None) -> Path:
         "#               step, so speed factor 1 is real time.\n"
         "# refresh_seconds: the timer when the two are uncoupled. A run then\n"
         "#               goes Δt/refresh times faster than the real process.\n"
+        "# storage_interval: write only every n-th step. 1 is everything.\n"
+        "#               Δt stays what it is — this is file size, not accuracy.\n"
         + yaml.safe_dump(settings.as_document(), sort_keys=True, allow_unicode=True),
         encoding="utf-8",
     )

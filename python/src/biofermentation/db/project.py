@@ -388,6 +388,7 @@ def save_project(
     phases: list[Phase] | None = None,
     log: list[dict] | None = None,
     info: dict[str, str] | None = None,
+    storage_interval: int = 1,
 ) -> dict[str, int | list[str]]:
     """The single write at session end. One connection, one transaction.
 
@@ -418,7 +419,7 @@ def save_project(
         if p:
             _save_parameters(conn, project_id, p, result)
         if series is not None:
-            _save_series(conn, project_id, series, result)
+            _save_series(conn, project_id, series, result, every=storage_interval)
         if phases is not None:
             _save_phases(conn, project_id, phases, result)
         if log:
@@ -482,18 +483,54 @@ def _save_parameters(
 
 
 def _save_series(
-    conn: sqlite3.Connection, project_id: int, series: VariableSeries, result: dict
+    conn: sqlite3.Connection,
+    project_id: int,
+    series: VariableSeries,
+    result: dict,
+    *,
+    every: int = 1,
 ) -> None:
     """Append the time steps that are not in the database yet.
 
-    COUNT(*) rather than MAX(): on an empty table MAX() returns NULL, which
-    was a recurring crash in the MATLAB version.
+    `every` stores only each n-th step. 1 is everything, which is what this
+    has always done. The point is file size: a step every 2 s is 1 800 rows
+    per variable per hour, and a 14 hour run measured 1 443 624 values. The
+    *computation* stays at Δt — only what is written thins out, so no
+    controller setting changes.
+
+    **Which step is kept is decided by its index, not by its position in this
+    batch.** Saving twice would otherwise shift the grid: the second save
+    would start counting again from its own first new step.
+
+    **The last computed step is always kept.** A resumed run starts at the
+    newest stored point, and starting it earlier than what the operator last
+    saw would silently throw away work.
+
+    Where to carry on from is asked, not counted. This used to take
+    COUNT(*) as the index into the in-memory arrays, which holds only while
+    every step is stored — with `every` above 1 it would append the wrong
+    slice. MAX(process_time) says what is really there.
     """
-    saved = conn.execute(
-        "SELECT COUNT(*) FROM timeTab WHERE projectID = ?", (project_id,)
+    step = max(1, int(every))
+    last_saved = conn.execute(
+        "SELECT MAX(process_time) FROM timeTab WHERE projectID = ?", (project_id,)
     ).fetchone()[0]
-    if series.n <= saved:
+
+    fresh = []
+    for i in range(series.n):
+        process_time = _number(series.t[i])
+        # Drop the NaN preallocation slots at the end of every series.
+        if process_time is None:
+            continue
+        if last_saved is not None and process_time <= last_saved:
+            continue
+        fresh.append((i, process_time))
+    if not fresh:
         return
+
+    keep = [entry for entry in fresh if entry[0] % step == 0]
+    if not keep or keep[-1][0] != fresh[-1][0]:
+        keep.append(fresh[-1])
 
     variables = {
         row["name"]: row["variableID"]
@@ -511,11 +548,7 @@ def _save_series(
     fallback = datetime.now().strftime("%d.%m.%Y %H:%M:%S.%f")[:-3]
 
     values: list[tuple] = []
-    for i in range(saved, series.n):
-        # Drop the NaN preallocation slots at the end of every series.
-        process_time = _number(series.t[i])
-        if process_time is None:
-            continue
+    for i, process_time in keep:
         stamp = series.real_t[i] if i < len(series.real_t) and series.real_t[i] else fallback
         cursor = conn.execute(
             "INSERT INTO timeTab (projectID, datetime, process_time) VALUES (?, ?, ?)",
