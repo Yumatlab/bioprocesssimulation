@@ -460,6 +460,32 @@ Gegenteil. `load_panels()` hängt jetzt an `_phase_changed`; die Parameter sind
 zu diesem Zeitpunkt schon angewandt, weil `check_start` sie schreibt und der
 Runner erst danach sendet.
 
+### Ein fortgesetzter Lauf verliert seine Regler — gemessen
+
+`a` wird nicht persistiert, und `initialize()` läuft beim Fortsetzen erneut
+(„rebuild a, keep v"). `init_controller_states` setzt dabei **jeden I- und
+D-Anteil auf null**. Das ist die MATLAB-Struktur und war nie gemessen.
+
+Nachgemessen an Projekt 716, eine Stunde rechnen, speichern, neu laden, eine
+Stunde weiter — gegen denselben Lauf ohne Unterbrechung:
+
+| | durchgehend | nach Neuladen |
+|---|---|---|
+| I-Anteil Rührerregler | 0,2194 | **0,0000** |
+| Rührerdrehzahl `NSt` | 469 rpm | **1276 rpm** |
+| pO2-RMS der zweiten Stunde | 7,06 | **9,85** |
+| `cXL` am Ende | 5,802 | 5,652 |
+
+Der Regler fängt also bei null an und fährt den Rührer auf fast das Dreifache,
+während der Prozess an derselben Stelle steht. Es ist **nicht** dasselbe wie
+die fehlenden Messwerte aus `variable_handlingTab`: dort fehlen Zeitreihen,
+hier fehlt der Zustand des Reglers, und der steht in keiner Tabelle.
+
+**Zu entscheiden, nicht zu reparieren.** Die Reglerzustände zu speichern wäre
+eine bewusste Abweichung vom Original — dieselbe Sorte wie die vier
+Begasungskorrekturen, und sie gehört genauso gemessen und begründet, bevor sie
+bleibt.
+
 ### Ein wieder geöffnetes Projekt ist schon beimpft
 
 `a` wird nicht gespeichert, und `initialize` setzt `inoc_occ` nur für einen
