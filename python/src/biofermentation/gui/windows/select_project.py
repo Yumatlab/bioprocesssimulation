@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ...db import delete_project, list_projects
+from ...db import list_projects
 
 MISSING = "<missing>"
 
@@ -200,5 +200,10 @@ class SelectProjectWindow(QWidget):
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
-        delete_project(self.db_path, project["projectID"])
+        # Über den Fortschrittsdialog: eine nicht migrierte Datenbank
+        # braucht dafür eine halbe Minute, und ein totes Fenster sieht
+        # aus wie ein Absturz.
+        from ..dialogs.deleting import delete_with_progress
+
+        delete_with_progress(self, self.db_path, project["projectID"], project["name"])
         self.refresh()

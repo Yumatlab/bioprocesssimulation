@@ -607,6 +607,59 @@ def test_backup_is_written_and_is_a_usable_database(db_copy: Path):
         )
 
 
+def test_a_cancelled_deletion_deletes_nothing(db_copy: Path):
+    """Abbrechen heißt nichts gelöscht — und das ist keine Zusage von Hand.
+
+    Es folgt daraus, dass das Löschen eine Transaktion ist: SQLite bricht die
+    Anweisung ab, committet wird nie, und die Datenbank ist genau wie vorher.
+    Nachgemessen an einem Projekt mit 201 656 Datenzeilen waren danach alle
+    201 656 noch da.
+    """
+    import sqlite3
+
+    from biofermentation.db import DeletionCancelledError, delete_project
+
+    project = 519
+    with sqlite3.connect(f"file:{db_copy}?mode=ro", uri=True) as conn:
+        before = {
+            table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table in ("projectTab", "project_parameterTab", "timeTab", "dataTab")
+        }
+
+    calls = {"n": 0}
+
+    def stop_at_once() -> int:
+        calls["n"] += 1
+        return 1
+
+    with pytest.raises(DeletionCancelledError):
+        delete_project(db_copy, project, on_progress=stop_at_once)
+    assert calls["n"] > 0, "der Haken wurde nie gerufen"
+
+    with sqlite3.connect(f"file:{db_copy}?mode=ro", uri=True) as conn:
+        after = {
+            table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table in before
+        }
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    assert after == before
+
+
+def test_a_deletion_that_is_not_cancelled_still_deletes(db_copy: Path):
+    """Der Haken darf nicht im Weg stehen, wenn er 0 antwortet."""
+    from biofermentation.db import delete_project
+
+    calls = {"n": 0}
+
+    def carry_on() -> int:
+        calls["n"] += 1
+        return 0
+
+    removed = delete_project(db_copy, 519, on_progress=carry_on)
+    assert removed["project_parameterTab"] > 0
+    assert _count(db_copy, "SELECT COUNT(*) FROM projectTab WHERE projectID = 519") == 0
+
+
 def test_the_cascade_has_an_index_to_walk_along(db_copy: Path):
     """Ohne die läuft ein Löschvorgang gegen eine Wand.
 

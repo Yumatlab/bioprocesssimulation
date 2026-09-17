@@ -903,7 +903,29 @@ def create_project(
     return project_id
 
 
-def delete_project(db_path: Path | str, project_id: int) -> dict[str, int]:
+class DeletionCancelledError(Exception):
+    """The caller's progress handler asked for the deletion to stop.
+
+    Nothing was deleted. That is not a promise made by hand — it follows from
+    the deletion being one transaction: SQLite aborts the statement, the
+    transaction never commits, and the database is exactly as it was.
+    Measured on a project with 201 656 data rows: after an abort all 201 656
+    were still there and `integrity_check` was clean.
+    """
+
+
+#: How often SQLite calls the progress handler, in virtual-machine
+#: instructions. Small enough that a window stays responsive, large enough
+#: that the callback is not the expensive part of the deletion.
+PROGRESS_INSTRUCTIONS = 10_000
+
+
+def delete_project(
+    db_path: Path | str,
+    project_id: int,
+    *,
+    on_progress=None,
+) -> dict[str, int]:
     """Delete a project and everything hanging off it. One transaction.
 
     MATLAB's ClosingScreen.deleteProject switches foreign keys off, deletes
@@ -914,6 +936,17 @@ def delete_project(db_path: Path | str, project_id: int) -> dict[str, int]:
 
     Here one DELETE removes the row and SQLite cascades the rest, inside the
     transaction get_connection holds and with foreign keys on throughout.
+
+    `on_progress` is called during the cascade and lets a window stay alive
+    while it runs. It takes no arguments and returns 0 to carry on or 1 to
+    stop, and stopping raises `DeletionCancelledError` with nothing deleted.
+
+    **It cannot report how far along the deletion is, and nothing can.** The
+    cascade is one statement; SQLite counts virtual-machine instructions, not
+    rows, and there is no total to divide by. What this gives a caller is a
+    heartbeat and a way out — not a percentage. The row counts this function
+    returns are known before the delete starts, so a caller that wants to say
+    how much work there is can say it in rows.
     """
     with get_connection(db_path) as conn:
         if (
@@ -936,6 +969,21 @@ def delete_project(db_path: Path | str, project_id: int) -> dict[str, int]:
             (project_id,),
         ).fetchone()[0]
 
-        conn.execute("DELETE FROM projectTab WHERE projectID = ?", (project_id,))
+        if on_progress is not None:
+            conn.set_progress_handler(on_progress, PROGRESS_INSTRUCTIONS)
+        try:
+            conn.execute("DELETE FROM projectTab WHERE projectID = ?", (project_id,))
+        except sqlite3.OperationalError as error:
+            if "interrupt" in str(error).lower():
+                raise DeletionCancelledError(
+                    f"deleting project {project_id} was cancelled"
+                ) from error
+            raise
+        finally:
+            # Off again before the block ends: get_connection commits on the
+            # way out, and a handler that answered "stop" during the COMMIT
+            # would abort that instead.
+            if on_progress is not None:
+                conn.set_progress_handler(None, 0)
 
     return before

@@ -23,6 +23,7 @@ from .models import (
     VariableSeries,
 )
 from .project import (
+    DeletionCancelledError,
     create_model,
     create_project,
     delete_project,
@@ -53,6 +54,7 @@ __all__ = [
     "MANIFEST",
     "BioreactorDefinition",
     "Condition",
+    "DeletionCancelledError",
     "Lookups",
     "MissingPrerequisiteError",
     "Phase",

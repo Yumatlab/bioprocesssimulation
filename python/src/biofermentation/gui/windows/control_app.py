@@ -939,8 +939,8 @@ class ControlWindow(QMainWindow):
         is open at a time, so leaving one is always a decision about it and
         never just a navigation step.
         """
-        from ...db import delete_project
         from ..dialogs.closing import Choice, ClosingDialog
+        from ..dialogs.deleting import delete_with_progress
 
         if self._leave_confirmed:
             return True
@@ -958,7 +958,15 @@ class ControlWindow(QMainWindow):
                 if was_running:
                     self.runner.start()
                 return False
-            delete_project(self.db_path, self.setup.info.projectID)
+            if delete_with_progress(
+                self, self.db_path, self.setup.info.projectID, self.setup.info.name
+            ) is None:
+                # Abgebrochen heißt: nichts gelöscht. Dann bleibt das
+                # Fenster stehen, statt ein Projekt zu schließen, das
+                # es noch gibt.
+                if was_running:
+                    self.runner.start()
+                return False
         elif dialog.choice is Choice.CANCEL:
             if was_running:
                 self.runner.start()
