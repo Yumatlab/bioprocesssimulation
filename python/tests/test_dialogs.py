@@ -1682,3 +1682,86 @@ def test_the_feed_panel_shows_three_decimals(qapp):
 
     decimals = {spec.parameter: spec.decimals for spec in FEED_PANEL.fields}
     assert decimals == {"cS{n}Lw": 3, "FR{n}w": 3, "FR{n}max": 3}
+
+
+# ------------------------------------------- a flag is drawn as a switch --
+
+
+def _update_phase(window):
+    """The first phase of the project, turned into an Update Parameter Set."""
+    from biofermentation.control import PhaseType
+
+    phase = window.setup.phases[0]
+    phase.typeID = int(PhaseType.PARAMETER_UPDATE)
+    return phase
+
+
+def test_a_flag_in_the_phase_dialog_is_a_switch_not_a_number(window):
+    """0 and 1 are a position. The database has said so all along.
+
+    `parameterTab.type` carries `switch` for 22 parameters, `dropdown` for the
+    five modes and `editfield` for the rest; the editors drew every one of them
+    as an edit field.
+    """
+    from biofermentation.gui.dialogs.parameters import ModeBox, PhaseParameterDialog, SwitchBox
+
+    phase = _update_phase(window)
+    dialog = PhaseParameterDialog(
+        phase, window.setup.p_meta, window.runner.state.p, modes=window.modes
+    )
+    kinds = {meta["parametername"]: meta.get("type") for meta in window.setup.p_meta}
+    for name, widget in dialog._boxes.items():
+        if kinds.get(name) == "switch":
+            assert isinstance(widget, SwitchBox), f"{name} is a flag"
+        elif kinds.get(name) == "dropdown":
+            assert isinstance(widget, ModeBox), f"{name} is a mode"
+        else:
+            assert not isinstance(widget, SwitchBox), f"{name} is not a flag"
+
+    switches = [n for n, w in dialog._boxes.items() if isinstance(w, SwitchBox)]
+    assert len(switches) > 10, "an Update Parameter Set phase offers every cyclic flag"
+
+
+def test_the_phase_summary_reads_a_switch_as_a_position(window):
+    from biofermentation.gui.dialogs.parameters import PhaseParameterDialog
+
+    phase = _update_phase(window)
+    dialog = PhaseParameterDialog(
+        phase, window.setup.p_meta, window.runner.state.p, modes=window.modes
+    )
+    before = float(window.runner.state.p["f_acid"])
+    dialog._boxes["f_acid"].switch.setChecked(not before)
+
+    assert "f_acid: Off → On" in dialog.summary.toPlainText() or (
+        "f_acid: On → Off" in dialog.summary.toPlainText()
+    )
+    assert "f_acid: 0" not in dialog.summary.toPlainText(), "not as a number"
+
+    # And the Drop button comes back the way it does for any other field.
+    assert dialog._resets["f_acid"].isVisibleTo(dialog)
+    dialog._reset("f_acid")
+    assert dialog._boxes["f_acid"].value() == before
+    assert "Nothing" in dialog.summary.toPlainText()
+
+
+def test_a_thrown_switch_is_stored_as_one(window):
+    from biofermentation.gui.dialogs.parameters import PhaseParameterDialog
+
+    phase = _update_phase(window)
+    dialog = PhaseParameterDialog(
+        phase, window.setup.p_meta, window.runner.state.p, modes=window.modes
+    )
+    dialog._boxes["f_harvest"].switch.setChecked(True)
+    dialog.accept()
+    assert dialog.changes == {"f_harvest": 1.0}
+
+
+def test_the_full_parameter_dialog_draws_flags_the_same_way(window):
+    """One helper serves both dialogs, so both tell the same story."""
+    from biofermentation.gui.dialogs.parameters import ParameterDialog, SwitchBox
+
+    dialog = ParameterDialog(
+        window.setup.p_meta, window.runner.state.p, started=True, modes=window.modes
+    )
+    assert isinstance(dialog._boxes["f_acid"], SwitchBox)
+    assert not isinstance(dialog._boxes["pHw"], SwitchBox)

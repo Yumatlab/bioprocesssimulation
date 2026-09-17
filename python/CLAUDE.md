@@ -901,6 +901,17 @@ standen sie gar nicht.
   `decimals`, `valueChanged` —, also sammelt `_EditorBase` ihn ein, ohne zu
   wissen, was er hält. Ein Flag als Zahlenfeld liest sich wie eine Messung;
   0 und 1 sind keine Menge, sondern eine Stellung.
+- **Welches Bedienelement ein Parameter bekommt, sagt die Datenbank.**
+  `parameterTab.type`: 22 `switch`, 5 `dropdown`, 287 `editfield`, 9
+  `uneditable` — und die Editoren haben jahrelang alles als Zahlenfeld
+  gezeichnet. `_field(value, name, modes, kind)` liest die Spalte jetzt, und
+  beide Dialoge (Parameterdialog und Phasendialog „Update Parameter Set")
+  reichen sie durch. **Geraten wird nichts**: ein Flag, das gerade auf 0 steht,
+  ist von einem Sollwert, der auf 0 steht, nicht zu unterscheiden — die
+  Spalte weiß es, der Wert nicht.
+- **Die Änderungsliste des Phasendialogs liest einen Schalter als Stellung**,
+  nicht als Zahl: „f_acid: Off → On". Ein Protokoll, in dem „0 → 1" steht,
+  zwingt den Leser, die Bedeutung selbst nachzuschlagen.
 - **Drei Kreise haben einen Schalter, zwei nicht, und die zwei aus
   verschiedenen Gründen.** pH hat keinen Integrator (P-Regler mit Totband).
   Der Temperatur-Master hat einen, **erreicht seine Anschläge aber nie**:

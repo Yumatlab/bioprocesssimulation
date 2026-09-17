@@ -146,8 +146,22 @@ class SwitchBox(QWidget):
         self.switch.setEnabled(enabled)
 
 
-def _field(value: float, name: str = "", modes: ModeTable | None = None):
-    """The editor for one parameter: a list of modes, or a number."""
+#: `parameterTab.type`, for the two values that are not a number in a box.
+#: The database has said this all along — 22 switches, 5 dropdowns, 287 edit
+#: fields — and the editors drew every one of them as an edit field.
+SWITCH_TYPE = "switch"
+
+
+def _field(value: float, name: str = "", modes: ModeTable | None = None, kind: str = ""):
+    """The editor for one parameter: a switch, a list of modes, or a number.
+
+    Which one is not guessed from the value — a flag that happens to stand at
+    0 is indistinguishable from a setpoint that does — but read from
+    `parameterTab.type`, which carries it for every parameter in the database.
+    `f_acid` is a `switch` there, `Mode_pH` a `dropdown`, `pHw` an `editfield`.
+    """
+    if kind == SWITCH_TYPE:
+        return SwitchBox(value)
     labels = modes_of(name, modes)
     return ModeBox(value, labels) if labels else _spin(value)
 
@@ -387,7 +401,7 @@ class ParameterDialog(_EditorBase):
                 name = meta["parametername"]
                 if name not in p:
                     continue
-                widget = _field(p[name], name, self._modes)
+                widget = _field(p[name], name, self._modes, meta.get("type") or "")
                 cyclic = meta.get("reading_rate") == CYCLIC
                 widget.setEnabled(cyclic or not started)
                 if started and not cyclic:
@@ -537,7 +551,12 @@ class PhaseParameterDialog(_EditorBase):
 
     def _add_row(self, form: QFormLayout, meta: dict, name: str, project_value: float) -> None:
         stored = self._phase.parameters.get(name)
-        widget = _field(stored if stored is not None else project_value, name, self._modes)
+        widget = _field(
+            stored if stored is not None else project_value,
+            name,
+            self._modes,
+            meta.get("type") or "",
+        )
         widget.valueChanged.connect(lambda _=0.0, key=name: self._changed(key))
         self._boxes[name] = widget
         #: The value to fall back to — the project's, not the phase's.
@@ -586,10 +605,16 @@ class PhaseParameterDialog(_EditorBase):
         self._resets[name].setVisible(changed)
         _mark_changed(self._boxes[name], changed)
 
+    def _describe(self, name: str, value: float) -> str:
+        """A switch reads Off and On; everything else goes through values.py."""
+        if isinstance(self._boxes[name], SwitchBox):
+            return "On" if value else "Off"
+        return format_value(name, value, self._modes)
+
     def _update_summary(self) -> None:
         lines = [
-            f"{name}: {format_value(name, self._original[name], self._modes)}"
-            f" → {format_value(name, self._boxes[name].value(), self._modes)}"
+            f"{name}: {self._describe(name, self._original[name])}"
+            f" → {self._describe(name, self._boxes[name].value())}"
             for name in sorted(self._boxes)
             if self._differs(name)
         ]

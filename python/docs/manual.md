@@ -265,6 +265,12 @@ on the type:
 Only what you actually change is stored. An untouched field means "leave it as
 it happens to be then" — not "set it to this value".
 
+**A flag is a switch, not a number.** Every parameter the database marks as a
+switch — `f_acid`, `f_feed`, `f_harvest`, `f_O2` and the rest — is drawn as one
+in both parameter dialogs, with Off and On beside it, and the list of changes
+reads "f_acid: Off → On". The five `Mode_…` parameters are drop-downs with the
+mode names, as they have been. Everything else is a number in a field.
+
 > **A running or completed phase can no longer be edited.** The automaton has
 > already read its conditions and applied its parameters; a change afterwards
 > would describe a process that did not take place that way.
