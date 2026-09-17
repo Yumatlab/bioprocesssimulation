@@ -64,31 +64,68 @@ def test_the_bundle_is_stamped_with_the_package_version():
 
 
 def test_the_institutional_logos_ship_and_are_marked_as_not_ours(specs):
-    """Sie sagen, woher die Software kommt — und sind nicht mitlizenziert.
+    """They say where the software comes from — and are not licensed with it.
 
-    Die MIT-Lizenz gilt für den Code. Eine Marke überträgt sie nicht, und ein
-    Repository, das öffentlich werden kann, muss das sagen: sonst nimmt ein
-    Fork die Logos einfach mit.
+    The MIT licence covers the code. It does not transfer a trademark, and a
+    repository that may become public has to say so: otherwise a fork simply
+    takes the logos along.
     """
     from biofermentation.resources import INSTITUTIONAL_LOGOS, institutional_logos
 
     found = institutional_logos()
-    assert len(found) == len(INSTITUTIONAL_LOGOS), "ein Logo fehlt auf der Platte"
+    assert len(found) == len(INSTITUTIONAL_LOGOS), "a logo is missing from the disk"
     for path in found:
-        assert path.stat().st_size < 200_000, f"{path.name} ist zu groß für ein UI-Bild"
+        assert path.stat().st_size < 200_000, f"{path.name} is too large for a UI image"
 
     declared = [str(source).replace("\\", "/") for source, _ in specs.data_files()]
     assert any(source.endswith("resources/logos") for source in declared), (
-        "der Ordner fehlt im PyInstaller-Bau — die gebaute Anwendung zeigt dann nichts"
+        "the folder is missing from the build — the built application shows nothing"
     )
 
-    # Zeilenumbrüche zusammengefaltet, bevor verglichen wird. Eine Behauptung
-    # über einen Satz, der im Fließtext umbricht, trifft sonst nie — und geht
-    # als "alles in Ordnung" durch, weil sie nur eine Zeichenkette sucht.
+    # Line breaks folded before comparing. An assertion about a sentence that
+    # wraps in running text would otherwise never hold — and would pass as
+    # "all in order", because it only looks for a string.
     licence = " ".join((BUILD_DIR.parent / "LICENSE").read_text(encoding="utf-8").split())
     assert "Trademarks" in licence
     assert "**not** covered by the MIT licence above" in licence
     assert "has to remove them" in licence
+
+
+def test_a_logo_is_wide_enough_for_a_retina_screen():
+    """A mark is measured in device pixels, not in the ones it is laid out in.
+
+    The About box lays the logos out in a 128-pixel column, and on a Retina
+    screen those are 256 real pixels. A file narrower than that has to be
+    stretched at drawing time — which is exactly what made the HAW mark look
+    smeared, while the file itself looked large enough at 274 px.
+    """
+    from PIL import Image
+
+    from biofermentation.gui.windows.control_app import ControlWindow
+    from biofermentation.resources import institutional_logos
+
+    needed = ControlWindow.MARK_COLUMN * 2
+    for path in institutional_logos():
+        with Image.open(path) as image:
+            assert image.width >= needed, (
+                f"{path.name} is {image.width} px wide and would be stretched to {needed}"
+            )
+
+
+def test_no_logo_carries_a_colour_profile():
+    """A CMYK source brings one, and it is larger than the image itself.
+
+    The BPA logo weighed 2.0 MB, 1.79 of them profile; the HAW source carries
+    557 KB. `convert("RGB")` leaves it in `im.info` and PIL writes it back
+    out — so it has to be dropped, not converted away.
+    """
+    from PIL import Image
+
+    from biofermentation.resources import institutional_logos
+
+    for path in institutional_logos():
+        with Image.open(path) as image:
+            assert not image.info.get("icc_profile"), f"{path.name} still carries its profile"
 
 
 def test_the_licence_is_declared_where_anyone_would_look():

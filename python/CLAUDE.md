@@ -1272,7 +1272,29 @@ Kopieren der `.db` ohne WAL sind sie verloren.
   davon 1,79 MB Farbprofil. Nach `convert("RGB")` steckt es weiter in
   `im.info` und landet wieder in der Ausgabedatei — ein 137 × 128 großes PNG
   wog damit 1354 KB. Verworfen sind es 18 KB. Qt zeichnet CMYK ohnehin nicht
-  zuverlässig, die Umwandlung ist also nicht nur eine Größenfrage. Quelle ist `logo.png` (1024², transparent),
+  zuverlässig, die Umwandlung ist also nicht nur eine Größenfrage. Dieselbe
+  Falle beim HAW-Logo: 557 KB Profil in einer 783-KB-Datei, das fertige PNG
+  wiegt 15 KB. `test_no_logo_carries_a_colour_profile` prüft es jetzt für
+  beide.
+
+  **Ein Logo misst sich in Gerätepixeln, nicht in denen des Layouts.** Die
+  Spalte im Info-Tab ist 128 *logische* Pixel breit, auf einem Retina-Schirm
+  also 256 echte. Ein Pixmap, dem sein `devicePixelRatio` nicht gesagt wird,
+  wird beim Zeichnen auf diese Breite gezogen — von Qt, stumm, unabhängig
+  davon wie groß die Datei ist. **Das** war die Unschärfe des HAW-Logos, und
+  die frühere Notiz hier („nie hochskalieren, die Quelle hat nur 274 × 77")
+  benannte die falsche Hälfte: hochskaliert wurde nicht beim Laden, sondern
+  beim Zeichnen. `scaled_mark(pixmap, column, ratio)` skaliert auf
+  `column × ratio` und setzt das Verhältnis; die Obergrenze bleibt, was die
+  Datei hergibt — eine zu kleine Quelle wird kleiner gezeichnet, nicht
+  weicher. Die Quelle ist inzwischen die offizielle Marke in 1606 × 591,
+  abgelegt mit 512 px Breite.
+
+  **Die Funktion steht außerhalb des Fensters, weil `QLabel.pixmap()` lügt.**
+  Es gibt eine geräteunabhängige Kopie zurück: für genau das Pixmap, das
+  256 px breit mit Verhältnis 2 hineingegeben wurde, meldet es 128 und 1.
+  Ein Test über das Label hätte die Regression nie gesehen — vor dem Label
+  ist die einzige Stelle, an der sie sichtbar ist. Quelle ist `logo.png` (1024², transparent),
   daneben die Kantenlängen 32–512, `icon.ico` und `icon.icns`. Zu erreichen
   über `resources.app_icon_path(size)` und `platform_icon_path()`; gesetzt
   wird es einmal auf der `QApplication`, alle Fenster erben es. Beide

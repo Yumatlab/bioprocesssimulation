@@ -88,6 +88,33 @@ PANEL_SPACING = 6
 LAMP_MARGIN = 7
 
 
+def scaled_mark(pixmap: QPixmap, column: int, ratio: float) -> QPixmap:
+    """A logo at `column` logical pixels, drawn at the screen's resolution.
+
+    `column` is in the pixels a layout counts in; on a Retina screen each one
+    is two real pixels, and a pixmap that is not told so is stretched to fill
+    them — by Qt, at drawing time, without a warning. That is what made the
+    HAW mark look smeared, and it had nothing to do with the size of the file.
+
+    **Never scaled up**: the width is capped by what the file itself can fill
+    at this ratio, so a source too small for the screen comes out smaller
+    rather than soft. A sharp small logo reads as a logo; a blurred large one
+    reads as a mistake.
+
+    Kept out of the window because a QLabel hands back a device-independent
+    copy of whatever it was given — `label.pixmap()` reports width 128 and
+    ratio 1 for the very pixmap that is 256 wide at ratio 2. Before it goes in
+    is the only place the difference can be seen.
+    """
+    ratio = max(1.0, float(ratio or 1.0))
+    width = min(column, pixmap.width() / ratio)
+    drawn = pixmap.scaledToWidth(
+        round(width * ratio), Qt.TransformationMode.SmoothTransformation
+    )
+    drawn.setDevicePixelRatio(ratio)
+    return drawn
+
+
 class ControlWindow(QMainWindow):
     """The running process: setpoints on the left, the run controls on the right."""
 
@@ -599,11 +626,20 @@ class ControlWindow(QMainWindow):
     def _institutional_marks(self) -> QWidget:
         """Where this software comes from: the HAW Hamburg and the BPA lab.
 
-        **Never scaled up.** The HAW logo exists only at 274 x 77 px, and
-        drawing it larger than that is what made it look smeared. Each mark is
-        fitted into the column width and then held to its own resolution, so
-        one of them is simply smaller than the other. A sharp small logo reads
-        as a logo; a blurred large one reads as a mistake.
+        **A logo is measured in device pixels, not in the ones it is laid out
+        in.** `MARK_COLUMN` is 128 *logical* pixels, and on a Retina screen
+        those are 256 real ones: a pixmap scaled to 128 was being stretched to
+        twice its size at drawing time, by Qt, silently. That — not the size
+        of the file — is what made the HAW mark look smeared, and the earlier
+        note here blamed the wrong half of it.
+
+        So each mark is scaled to `width x ratio` and then told its ratio;
+        Qt lays it out at `width` and draws it at full resolution.
+
+        **Still never scaled up.** The cap is what the file itself holds, so a
+        source too small for this screen comes out smaller rather than soft. A
+        sharp small logo reads as a logo; a blurred large one reads as a
+        mistake.
 
         A missing file leaves an empty column rather than a broken image —
         these are the one resource here that a fork is expected to delete.
@@ -614,15 +650,13 @@ class ControlWindow(QMainWindow):
         column = QVBoxLayout(strip)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(12)
+        ratio = max(1.0, float(self.devicePixelRatioF() or 1.0))
         for path in institutional_logos():
             pixmap = QPixmap(str(path))
             if pixmap.isNull():
                 continue
-            width = min(self.MARK_COLUMN, pixmap.width())
             label = QLabel()
-            label.setPixmap(
-                pixmap.scaledToWidth(width, Qt.TransformationMode.SmoothTransformation)
-            )
+            label.setPixmap(scaled_mark(pixmap, self.MARK_COLUMN, ratio))
             label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
             column.addWidget(label, 0, Qt.AlignmentFlag.AlignHCenter)
         return strip

@@ -1445,3 +1445,59 @@ def test_the_student_view_says_so_in_the_title(qapp, db_copy, monkeypatch):
 
     ordinary = _window_with(db_copy, monkeypatch, Settings())
     assert "Student View" not in ordinary.windowTitle()
+
+
+# --------------------------------------------------- where it comes from --
+
+
+def _logo():
+    from PySide6.QtGui import QPixmap
+
+    from biofermentation.resources import logo_path
+
+    return QPixmap(str(logo_path("haw.png")))
+
+
+def test_a_logo_is_drawn_at_the_resolution_of_the_screen(qapp):
+    """The blur was Qt stretching a 128-pixel pixmap over 256 real ones.
+
+    A pixmap that is not told its device pixel ratio is laid out at its own
+    width, so on a Retina screen every logo was upscaled at drawing time — by
+    the toolkit, without a warning, and regardless of how large the file was.
+    """
+    from biofermentation.gui.windows.control_app import ControlWindow, scaled_mark
+
+    column = ControlWindow.MARK_COLUMN
+    source = _logo()
+    assert source.width() >= 2 * column, "this test needs a file that can fill a Retina column"
+
+    plain = scaled_mark(source, column, 1.0)
+    assert (plain.width(), plain.devicePixelRatio()) == (column, 1.0)
+
+    retina = scaled_mark(source, column, 2.0)
+    assert retina.devicePixelRatio() == 2.0
+    assert retina.width() == 2 * column, "drawn at half the resolution of the screen"
+    assert retina.deviceIndependentSize().width() == column, "and laid out in the same space"
+
+
+def test_a_logo_is_never_scaled_up_beyond_its_file(qapp):
+    """A source too small for this screen comes out smaller, not soft."""
+    from biofermentation.gui.windows.control_app import ControlWindow, scaled_mark
+
+    column = ControlWindow.MARK_COLUMN
+    source = _logo().scaledToWidth(100)  # narrower than one logical column
+
+    drawn = scaled_mark(source, column, 2.0)
+    assert drawn.width() == 100, "stretched past what the file holds"
+    assert drawn.deviceIndependentSize().width() == 50
+
+
+def test_both_marks_stand_in_the_column_of_the_application_mark(window):
+    """Beneath the application's own mark, not beside it, and no wider."""
+    from PySide6.QtWidgets import QLabel
+
+    strip = window._institutional_marks()
+    labels = [child for child in strip.findChildren(QLabel) if not child.pixmap().isNull()]
+    assert len(labels) == 2
+    for label in labels:
+        assert label.sizeHint().width() <= window.MARK_COLUMN
