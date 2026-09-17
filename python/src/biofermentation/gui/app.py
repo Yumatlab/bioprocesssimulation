@@ -32,20 +32,20 @@ from .windows import (
 
 
 def _ensure_cascade_indexes(db_path) -> list[str]:
-    """Nachrüsten, was das Template mitbringt und eine ältere Datenbank nicht.
+    """Add what the template ships with and an older database does not.
 
-    SQLite legt für Fremdschlüssel keine Indizes an, und ohne den auf
-    `dataTab.timeID` durchsucht es beim Löschen eines Projekts für jede
-    Zeitzeile die ganze Tabelle. Auf einer echten Arbeitsdatenbank mit
-    2 195 640 Datenzeilen dauert ein Löschvorgang damit Minuten statt 0,58 s.
+    SQLite creates no index for a foreign key, and without one on
+    `dataTab.timeID` it scans the whole table for every deleted time row when
+    a project is removed. Measured on a real working database with 2 195 640
+    data rows, that turns a deletion into minutes instead of 0.58 s.
 
-    Hier und nicht in der vollständigen Migration, weil das sechs additive
-    Anweisungen sind und die Migration ein Neuaufbau aller Tabellen. Fehlt
-    nichts, kostet der Aufruf eine Abfrage; fehlt etwas, kostet er einmalig
-    ein bis zwei Sekunden.
+    Here rather than in the full migration, because these are six additive
+    statements and the migration is a rebuild of every table. If nothing is
+    missing the call costs one query; if something is, it costs a second or
+    two, once.
 
-    Ein Fehler hier darf den Start nicht verhindern: eine Datenbank ohne
-    Indizes ist langsam, eine Anwendung, die nicht aufgeht, ist unbenutzbar.
+    A failure here must not stop the application from opening: a database
+    without indexes is slow, an application that will not start is useless.
     """
     try:
         return ensure_indexes(db_path)
@@ -248,9 +248,9 @@ class SimulationApp(QApplication):
             state.dt = seconds / 3600
 
         automaton = PhaseAutomaton.from_setup(setup)
-        # Der Takt kommt aus den Einstellungen: gekoppelt folgt er Δt, sonst
-        # dem dort eingetragenen Wert. Ohne interval_ms würde der Runner sich
-        # selbst an Δt hängen, und die Einstellung liefe ins Leere.
+        # The pace comes from the settings: tied it follows Δt, untied it is
+        # whatever was entered there. Without interval_ms the runner would tie
+        # itself to Δt and the setting would do nothing.
         settings, _ = load_settings()
         self.runner = SimulationRunner(
             organism,

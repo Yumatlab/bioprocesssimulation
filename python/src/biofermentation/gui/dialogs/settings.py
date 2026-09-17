@@ -75,12 +75,12 @@ class SettingsDialog(QDialog):
 
         pace = QGroupBox("Refresh")
         pace_layout = QVBoxLayout(pace)
-        self.couple_box = QCheckBox("Refreshrate an Δt koppeln")
+        self.couple_box = QCheckBox("Tie the refresh rate to Δt")
         self.couple_box.setChecked(settings.couple_refresh_to_dt)
         pace_layout.addWidget(self.couple_box)
 
         row = QHBoxLayout()
-        self.refresh_label = QLabel("Refresh alle")
+        self.refresh_label = QLabel("Refresh every")
         self.refresh_box = QDoubleSpinBox()
         self.refresh_box.setRange(0.05, 600.0)
         self.refresh_box.setDecimals(2)
@@ -96,14 +96,15 @@ class SettingsDialog(QDialog):
 
         pace_layout.addWidget(
             _note(
-                "Gekoppelt: ein Tick je Rechenschritt, Speedfactor 1 läuft in "
-                "Echtzeit. Entkoppelt gilt das Feld — der Lauf wird dann um "
-                "Δt geteilt durch Refresh schneller als der echte Prozess."
+                "Tied: one tick per computed step, so a speed factor of 1 "
+                "runs at real time. Untied, the field sets the pace — and the "
+                "run then goes Δt divided by refresh times faster than the "
+                "real process."
             )
         )
         layout.addWidget(pace)
 
-        # Das Feld gehört zur Checkbox: ausgegraut, solange gekoppelt ist.
+        # The field belongs to the box above it: dead while they are tied.
         self.couple_box.toggled.connect(self._follow_coupling)
         self._follow_coupling(self.couple_box.isChecked())
 
@@ -119,11 +120,11 @@ class SettingsDialog(QDialog):
         layout.addWidget(buttons)
 
     def _follow_coupling(self, coupled: bool) -> None:
-        """Ein Feld, das nichts bewirkt, gehört ausgegraut."""
+        """A field that changes nothing belongs greyed out."""
         self.refresh_box.setEnabled(not coupled)
         self.refresh_label.setEnabled(not coupled)
         self.refresh_box.setToolTip(
-            "Folgt Δt — die Checkbox darüber löst das" if coupled else ""
+            "Follows Δt — the box above unties them" if coupled else ""
         )
 
     def settings(self) -> Settings:

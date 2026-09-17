@@ -67,9 +67,9 @@ def ensure_columns(db_path: Path | str) -> list[str]:
         conn.close()
 
 
-#: Die Indizes auf den Fremdschlüsseln, an denen die Kaskade entlangläuft.
-#: Wortgleich mit denen in migrate_schema.sql — dort für eine vollständige
-#: Migration, hier zum Nachrüsten beim Öffnen einer bestehenden Datenbank.
+#: The indexes on the foreign keys the cascade walks along. Word for word the
+#: ones in migrate_schema.sql — there for a full migration, here to add them
+#: to a database that already exists, when it is opened.
 CASCADE_INDEXES = (
     ("timeTab_projectID", "timeTab (projectID)"),
     ("dataTab_timeID", "dataTab (timeID)"),
@@ -81,21 +81,21 @@ CASCADE_INDEXES = (
 
 
 def ensure_indexes(db_path: Path | str) -> list[str]:
-    """Nachrüsten, was SQLite für Fremdschlüssel nicht selbst anlegt.
+    """Add what SQLite does not create for a foreign key by itself.
 
-    Ohne einen Index auf `dataTab.timeID` muss SQLite beim Löschen eines
-    Projekts für **jede** gelöschte Zeitzeile die ganze `dataTab` durchsuchen.
-    Gemessen an einer echten Arbeitsdatenbank mit 2 195 640 Datenzeilen dauert
-    das Löschen eines Projekts mit 342 936 Messwerten Minuten; mit den Indizes
-    0,58 s, und ihr Aufbau kostet einmalig 1,8 s.
+    Without an index on `dataTab.timeID`, deleting a project makes SQLite scan
+    the whole `dataTab` for **every** deleted time row. Measured on a real
+    working database with 2 195 640 data rows, deleting a project of 342 936
+    measured values takes minutes; with the indexes 0.58 s, and building them
+    costs 1.8 s once.
 
-    Das Template bringt sie mit. Wer schon eine Datenbank hat, bekäme sie sonst
-    nur über einen vollständigen Migrationslauf — und das ist ein Neuaufbau
-    aller Tabellen für etwas, das sechs additive Anweisungen sind. Deshalb
-    läuft das hier beim Öffnen: geprüft wird über `sqlite_master`, gebaut wird
-    nur, was fehlt, und wenn nichts fehlt, kostet es eine Abfrage.
+    The template ships with them. A database that already exists would
+    otherwise need a full migration run — a rebuild of every table for what
+    are six additive statements. So this runs when the database is opened:
+    `sqlite_master` is asked, only what is missing is built, and when nothing
+    is missing it costs one query.
 
-    Gibt die Namen der Indizes zurück, die tatsächlich angelegt wurden.
+    Returns the names of the indexes that were actually created.
     """
     with get_connection(db_path, readonly=True) as conn:
         present = {

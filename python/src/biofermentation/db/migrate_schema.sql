@@ -398,23 +398,22 @@ INSERT INTO sqlite_sequence (name, seq)
 DROP TABLE _seq_backup;
 
 -- ---------------------------------------------------------------------
--- 8. Indizes auf die Fremdschlüssel, an denen die Kaskade entlangläuft.
+-- 8. Indexes on the foreign keys the cascade walks along.
 --
--- SQLite legt für einen Fremdschlüssel keinen Index an. Beim Löschen eines
--- Projekts muss es dann für JEDE gelöschte Zeitzeile die ganze dataTab
--- durchsuchen, um deren Datenzeilen zu finden. Bei zwei Stunden Prozesszeit
--- sind das 3 601 Zeitzeilen gegen 201 656 Datenzeilen.
+-- SQLite creates no index for a foreign key. Deleting a project then means
+-- scanning the whole dataTab for EVERY deleted time row to find its data
+-- rows. Two hours of process time are 3 601 time rows against 201 656 data
+-- rows.
 --
--- Gemessen an genau diesem Projekt:
---     ohne Index   22,84 s
---     mit Index     0,28 s      -- Faktor 80
+-- Measured on exactly that project:
+--     without an index   22.84 s
+--     with               0.28 s      -- 80 times faster
 --
--- Die Schreibkosten sind nicht messbar (0,54 gegen 0,53 s fürs Speichern);
--- bezahlt wird mit Dateigröße, 8,1 auf 11,0 MB.
+-- The write cost is not measurable (0.54 against 0.53 s to save); it is paid
+-- in file size, 8.1 to 11.0 MB.
 --
--- Das ist die Antwort, die in CLAUDE.md schon vorgesehen war: "Ist das
--- Löschen zu langsam, ist der Index das Mittel, nicht das Abschalten der
--- Integritätsprüfung."
+-- This is the answer CLAUDE.md anticipated: "Ist das Löschen zu langsam, ist
+-- der Index das Mittel, nicht das Abschalten der Integritätsprüfung." "
 CREATE INDEX IF NOT EXISTS timeTab_projectID          ON timeTab (projectID);
 CREATE INDEX IF NOT EXISTS dataTab_timeID             ON dataTab (timeID);
 CREATE INDEX IF NOT EXISTS dataTab_variableID         ON dataTab (variableID);

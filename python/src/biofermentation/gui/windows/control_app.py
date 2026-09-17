@@ -735,10 +735,9 @@ class ControlWindow(QMainWindow):
         with self.runner.editing() as state:
             state.p["deltatsec"] = float(seconds)
             state.dt = seconds / 3600
-        # Nur wenn die Einstellung es verlangt. Gekoppelt folgt der Takt der
-        # Schrittweite, damit ein Speedfactor von 1 Echtzeit bleibt; entkoppelt
-        # hat der Anwender den Takt selbst gesetzt und Δt darf ihn nicht
-        # wieder überschreiben.
+        # Only as the settings ask. Tied, the pace follows the step width so
+        # that a speed factor of 1 stays real time; untied the operator set it
+        # themselves and a change to Δt must not overwrite it.
         self.runner.set_interval(self.settings.interval_ms(seconds))
         self.note(
             f"Δt set to {seconds} s, refresh every {self.runner.interval_ms} ms",

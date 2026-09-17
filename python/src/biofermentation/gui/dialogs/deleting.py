@@ -59,14 +59,11 @@ def delete_with_progress(
     except Exception:  # a database that will not even count
         rows = 0
 
-    label = f"{name or 'Projekt'} wird gelöscht …"
+    label = f"Deleting {name or 'the project'} …"
     if rows:
-        # Punkt als Tausendertrennzeichen, von Hand. "{:n}" richtet sich nach
-        # der Locale des Prozesses, und die steht ohne setlocale auf "C" —
-        # dann steht dort 201656 statt 201.656.
-        label += f"\n{rows:,} Messwerte".replace(",", ".")
-    dialog = QProgressDialog(label, "Abbrechen", 0, 0, parent)
-    dialog.setWindowTitle("Projekt löschen")
+        label += f"\n{rows:,} measured values"
+    dialog = QProgressDialog(label, "Cancel", 0, 0, parent)
+    dialog.setWindowTitle("Delete Project")
     dialog.setWindowModality(Qt.WindowModality.WindowModal)
     # Not shown for a deletion that is over before anyone could read it.
     dialog.setMinimumDuration(SHOW_AFTER_MS)

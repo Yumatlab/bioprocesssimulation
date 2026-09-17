@@ -8,13 +8,20 @@ stays separate from the presentation.
 
 from pathlib import Path
 
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
+from PySide6.QtCore import (
+    QAbstractTableModel,
+    QModelIndex,
+    QSortFilterProxyModel,
+    Qt,
+    Signal,
+)
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPushButton,
     QTableView,
@@ -31,6 +38,26 @@ MISSING = "<missing>"
 NO_PARENT = QModelIndex()
 
 
+def _sort_key(column: str, value):
+    """Something that compares the way a reader expects.
+
+    Dates come out of the database as "20.11.2024 21:26:10.399" and sort as
+    text by the day of the month. Turned round they sort by date. Everything
+    else sorts case-insensitively, because a project called "abc" belongs
+    next to "ABC" and not after "Zeta".
+    """
+    if value in (None, ""):
+        # Empty last, whichever way round the column is sorted.
+        return ""
+    if column == "recent_use":
+        date, _, clock = str(value).partition(" ")
+        parts = date.split(".")
+        if len(parts) == 3:
+            day, month, year = parts
+            return f"{year}-{month.zfill(2)}-{day.zfill(2)} {clock}"
+    return str(value).casefold()
+
+
 class ProjectTableModel(QAbstractTableModel):
     """projectTab as the window shows it.
 
@@ -38,6 +65,11 @@ class ProjectTableModel(QAbstractTableModel):
     opened. Those are marked rather than hidden — the production database has
     nine of them, and silently dropping a row would only hide the problem.
     """
+
+    #: The role the proxy sorts by. Sorting on what is displayed would order
+    #: "Last used on" as text — "20.11.2024" before "3.12.2024", because "2"
+    #: comes before "3". This role hands out something that compares.
+    SORT_ROLE = Qt.ItemDataRole.UserRole + 1
 
     COLUMNS = (
         ("name", "Title"),
@@ -79,6 +111,8 @@ class ProjectTableModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.DisplayRole:
             value = project.get(key)
             return MISSING if value in (None, "") else str(value)
+        if role == self.SORT_ROLE:
+            return _sort_key(key, project.get(key))
         if role == Qt.ItemDataRole.ForegroundRole and not self.is_usable(index.row()):
             return QColor(150, 150, 150)
         if role == Qt.ItemDataRole.ToolTipRole and not self.is_usable(index.row()):
@@ -118,14 +152,32 @@ class SelectProjectWindow(QWidget):
         font.setBold(True)
         heading.setFont(font)
         header.addWidget(heading)
+        header.addSpacing(16)
+        self.filter_edit = QLineEdit()
+        self.filter_edit.setPlaceholderText("Filter by title, author, organism …")
+        self.filter_edit.setClearButtonEnabled(True)
+        self.filter_edit.setMaximumWidth(280)
+        header.addWidget(self.filter_edit)
         header.addStretch()
         self.size_label = QLabel()
         header.addWidget(self.size_label)
         layout.addLayout(header)
 
         self.model = ProjectTableModel()
+        # Between the table and the model: it does the sorting the model has
+        # no sort() for — the header arrow used to appear and nothing moved —
+        # and it does the filtering the window had none of.
+        self.proxy = QSortFilterProxyModel(self)
+        self.proxy.setSourceModel(self.model)
+        self.proxy.setSortRole(ProjectTableModel.SORT_ROLE)
+        self.proxy.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        # -1: every column is searched, so one box covers the whole row.
+        self.proxy.setFilterKeyColumn(-1)
+        self.filter_edit.textChanged.connect(self.proxy.setFilterFixedString)
+        self.filter_edit.textChanged.connect(self._update_count)
+
         self.table = QTableView(self)
-        self.table.setModel(self.model)
+        self.table.setModel(self.proxy)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -164,23 +216,42 @@ class SelectProjectWindow(QWidget):
 
     def refresh(self) -> None:
         self.model.set_projects(list_projects(self.db_path))
-        size = self.db_path.stat().st_size / 1024 / 1024 if self.db_path.is_file() else 0.0
-        self.size_label.setText(f"Database size: {size:.2f} MB")
         self.table.resizeColumnsToContents()
+        self._update_count()
         self._update_buttons()
 
+    def _update_count(self, *_) -> None:
+        """How many rows the filter lets through, and how large the file is.
+
+        Without the count a filter that matches nothing looks like a database
+        that lost its projects.
+        """
+        shown, total = self.proxy.rowCount(), self.model.rowCount()
+        size = self.db_path.stat().st_size / 1024 / 1024 if self.db_path.is_file() else 0.0
+        counted = f"{shown} of {total} projects" if shown != total else f"{total} projects"
+        self.size_label.setText(f"{counted} — database {size:.2f} MB")
+
     def selected_project(self) -> dict | None:
+        row = self._source_row()
+        return self.model.project_at(row) if row is not None else None
+
+    def _source_row(self) -> int | None:
+        """The row in the model behind the row the table shows.
+
+        With a proxy in between the two differ as soon as anything is sorted
+        or filtered, and reading the project at the *view's* row number would
+        quietly open or delete the wrong one.
+        """
         rows = self.table.selectionModel().selectedRows()
-        return self.model.project_at(rows[0].row()) if rows else None
+        return self.proxy.mapToSource(rows[0]).row() if rows else None
 
     # --------------------------------------------------------- actions --
 
     def _update_buttons(self, *_) -> None:
-        rows = self.table.selectionModel().selectedRows()
-        has_selection = bool(rows)
-        self.delete_button.setEnabled(has_selection)
+        row = self._source_row()
+        self.delete_button.setEnabled(row is not None)
         # A half-written project can be deleted but not opened.
-        self.select_button.setEnabled(has_selection and self.model.is_usable(rows[0].row()))
+        self.select_button.setEnabled(row is not None and self.model.is_usable(row))
 
     def _select(self, *_) -> None:
         project = self.selected_project()
