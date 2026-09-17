@@ -73,8 +73,8 @@ Hamburg.</p>
 
 <p style="color:#6a6a6a">A packaged build also contains Qt by way of PySide6,
 under the GNU Lesser General Public License v3. The two institutional marks
-below belong to the HAW Hamburg and are not covered by the MIT licence of
-this software.</p>
+shown here belong to the HAW Hamburg and are not covered by the MIT licence
+of this software.</p>
 """
 
 
@@ -531,8 +531,15 @@ class ControlWindow(QMainWindow):
             ("Phases", len(self.setup.phases)),
         ):
             form.addRow(f"{label}:", QLabel(str(value if value not in (None, "") else "-")))
-        layout.addWidget(box)
-        layout.addWidget(self._about_box())
+
+        # Side by side, not stacked: the project form is ten short rows and
+        # the about text is a column of prose. Under one another they left a
+        # band of nothing down the right of the tab.
+        row = QHBoxLayout()
+        row.setSpacing(PANEL_SPACING * 2)
+        row.addWidget(box, 2)
+        row.addWidget(self._about_box(), 3)
+        layout.addLayout(row)
         layout.addStretch()
         return page
 
@@ -550,12 +557,21 @@ class ControlWindow(QMainWindow):
         box = QGroupBox("About")
         outer = QHBoxLayout(box)
 
+        # The left column: this application's own mark, and beneath it the two
+        # marks of the institution it was written in. Beneath, not beside —
+        # side by side they would read as one set, and the university did not
+        # draw the first one.
+        column = QVBoxLayout()
+        column.setSpacing(14)
         mark = QLabel()
-        mark.setAlignment(Qt.AlignmentFlag.AlignTop)
+        mark.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         icon = app_icon_path(128)
         if icon.is_file():
             mark.setPixmap(QPixmap(str(icon)))
-        outer.addWidget(mark, 0)
+        column.addWidget(mark, 0, Qt.AlignmentFlag.AlignHCenter)
+        column.addWidget(self._institutional_marks(), 0)
+        column.addStretch(1)
+        outer.addLayout(column, 0)
 
         layout = QVBoxLayout()
         outer.addLayout(layout, 1)
@@ -573,44 +589,42 @@ class ControlWindow(QMainWindow):
         body.setOpenExternalLinks(True)
         body.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
         layout.addWidget(body)
-        layout.addWidget(self._institutional_marks())
+        layout.addStretch(1)
         return box
 
-    #: How tall the institutional logos are drawn. They are stored at twice
-    #: that so they stay sharp on a high-resolution screen.
-    LOGO_HEIGHT = 56
+    #: How wide the left column of the About box is — the width of the
+    #: application mark, which the institutional logos below it match.
+    MARK_COLUMN = 128
 
     def _institutional_marks(self) -> QWidget:
         """Where this software comes from: the HAW Hamburg and the BPA lab.
 
-        Left-aligned in a row of their own, below the text that names them.
-        A logo the reader cannot place is decoration; one under the sentence
-        that says "developed for the laboratory of Bioprocess Automation at
-        the University of Applied Sciences Hamburg" is a source.
+        **Never scaled up.** The HAW logo exists only at 274 x 77 px, and
+        drawing it larger than that is what made it look smeared. Each mark is
+        fitted into the column width and then held to its own resolution, so
+        one of them is simply smaller than the other. A sharp small logo reads
+        as a logo; a blurred large one reads as a mistake.
 
-        A missing file leaves an empty row rather than a broken image — they
-        are the one resource in this application that a fork is expected to
-        remove.
+        A missing file leaves an empty column rather than a broken image —
+        these are the one resource here that a fork is expected to delete.
         """
         from ...resources import institutional_logos
 
         strip = QWidget()
-        row = QHBoxLayout(strip)
-        row.setContentsMargins(0, 10, 0, 0)
-        row.setSpacing(18)
+        column = QVBoxLayout(strip)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(12)
         for path in institutional_logos():
             pixmap = QPixmap(str(path))
             if pixmap.isNull():
                 continue
+            width = min(self.MARK_COLUMN, pixmap.width())
             label = QLabel()
             label.setPixmap(
-                pixmap.scaledToHeight(
-                    self.LOGO_HEIGHT, Qt.TransformationMode.SmoothTransformation
-                )
+                pixmap.scaledToWidth(width, Qt.TransformationMode.SmoothTransformation)
             )
-            label.setToolTip(path.stem.upper())
-            row.addWidget(label, 0)
-        row.addStretch(1)
+            label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+            column.addWidget(label, 0, Qt.AlignmentFlag.AlignHCenter)
         return strip
 
     # ------------------------------------------------------------ state --
