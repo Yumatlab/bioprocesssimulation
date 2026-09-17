@@ -156,6 +156,8 @@ class SimulationApp(QApplication):
             self.manage_organisms()
         elif name == "Bioreactors…":
             self.manage_bioreactors()
+        elif name == "Models…":
+            self.manage_models()
         elif name == "Import organism…":
             import_organism_file(window, self.db_path)
         elif name == "Export organism…":
@@ -177,6 +179,16 @@ class SimulationApp(QApplication):
 
         dialog = BioreactorManager(self.db_path, parent=self.starting_screen)
         dialog.exec()
+
+    def manage_models(self) -> None:
+        """An organism in a vessel — what a project is actually created from.
+
+        The two dialogs above can make one in passing ("Make selectable…");
+        this is the one that can also show, rename, correct and remove one.
+        """
+        from .dialogs.models import ModelManager
+
+        ModelManager(self.db_path, parent=self.starting_screen).exec()
 
     def show_settings(self) -> None:
         """What this installation shows. Read again when a project opens."""

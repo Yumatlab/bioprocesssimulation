@@ -889,3 +889,97 @@ def test_an_old_entry_gives_up_its_event_type_prefix(db_copy):
             "SELECT message FROM logTab WHERE logID = ?", (prefixed["logID"],)
         ).fetchone()[0]
     assert stored == "[Phase Event] Batch ended", "the stored text was rewritten"
+
+
+# ------------------------------------------------------- models, plan 5 --
+#
+# An organism in a vessel. `create_project` reads nothing but
+# `model_parameterTab`, which makes this the one table between a definition
+# and a run — and until the Models dialog there was no way to correct
+# anything in it.
+
+
+def test_a_model_carries_both_sides_and_says_which(db_copy):
+    """The parameter set of a model is the union of organism and vessel."""
+    from biofermentation.db import model_parameters
+
+    rows = model_parameters(db_copy, 1)
+    origins = {row["origin"] for row in rows}
+    assert origins <= {
+        "organism",
+        "bioreactor",
+        "bioreactor (overrides the organism)",
+        "neither — added after the model was built",
+    }
+    # 193 from the organism, 60 from the vessel in this template.
+    assert len(rows) == 253
+    assert sum(row["origin"] == "bioreactor" for row in rows) == 60
+
+
+def test_saving_model_parameters_writes_values_and_nothing_else(db_copy):
+    """Which parameters a model carries is not a form's decision."""
+    from biofermentation.db import model_parameters, save_model_parameters
+
+    before = model_parameters(db_copy, 1)
+    name = before[0]["parametername"]
+    result = save_model_parameters(
+        db_copy, 1, {name: 42.5, "not_a_parameter": 1.0}
+    )
+    assert result["parameters"] == 1
+    assert result["unknown_parameters"] == ["not_a_parameter"]
+
+    after = model_parameters(db_copy, 1)
+    assert len(after) == len(before), "an unknown name adds no row"
+    assert {row["parametername"]: row["value"] for row in after}[name] == 42.5
+
+
+def test_a_model_cannot_take_a_name_another_one_has(db_copy):
+    """modelTab.name is UNIQUE table-wide, not per organism."""
+    from biofermentation.db import list_models, update_model
+
+    rows = list_models(db_copy)
+    with pytest.raises(ValueError, match="already exists"):
+        update_model(db_copy, rows[0]["modelID"], name=rows[1]["name"])
+    # The refusal is a refusal: nothing was written on the way to it.
+    assert [row["name"] for row in list_models(db_copy)] == [row["name"] for row in rows]
+
+
+def test_deleting_a_model_is_refused_while_a_project_stands_on_it(db_copy):
+    """`projectTab.modelID` is the one reference without an ON DELETE action.
+
+    SQLite would refuse it anyway; asked first, it is a sentence instead of a
+    constraint error — and the check is the same one the dialog greys its
+    button with.
+    """
+    from biofermentation.db import delete_model, model_usage
+
+    used = next(
+        model_id
+        for model_id in (1, 2, 3)
+        if model_usage(db_copy, model_id)["projects"]
+    )
+    with pytest.raises(ValueError, match="still used"):
+        delete_model(db_copy, used)
+    with get_connection(db_copy, readonly=True) as conn:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM modelTab WHERE modelID = ?", (used,)
+        ).fetchone()[0] == 1
+
+
+def test_a_duplicated_model_is_a_second_row_with_the_same_values(db_copy):
+    from biofermentation.db import duplicate_model, model_parameters, save_model_parameters
+
+    name = model_parameters(db_copy, 1)[0]["parametername"]
+    save_model_parameters(db_copy, 1, {name: 7.25})
+    copy_id = duplicate_model(db_copy, 1, "A copy")
+
+    original = {row["parametername"]: row["value"] for row in model_parameters(db_copy, 1)}
+    copy = {row["parametername"]: row["value"] for row in model_parameters(db_copy, copy_id)}
+    assert copy == original
+    assert copy[name] == 7.25
+
+    # Two rows now, not one shared one: editing the copy leaves the original.
+    save_model_parameters(db_copy, copy_id, {name: 1.0})
+    assert {row["parametername"]: row["value"] for row in model_parameters(db_copy, 1)}[
+        name
+    ] == 7.25

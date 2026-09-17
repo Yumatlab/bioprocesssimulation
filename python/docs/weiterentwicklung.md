@@ -111,6 +111,8 @@ Vorhaben dazugehört:
 |---|---|
 | Neuer Organismus mit anderen Werten | **Library → Organisms… → New from selected…**, dann **Make selectable…** |
 | Neuer Bioreaktor | **Library → Bioreactors…**, genauso |
+| Neue Kombination aus Organismus und Kessel | **Library → Models… → New model…** |
+| Andere Reglerverstärkungen für eine Übung | **Library → Models… → Duplicate…**, dann die Werte im Filterfeld unter `KP_` suchen |
 | Andere Anordnung der Regelpanels | `control_options.yaml` neben der Datenbank |
 | Andere Farben, Schriften, Abstände | `style.qss` neben der Datenbank |
 | Tabs ausblenden, Studierendenansicht | **Settings…** auf dem Startbildschirm |

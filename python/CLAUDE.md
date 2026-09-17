@@ -1023,6 +1023,44 @@ parameterID)`, ein Modell mit einem doppelten Parameter ergäbe ein Projekt,
 das sich nicht anlegen lässt. MATLAB hängt die beiden Tabellen aneinander und
 merkt es nicht.
 
+### Der dritte Dialog: die Modelle selbst
+
+**Library → Models…**, gleiche Bauart wie die anderen beiden. Ein Modell
+konnte bisher nur *nebenbei* entstehen — über „Make selectable…" neben einem
+Organismus oder einem Kessel —, und danach gab es keine Stelle, an der man
+eines ansehen, umbenennen, korrigieren oder entfernen konnte. Dabei ist
+`model_parameterTab` die einzige Tabelle zwischen einer Definition und einem
+Lauf: `create_project` liest nichts anderes.
+
+- **Die Paarung ist nicht editierbar.** Organismus und Kessel stehen als
+  Beschriftung da, nicht als Auswahlfeld. Sie zu tauschen hieße, Werte aus
+  einem Kessel stehen zu lassen, den das Modell nicht mehr nennt — der
+  Parametersatz wurde beim Anlegen aus beiden kopiert. Eine andere Paarung
+  ist ein anderes Modell, und dafür gibt es `create_model`.
+- **Parameter lassen sich weder hinzufügen noch entfernen**, nur ändern.
+  Welche ein Modell trägt, entscheiden Organismus und Kessel;
+  `save_model_parameters` meldet einen unbekannten Namen zurück, statt eine
+  Zeile anzulegen.
+- **`model_parameters` sagt, woher jeder Wert kommt** — Organismus, Kessel
+  oder beide (dann hat der Kessel gewonnen). Das ist das Einzige, was ein
+  Modell gegenüber den beiden Sätzen, aus denen es gebaut ist, hinzufügt, und
+  es steht im Tooltip jedes Feldes.
+- **Duplizieren kopiert den Ist-Zustand**, nicht die Vorgaben. Eine Variante
+  entsteht aus dem Modell, nicht aus dem, woraus das Modell einmal entstand —
+  sonst wäre „Duplicate" dasselbe wie ein zweites `create_model` auf
+  derselben Paarung, und die bearbeiteten Werte fielen weg.
+- **`projectTab.modelID` ist die einzige Referenz ohne `ON DELETE`-Klausel.**
+  SQLite weist das Löschen also von sich aus ab; `model_usage` wird trotzdem
+  vorher gefragt, damit ein Satz dasteht statt eines Constraint-Fehlers — und
+  damit der Knopf grau sein kann, bevor jemand darauf drückt.
+- **Ein Filterfeld über den Parametern**, als einziger der drei Dialoge. Ein
+  Kessel hat 60 Parameter, ein Modell 253; das ist der Unterschied zwischen
+  Blättern und Suchen. Gefiltert wird über Name, Symbol, Kategorie und
+  Beschreibung.
+- **`isVisibleTo(parent)`, nicht `isVisible()`** — der Test dazu wäre sonst
+  immer grün und immer leer: in einem nie gezeigten Dialog meldet jedes
+  Widget `False`. Dieselbe Falle wie in UX-Punkt 7.
+
 ## Projekte, Organismen und Bioreaktoren übertragen
 
 Drei Pakete, alle über **Namen** verschlüsselt, nie über IDs — die

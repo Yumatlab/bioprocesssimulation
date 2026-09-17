@@ -1372,3 +1372,164 @@ def test_saving_writes_only_every_n_th_step_when_asked(window, db, monkeypatch):
     # Whatever the interval, the newest step is stored: a run that is picked
     # up again has to carry on from where it actually stopped.
     assert new[-1] == pytest.approx(state.v.t[computed - 1], abs=1e-9)
+
+
+# --------------------------------------------------------- managing models --
+
+
+@pytest.fixture
+def models(db, qapp):
+    from biofermentation.gui.dialogs.models import ModelManager
+
+    manager = ModelManager(db)
+    yield manager
+    manager.close()
+
+
+def _shown(manager) -> list[str]:
+    """Which parameter fields the filter lets through.
+
+    `isVisible()` is False for every widget of a dialog that was never shown;
+    the state question is `isVisibleTo(parent)`. See CLAUDE.md, UX point 7.
+    """
+    return [
+        name for name, box in manager._boxes.items() if box.isVisibleTo(box.parentWidget())
+    ]
+
+
+def test_the_dialog_lists_every_model_with_its_pair(models, db):
+    from biofermentation.db import list_models
+
+    rows = list_models(db)
+    assert models.list.count() == len(rows) == 3
+    assert models._current is not None
+    assert models.organism_label.text()
+    assert models.bioreactor_label.text()
+    # The parameter set of a model is the union of the organism's and the
+    # vessel's; 253 is what this template's Escherichia model carries.
+    assert len(models._boxes) == 253
+
+
+def test_a_new_model_is_an_organism_in_a_vessel(models, db):
+    """The pairing is the whole point: create_project reads nothing else."""
+    from biofermentation.db import list_bioreactors, list_models
+    from biofermentation.db.definitions import list_organisms
+
+    organism = list_organisms(db)[0]
+    vessel = next(row for row in list_bioreactors(db) if row["name"] == "BIOSTAT B")
+    before = len(list_models(db))
+
+    model_id = models.create_model(
+        organism["organismID"], vessel["bioreactorID"], "E. coli in BIOSTAT B"
+    )
+    assert model_id is not None
+    assert len(list_models(db)) == before + 1
+    assert models._current == model_id, "the dialog lands on what it just made"
+    assert models.bioreactor_label.text() == "BIOSTAT B"
+    assert len(models._boxes) > 0
+
+
+def test_a_model_a_project_stands_on_cannot_be_deleted(models, db):
+    """The cascade taking projects with it is how MATLAB lost them."""
+    from biofermentation.db import delete_model, model_usage
+
+    used = next(
+        row for row in models.models() if model_usage(db, row["modelID"])["projects"]
+    )
+    models._select(used["modelID"])
+    assert models.delete_button.isEnabled() is False
+    with pytest.raises(ValueError, match="still used"):
+        delete_model(db, used["modelID"])
+
+
+def test_a_model_nothing_stands_on_goes_with_its_parameters(models, db):
+    from biofermentation.db import list_bioreactors, list_models
+    from biofermentation.db.definitions import list_organisms
+
+    organism = list_organisms(db)[0]
+    vessel = list_bioreactors(db)[0]
+    model_id = models.create_model(organism["organismID"], vessel["bioreactorID"], "Throwaway")
+    assert models.delete_button.isEnabled() is True
+
+    assert models.delete_selected(confirmed=True) is True
+    assert model_id not in [row["modelID"] for row in list_models(db)]
+    with sqlite3.connect(f"file:{db}?mode=ro", uri=True) as conn:
+        left = conn.execute(
+            "SELECT COUNT(*) FROM model_parameterTab WHERE modelID = ?", (model_id,)
+        ).fetchone()[0]
+    assert left == 0, "the parameter rows cascade with the model row"
+
+
+def test_renaming_a_model_is_an_update_not_a_second_model(models, db):
+    """Projects point at modelID; a rename must not strand them."""
+    from biofermentation.db import list_models, model_usage
+
+    current = next(row for row in models.models() if model_usage(db, row["modelID"])["projects"])
+    models._select(current["modelID"])
+    projects = model_usage(db, current["modelID"])["projects"]
+
+    models.name_edit.setText("Escherichia coli — teaching")
+    assert models.save(announce=False) is True
+
+    rows = list_models(db)
+    assert len(rows) == 3, "renamed, not duplicated"
+    renamed = next(row for row in rows if row["modelID"] == current["modelID"])
+    assert renamed["name"] == "Escherichia coli — teaching"
+    assert model_usage(db, current["modelID"])["projects"] == projects
+
+
+def test_a_duplicate_carries_the_values_as_they_are_now(models, db):
+    """A variant is made from the model, not from the defaults it came from."""
+    from biofermentation.db import model_parameters
+
+    name = next(iter(models._boxes))
+    models._boxes[name].setValue(models._boxes[name].value() + 1.5)
+    edited = models._boxes[name].value()
+    assert models.save(announce=False) is True
+
+    copy_id = models.duplicate_selected("A copy of it")
+    assert copy_id is not None
+    values = {row["parametername"]: row["value"] for row in model_parameters(db, copy_id)}
+    assert values[name] == pytest.approx(edited)
+
+
+def test_the_filter_narrows_the_parameter_list(models):
+    """253 parameters is four times what a vessel has; scrolling is not a plan."""
+    everything = len(_shown(models))
+    assert everything == len(models._boxes)
+
+    models.filter_edit.setText("KP_")
+    gains = _shown(models)
+    assert 0 < len(gains) < everything
+    assert all(name.startswith("KP_") for name in gains)
+
+    models.filter_edit.clear()
+    assert len(_shown(models)) == everything
+
+
+def test_the_organism_and_the_vessel_are_shown_and_not_editable(models):
+    """A different pairing is a different model, not an edit to this one."""
+    from PySide6.QtWidgets import QLabel
+
+    assert isinstance(models.organism_label, QLabel)
+    assert isinstance(models.bioreactor_label, QLabel)
+    assert not hasattr(models, "organism_box")
+
+
+def test_the_new_model_dialog_suggests_a_name_and_then_leaves_it_alone(qapp, db):
+    from biofermentation.db import list_bioreactors
+    from biofermentation.db.definitions import list_organisms
+    from biofermentation.gui.dialogs.models import NewModelDialog
+
+    organisms, vessels = list_organisms(db), list_bioreactors(db)
+    dialog = NewModelDialog(organisms, vessels)
+    assert dialog.name_edit.text() == f"{organisms[0]['name']} in {vessels[0]['name']}"
+
+    dialog.bioreactor_box.setCurrentIndex(1)
+    assert dialog.name_edit.text() == f"{organisms[0]['name']} in {vessels[1]['name']}"
+
+    # A name somebody typed is theirs from then on.
+    dialog.name_edit.setText("My own name")
+    dialog.name_edit.textEdited.emit("My own name")
+    dialog.organism_box.setCurrentIndex(1)
+    assert dialog.name_edit.text() == "My own name"

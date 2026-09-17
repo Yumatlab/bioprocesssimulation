@@ -360,6 +360,33 @@ def test_every_way_into_a_project_releases_the_one_that_is_open():
         )
 
 
+def test_every_library_entry_is_handled(qapp):
+    """A menu entry that falls through does nothing and says nothing.
+
+    `library_action` is a chain of comparisons against the very strings the
+    menu is built from, so the two can drift apart without a syntax error —
+    the Models… entry was added to both, and this is what keeps it that way.
+    """
+    import inspect
+
+    from biofermentation.gui import app as app_module
+
+    source = inspect.getsource(app_module.SimulationApp.library_action)
+    for entry in StartingScreen.LIBRARY_ENTRIES:
+        if entry is not None:
+            assert f'"{entry}"' in source, f"{entry} leads nowhere"
+
+
+def test_the_library_offers_the_models_themselves(qapp):
+    """A project is created from a model, so a model has to be reachable.
+
+    Before this it could only be made in passing, out of the organism or the
+    bioreactor dialog, and never looked at again.
+    """
+    assert "Models…" in StartingScreen.LIBRARY_ENTRIES
+    assert hasattr(StartingScreen(), "library_button")
+
+
 def test_every_starting_screen_button_leads_somewhere(qapp):
     """A button that emits into nothing is worse than one that says so.
 

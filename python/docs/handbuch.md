@@ -334,13 +334,41 @@ nimmt die Ersatzanordnung und schreibt den Grund ins Protokoll.
 
 ### Bibliothek
 
-**Library…** auf dem Startbildschirm verwaltet Organismen und Bioreaktoren und
-importiert oder exportiert sie. Eine Kopie eines Organismus mit anderen Werten
-ist ein neuer Organismus und braucht kein Python — die Kinetik übernimmt die
-Kopie von ihrer Vorlage.
+**Library…** auf dem Startbildschirm verwaltet Organismen, Bioreaktoren und
+Modelle und importiert oder exportiert die ersten beiden. Eine Kopie eines
+Organismus mit anderen Werten ist ein neuer Organismus und braucht kein Python
+— die Kinetik übernimmt die Kopie von ihrer Vorlage.
 
 **Wichtig:** Ein neuer Organismus oder Kessel ist erst auswählbar, wenn es ein
-**Modell** dazu gibt. Dafür ist die Schaltfläche **Make selectable…** da.
+**Modell** dazu gibt. Dafür ist die Schaltfläche **Make selectable…** da — oder
+der Eintrag **Models…**.
+
+#### Modelle
+
+Ein Modell ist ein **Organismus in einem Kessel**. Es ist das, woraus ein
+Projekt entsteht: beim Anlegen kopiert die Anwendung den Parametersatz des
+Modells in das Projekt, und danach hat das Projekt seinen eigenen. Genau diese
+zwei Kopien machen einen gespeicherten Lauf reproduzierbar — und sie sind auch
+der Grund, warum eine Änderung am Modell **nur neue Projekte** erreicht.
+
+Unter **Library → Models…** steht links die Liste, rechts das Modell:
+
+- **New model…** — Organismus und Kessel wählen, Name vorgeschlagen. Der
+  Parametersatz ist die Vereinigung beider; nennen beide denselben Parameter,
+  gewinnt der Kessel.
+- **Duplicate…** — eine Kopie *mit den Werten, wie sie jetzt sind*. Damit
+  lassen sich Varianten anlegen, etwa ein Modell mit anderen
+  Reglerverstärkungen für eine Übung.
+- **Delete…** — nur, wenn kein Projekt daraus entstanden ist. Die
+  Parameterwerte gehen mit; Organismus und Kessel bleiben stehen.
+- **Name, Beschreibung und alle Werte** sind bearbeitbar. Das Filterfeld über
+  der Liste hilft: ein Modell trägt rund 250 Parameter. Ein Tooltip sagt bei
+  jedem, ob der Wert vom Organismus oder vom Kessel stammt.
+
+**Organismus und Kessel selbst lassen sich nicht tauschen.** Sie sind nicht
+zwei weitere Felder, sondern das, woraus das Modell besteht — ein Tausch ließe
+Werte aus einem Kessel stehen, den das Modell nicht mehr nennt. Eine andere
+Paarung ist ein anderes Modell.
 
 ### Refreshrate und Δt entkoppeln
 

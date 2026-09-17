@@ -86,7 +86,10 @@ class StartingScreen(QWidget):
         # of, rather than what one session does. It used to hang in a menu bar
         # over a window that has no other menus.
         self.library_button = self._button("Library…", None)
-        self.library_button.setToolTip("Import and export organisms, bioreactors and projects")
+        self.library_button.setToolTip(
+            "Organisms, bioreactors and the models made from them — and the "
+            "import and export of all three"
+        )
         self.library_button.clicked.connect(self._show_library)
         layout.addWidget(self.library_button)
 
@@ -109,6 +112,10 @@ class StartingScreen(QWidget):
         "Bioreactors…",
         "Import bioreactor…",
         "Export bioreactor…",
+        None,
+        # A project is created from a model, so this is the entry the other
+        # two lead to; it stands on its own line because it is not an import.
+        "Models…",
         None,
         "Import project…",
     )

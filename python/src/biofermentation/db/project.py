@@ -855,6 +855,217 @@ def create_model(
     return model_id
 
 
+def model_parameters(db_path: Path | str, model_id: int) -> list[dict]:
+    """The model's parameter set, with what an editor needs to show it.
+
+    The same shape and the same order as `bioreactor_parameters`: by section,
+    category and the order a parameter carries itself. `origin` says where the
+    value came from — the organism defaults, the vessel defaults, or both, in
+    which case the vessel won when the model was built.
+    """
+    with get_connection(db_path, readonly=True) as conn:
+        model = conn.execute(
+            "SELECT organismID, bioreactorID FROM modelTab WHERE modelID = ?", (model_id,)
+        ).fetchone()
+        if model is None:
+            raise LookupError(f"no model with modelID {model_id}")
+        from_organism = {
+            row[0]
+            for row in conn.execute(
+                "SELECT parameterID FROM default_modelTab WHERE organismID = ?",
+                (model["organismID"],),
+            )
+        }
+        from_vessel = {
+            row[0]
+            for row in conn.execute(
+                "SELECT parameterID FROM default_bioreactorTab WHERE bioreactorID = ?",
+                (model["bioreactorID"],),
+            )
+        }
+        rows = _rows(
+            conn,
+            """
+            SELECT mp.parameterID, mp.value, mp.description,
+                   p.name AS parametername, p.tex, p.unit, p.type,
+                   c.name AS categoryname, c.section AS categorysection
+              FROM model_parameterTab mp
+              JOIN parameterTab p ON p.parameterID = mp.parameterID
+              JOIN categoryTab c ON c.categoryID = p.categoryID
+             WHERE mp.modelID = ?
+             ORDER BY c.section, c.name, p.internal_order, p.parameterID
+            """,
+            (model_id,),
+        )
+    for row in rows:
+        organism = row["parameterID"] in from_organism
+        vessel = row["parameterID"] in from_vessel
+        row["origin"] = (
+            "bioreactor (overrides the organism)"
+            if organism and vessel
+            else "bioreactor"
+            if vessel
+            else "organism"
+            if organism
+            else "neither — added after the model was built"
+        )
+    return rows
+
+
+def model_usage(db_path: Path | str, model_id: int) -> dict[str, int]:
+    """How many projects were created from this model.
+
+    `projectTab.modelID` is the one reference in this schema **without** an
+    ON DELETE action, so SQLite refuses the deletion by itself. Asked here
+    anyway, to say so in a sentence rather than as a constraint error.
+    """
+    with get_connection(db_path, readonly=True) as conn:
+        if (
+            conn.execute(
+                "SELECT COUNT(*) FROM modelTab WHERE modelID = ?", (model_id,)
+            ).fetchone()[0]
+            == 0
+        ):
+            raise LookupError(f"no model with modelID {model_id}")
+        return {
+            "projects": conn.execute(
+                "SELECT COUNT(*) FROM projectTab WHERE modelID = ?", (model_id,)
+            ).fetchone()[0]
+        }
+
+
+def update_model(
+    db_path: Path | str,
+    model_id: int,
+    *,
+    name: str | None = None,
+    description: str | None = None,
+) -> None:
+    """Rename a model or change its description.
+
+    A rename is an UPDATE, not a new model beside the old one: projects point
+    at `modelID`, never at the name.
+
+    The organism and the vessel are **not** changeable here. They are not two
+    more fields of a model, they are what it is made of — the parameter set
+    was copied from them when it was built, and swapping one would leave
+    values from a vessel the model no longer names. That is a new model, and
+    `create_model` is how one is made.
+    """
+    with get_connection(db_path) as conn:
+        if (
+            conn.execute(
+                "SELECT COUNT(*) FROM modelTab WHERE modelID = ?", (model_id,)
+            ).fetchone()[0]
+            == 0
+        ):
+            raise LookupError(f"no model with modelID {model_id}")
+        if name is not None:
+            name = name.strip()
+            if not name:
+                raise ValueError("a model needs a name")
+            taken = conn.execute(
+                "SELECT COUNT(*) FROM modelTab WHERE name = ? AND modelID != ?",
+                (name, model_id),
+            ).fetchone()[0]
+            if taken:
+                raise ValueError(f"a model named {name!r} already exists")
+            conn.execute("UPDATE modelTab SET name = ? WHERE modelID = ?", (name, model_id))
+        if description is not None:
+            conn.execute(
+                "UPDATE modelTab SET description = ? WHERE modelID = ?",
+                (description.strip() or None, model_id),
+            )
+
+
+def save_model_parameters(
+    db_path: Path | str, model_id: int, values: dict[str, float]
+) -> dict[str, int | list[str]]:
+    """Write changed values back into `model_parameterTab`. One transaction.
+
+    Only the values — a parameter the model does not carry is reported back
+    rather than added, because the set of parameters is what the organism and
+    the vessel between them decide, not what a form happens to show.
+
+    **This reaches new projects only.** `create_project` copies from here into
+    `project_parameterTab`, and a project keeps its own copy from then on;
+    that is exactly what makes a stored run reproducible.
+    """
+    written, unknown = 0, []
+    with get_connection(db_path) as conn:
+        known = {
+            row["name"]: row["parameterID"]
+            for row in conn.execute(
+                "SELECT p.name, p.parameterID FROM model_parameterTab mp "
+                "JOIN parameterTab p ON p.parameterID = mp.parameterID WHERE mp.modelID = ?",
+                (model_id,),
+            )
+        }
+        for name, value in values.items():
+            if name not in known:
+                unknown.append(name)
+                continue
+            written += conn.execute(
+                "UPDATE model_parameterTab SET value = ? WHERE modelID = ? AND parameterID = ?",
+                (float(value), model_id, known[name]),
+            ).rowcount
+    return {"parameters": written, "unknown_parameters": unknown}
+
+
+def duplicate_model(db_path: Path | str, model_id: int, name: str) -> int:
+    """A copy of a model under a new name, values and all. One transaction.
+
+    Not the same as building a second model on the same pair: this one carries
+    the values as they are *now*, edited ones included. That is the point —
+    a variant of a model is made from the model, not from the defaults it once
+    came from.
+    """
+    name = name.strip()
+    if not name:
+        raise ValueError("a model needs a name")
+    with get_connection(db_path) as conn:
+        source = conn.execute(
+            "SELECT organismID, bioreactorID, description FROM modelTab WHERE modelID = ?",
+            (model_id,),
+        ).fetchone()
+        if source is None:
+            raise LookupError(f"no model with modelID {model_id}")
+        if conn.execute("SELECT COUNT(*) FROM modelTab WHERE name = ?", (name,)).fetchone()[0]:
+            raise ValueError(f"a model named {name!r} already exists")
+        new_id = conn.execute(
+            "INSERT INTO modelTab (organismID, bioreactorID, name, description) "
+            "VALUES (?, ?, ?, ?)",
+            (source["organismID"], source["bioreactorID"], name, source["description"]),
+        ).lastrowid
+        conn.execute(
+            "INSERT INTO model_parameterTab (modelID, parameterID, value, description) "
+            "SELECT ?, parameterID, value, description FROM model_parameterTab WHERE modelID = ?",
+            (new_id, model_id),
+        )
+    return new_id
+
+
+def delete_model(db_path: Path | str, model_id: int) -> dict[str, int]:
+    """Remove a model and its parameter set. One transaction.
+
+    Refused while a project was created from it. The parameter rows go with
+    the model row — `model_parameterTab.modelID` cascades, and cascading is
+    SQLite's job here as everywhere else.
+    """
+    usage = model_usage(db_path, model_id)
+    if usage["projects"]:
+        raise ValueError(
+            f"this model is still used by {usage['projects']} project(s); "
+            "delete those first"
+        )
+    with get_connection(db_path) as conn:
+        parameters = conn.execute(
+            "SELECT COUNT(*) FROM model_parameterTab WHERE modelID = ?", (model_id,)
+        ).fetchone()[0]
+        conn.execute("DELETE FROM modelTab WHERE modelID = ?", (model_id,))
+    return {"parameters": parameters}
+
+
 def unique_project_name(db_path: Path | str, name: str) -> str:
     """A free name, appending _1, _2 … the way uniqueProjectname does."""
     with get_connection(db_path, readonly=True) as conn:
