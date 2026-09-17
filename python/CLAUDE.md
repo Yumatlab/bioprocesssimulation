@@ -405,6 +405,30 @@ den gelaufenen Prozess nicht beschreibt. Die beiden Gründe, aus denen eine
 Schaltfläche tot ist, sagen weiter Verschiedenes — „Pause the process to edit
 a phase" gegen „A running or completed phase cannot be edited".
 
+### Δt speichert, der Refresh zeigt
+
+`sync_interval_to_dt()` hängt den Timer an `deltatsec` — ein Tick je Schritt,
+damit ein Speedfactor von 1 Echtzeit bleibt. Das ist die Vorgabe und war
+bisher die einzige Möglichkeit, und sie macht ein großes Δt unbenutzbar: Δt
+bestimmt, wie viele Messwerte entstehen (bei 2 s sind es 1800 je Stunde und
+Variable, gemessen 1 443 624 Werte für 14,3 h), gekoppelt bestimmt es aber
+auch, wie oft der Bildschirm sich rührt.
+
+- **`Settings.interval_ms(dt)` ist die eine Stelle, die die Frage
+  beantwortet.** Fenster und Einstellungsdialog können sich damit nicht
+  darüber uneinig werden, was die Einstellung bedeutet.
+- **Entkoppeln ändert das Tempo, nicht nur die Glätte.** Δt geteilt durch
+  Refresh *ist* der Faktor gegenüber der Wirklichkeit — bei Δt = 10 s und 2 s
+  Refresh läuft es fünffach. Das steht so im Dialog und im Handbuch, weil
+  jemand sonst eine ruhigere Anzeige erwartet und einen schnelleren Prozess
+  bekommt.
+- **`_set_dt` darf den Takt nicht mehr blind nachziehen.** Entkoppelt hat der
+  Anwender ihn gesetzt, und eine Änderung an Δt überschriebe ihn.
+- **Ein Refresh von 0 wird abgewiesen, nicht benutzt.** Ein QTimer mit
+  Intervall 0 feuert, so schnell die Ereignisschleife kann; das Fenster wäre
+  nicht mehr zu bedienen. `load_settings` prüft 0,05 bis 600 s und fällt
+  sonst auf die Vorgabe zurück, mit Begründung für den Log.
+
 ### Was im Log steht, und was man davon sieht
 
 Drei Sorten Einträge und zwei Schalter darüber. **Parameter Value Change** ist

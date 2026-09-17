@@ -13,7 +13,7 @@ from .bioreactors import (
     write_bioreactor,
 )
 from .connection import get_connection
-from .migrate import apply_migration, ensure_columns
+from .migrate import apply_migration, ensure_columns, ensure_indexes
 from .models import (
     Condition,
     Lookups,
@@ -71,6 +71,7 @@ __all__ = [
     "delete_bioreactor",
     "delete_project",
     "ensure_columns",
+    "ensure_indexes",
     "export_bioreactor",
     "export_defaults",
     "free_bioreactor_name",

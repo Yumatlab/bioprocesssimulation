@@ -336,6 +336,26 @@ Kopie von ihrer Vorlage.
 **Wichtig:** Ein neuer Organismus oder Kessel ist erst auswählbar, wenn es ein
 **Modell** dazu gibt. Dafür ist die Schaltfläche **Make selectable…** da.
 
+### Refreshrate und Δt entkoppeln
+
+Unter **Settings…** steht die Checkbox **„Refreshrate an Δt koppeln"**.
+Angehakt — die Vorgabe — rechnet die Anwendung einen Schritt je Taktschlag:
+ein Speedfactor von 1 läuft dann in Echtzeit, egal wie Δt eingestellt ist.
+
+Der Haken lohnt sich, wenn Sie **Δt vergrößern wollen**. Δt bestimmt, wie
+viele Messwerte gespeichert werden — bei 2 s sind das 1800 Zeitpunkte je
+Stunde und Variable, bei 10 s nur noch 360. Gekoppelt bewegt sich der
+Bildschirm dann aber auch nur noch alle zehn Sekunden.
+
+Nehmen Sie den Haken heraus, wird das Feld darunter aktiv und bestimmt den
+Takt. **Das ändert auch das Tempo:** bei Δt = 10 s und 2 s Refresh schreitet
+der Prozess je Taktschlag zehn Sekunden voran, geschlagen wird aber alle zwei
+— der Lauf ist fünffach schneller als die Wirklichkeit. Das Verhältnis Δt zu
+Refresh *ist* der Faktor.
+
+Kurz: **Δt bestimmt, wie viel gespeichert wird, der Refresh, wie oft man es
+sieht.**
+
 ### Studierendenansicht
 
 Unter **Settings…** lässt sich die Laufsteuerung sperren: Δt bleibt sichtbar,

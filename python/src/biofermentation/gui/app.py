@@ -18,9 +18,10 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from ..control import PhaseAutomaton
 from ..core.runner import DEFAULT_DT, load_project_state
 from ..core.simulation_runner import SimulationRunner
-from ..db import ensure_columns, load_phases
+from ..db import ensure_columns, ensure_indexes, load_phases
 from ..organisms import discover_organisms
 from ..resources import app_icon_path, default_database
+from .settings import load_settings
 from .style import apply_theme
 from .windows import (
     ControlWindow,
@@ -28,6 +29,28 @@ from .windows import (
     SelectProjectWindow,
     StartingScreen,
 )
+
+
+def _ensure_cascade_indexes(db_path) -> list[str]:
+    """Nachrüsten, was das Template mitbringt und eine ältere Datenbank nicht.
+
+    SQLite legt für Fremdschlüssel keine Indizes an, und ohne den auf
+    `dataTab.timeID` durchsucht es beim Löschen eines Projekts für jede
+    Zeitzeile die ganze Tabelle. Auf einer echten Arbeitsdatenbank mit
+    2 195 640 Datenzeilen dauert ein Löschvorgang damit Minuten statt 0,58 s.
+
+    Hier und nicht in der vollständigen Migration, weil das sechs additive
+    Anweisungen sind und die Migration ein Neuaufbau aller Tabellen. Fehlt
+    nichts, kostet der Aufruf eine Abfrage; fehlt etwas, kostet er einmalig
+    ein bis zwei Sekunden.
+
+    Ein Fehler hier darf den Start nicht verhindern: eine Datenbank ohne
+    Indizes ist langsam, eine Anwendung, die nicht aufgeht, ist unbenutzbar.
+    """
+    try:
+        return ensure_indexes(db_path)
+    except Exception:
+        return []
 
 
 class SimulationApp(QApplication):
@@ -49,6 +72,7 @@ class SimulationApp(QApplication):
         discover_organisms()
 
         self.db_path = Path(db_path) if db_path else default_database()
+        self._new_indexes = _ensure_cascade_indexes(self.db_path)
         # A user's database is a copy of the template taken when they first
         # ran the program; it can be older than the schema this code expects.
         ensure_columns(self.db_path)
@@ -224,11 +248,16 @@ class SimulationApp(QApplication):
             state.dt = seconds / 3600
 
         automaton = PhaseAutomaton.from_setup(setup)
+        # Der Takt kommt aus den Einstellungen: gekoppelt folgt er Δt, sonst
+        # dem dort eingetragenen Wert. Ohne interval_ms würde der Runner sich
+        # selbst an Δt hängen, und die Einstellung liefe ins Leere.
+        settings, _ = load_settings()
         self.runner = SimulationRunner(
             organism,
             state,
             phases=automaton,
             speedfactor=int(state.p.get("speedfactor", 1) or 1),
+            interval_ms=settings.interval_ms(seconds),
         )
 
         self.control_window = ControlWindow(setup, self.runner, self.db_path)

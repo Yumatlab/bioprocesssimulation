@@ -4,11 +4,17 @@ The migration rebuilds tables, so it has to run with foreign keys switched
 off on its own connection. That is the opposite of what get_connection()
 sets up for normal access, which is why this lives apart from the access
 layer and opens its own connection.
+
+`ensure_columns` and `ensure_indexes` are the exception and use the normal
+access layer: they add, they never rebuild, and something that only adds
+belongs inside the usual transaction with foreign keys on.
 """
 
 import shutil
 import sqlite3
 from pathlib import Path
+
+from .connection import get_connection
 
 MIGRATION_SQL = Path(__file__).with_name("migrate_schema.sql")
 
@@ -59,6 +65,53 @@ def ensure_columns(db_path: Path | str) -> list[str]:
         return _add_missing_columns(conn)
     finally:
         conn.close()
+
+
+#: Die Indizes auf den Fremdschlüsseln, an denen die Kaskade entlangläuft.
+#: Wortgleich mit denen in migrate_schema.sql — dort für eine vollständige
+#: Migration, hier zum Nachrüsten beim Öffnen einer bestehenden Datenbank.
+CASCADE_INDEXES = (
+    ("timeTab_projectID", "timeTab (projectID)"),
+    ("dataTab_timeID", "dataTab (timeID)"),
+    ("dataTab_variableID", "dataTab (variableID)"),
+    ("processTab_projectID", "processTab (projectID)"),
+    ("logTab_projectID", "logTab (projectID)"),
+    ("process_parameterTab_processID", "process_parameterTab (processID)"),
+)
+
+
+def ensure_indexes(db_path: Path | str) -> list[str]:
+    """Nachrüsten, was SQLite für Fremdschlüssel nicht selbst anlegt.
+
+    Ohne einen Index auf `dataTab.timeID` muss SQLite beim Löschen eines
+    Projekts für **jede** gelöschte Zeitzeile die ganze `dataTab` durchsuchen.
+    Gemessen an einer echten Arbeitsdatenbank mit 2 195 640 Datenzeilen dauert
+    das Löschen eines Projekts mit 342 936 Messwerten Minuten; mit den Indizes
+    0,58 s, und ihr Aufbau kostet einmalig 1,8 s.
+
+    Das Template bringt sie mit. Wer schon eine Datenbank hat, bekäme sie sonst
+    nur über einen vollständigen Migrationslauf — und das ist ein Neuaufbau
+    aller Tabellen für etwas, das sechs additive Anweisungen sind. Deshalb
+    läuft das hier beim Öffnen: geprüft wird über `sqlite_master`, gebaut wird
+    nur, was fehlt, und wenn nichts fehlt, kostet es eine Abfrage.
+
+    Gibt die Namen der Indizes zurück, die tatsächlich angelegt wurden.
+    """
+    with get_connection(db_path, readonly=True) as conn:
+        present = {
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL"
+            )
+        }
+    missing = [(name, spec) for name, spec in CASCADE_INDEXES if name not in present]
+    if not missing:
+        return []
+
+    with get_connection(db_path) as conn:
+        for name, spec in missing:
+            conn.execute(f"CREATE INDEX IF NOT EXISTS {name} ON {spec}")
+    return [name for name, _ in missing]
 
 
 def apply_migration(db_path: Path | str, *, backup: bool = True) -> Path | None:

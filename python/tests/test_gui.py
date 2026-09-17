@@ -535,6 +535,51 @@ def test_a_broken_settings_file_shows_everything_and_says_why(tmp_path):
     assert "mapping" in problem
 
 
+def test_the_refresh_follows_delta_t_unless_it_is_uncoupled():
+    """Der Takt bestimmt zweierlei: wie oft man hinsieht und wie schnell es geht.
+
+    Gekoppelt ist ein Tick ein Rechenschritt, ein Speedfactor von 1 also
+    Echtzeit. Entkoppelt gilt der eingetragene Wert — und das Verhältnis
+    Δt/Refresh ist dann genau der Faktor, um den der Lauf schneller ist als
+    der echte Prozess.
+    """
+    from biofermentation.gui.settings import Settings
+
+    coupled = Settings()
+    assert coupled.interval_ms(2.0) == 2000
+    assert coupled.interval_ms(10.0) == 10000, "gekoppelt folgt der Takt Δt"
+
+    free = Settings(couple_refresh_to_dt=False, refresh_seconds=2.0)
+    assert free.interval_ms(2.0) == 2000
+    assert free.interval_ms(10.0) == 2000, "entkoppelt bleibt der Takt stehen"
+
+
+def test_an_impossible_refresh_is_refused_rather_than_used(tmp_path):
+    """Eine Datei, die einen 0-Sekunden-Takt verlangt, darf ihn nicht bekommen.
+
+    Ein Timer mit Intervall 0 feuert, so schnell die Ereignisschleife kann —
+    das Fenster wäre nicht mehr zu bedienen.
+    """
+    from biofermentation.gui.settings import load_settings
+
+    path = tmp_path / "settings.yaml"
+    path.write_text("couple_refresh_to_dt: false\nrefresh_seconds: 0\n", encoding="utf-8")
+    settings, problem = load_settings(path)
+    assert "refresh_seconds" in problem
+    assert settings.couple_refresh_to_dt is True, "die Vorgabe, nicht die kaputte Datei"
+
+
+def test_the_refresh_survives_a_round_trip(tmp_path):
+    from biofermentation.gui.settings import Settings, load_settings, save_settings
+
+    path = tmp_path / "settings.yaml"
+    save_settings(Settings(couple_refresh_to_dt=False, refresh_seconds=0.5), path)
+    back, problem = load_settings(path)
+    assert problem == ""
+    assert back.couple_refresh_to_dt is False
+    assert back.refresh_seconds == 0.5
+
+
 def test_control_options_and_information_cannot_be_switched_off():
     """A window without them is not a control window."""
     from biofermentation.gui.settings import HIDEABLE_TABS
