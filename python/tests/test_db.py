@@ -983,3 +983,79 @@ def test_a_duplicated_model_is_a_second_row_with_the_same_values(db_copy):
     assert {row["parametername"]: row["value"] for row in model_parameters(db_copy, 1)}[
         name
     ] == 7.25
+
+
+# ------------------------------------------------------- reclaiming space --
+
+
+def _bloat(db_path: Path, pages: int = 20_000) -> None:
+    """Fill the file and free it again — what a deleted project leaves."""
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("CREATE TABLE ballast (x BLOB)")
+        conn.executemany("INSERT INTO ballast VALUES (?)", [(b"0" * 4000,)] * pages)
+        conn.commit()
+        conn.execute("DROP TABLE ballast")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_the_size_of_a_database_is_mostly_its_free_pages(db_copy: Path):
+    from biofermentation.db import database_size
+
+    before = database_size(db_copy)
+    assert before["free_pages"] == 0
+
+    _bloat(db_copy)
+    after = database_size(db_copy)
+    assert after["free_pages"] > 10_000
+    assert after["reclaimable"] == after["free_pages"] * after["page_size"]
+    assert after["bytes"] > before["bytes"] * 10
+
+
+def test_compacting_gives_the_space_back_and_keeps_every_row(db_copy: Path):
+    """The claim the dialog makes: the file shrinks, the content does not.
+
+    Measured on a real working database: 119 MB with no project left in it.
+    """
+    from biofermentation.db import database_size, list_projects, vacuum_database
+
+    projects = [row["projectID"] for row in list_projects(db_copy)]
+    with get_connection(db_copy, readonly=True) as conn:
+        rows = conn.execute("SELECT COUNT(*) FROM dataTab").fetchone()[0]
+        parameters = conn.execute("SELECT COUNT(*) FROM project_parameterTab").fetchone()[0]
+
+    _bloat(db_copy)
+    result = vacuum_database(db_copy)
+
+    assert result["saved"] > 50_000_000, f"only {result['saved']} bytes came back"
+    # The file on disk, not just the freelist: in WAL mode the rebuilt pages
+    # live in the log until it is checkpointed, and without that the database
+    # reports itself as tidy at its old size.
+    assert db_copy.stat().st_size == result["after"] < result["before"] / 10
+    assert database_size(db_copy)["free_pages"] == 0
+
+    assert [row["projectID"] for row in list_projects(db_copy)] == projects
+    with get_connection(db_copy, readonly=True) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM dataTab").fetchone()[0] == rows
+        assert (
+            conn.execute("SELECT COUNT(*) FROM project_parameterTab").fetchone()[0] == parameters
+        )
+        assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+
+
+def test_compacting_leaves_the_old_file_beside_the_new_one(db_copy: Path):
+    """This project does not rewrite a database without a copy beside it."""
+    from biofermentation.db import vacuum_database
+
+    _bloat(db_copy, pages=2_000)
+    before = db_copy.stat().st_size
+    result = vacuum_database(db_copy)
+
+    backup = Path(result["backup"])
+    assert backup.is_file() and backup != db_copy
+    # The copy is the database as it was, not an empty file.
+    with sqlite3.connect(f"file:{backup}?mode=ro", uri=True) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM projectTab").fetchone()[0] > 0
+    assert backup.stat().st_size <= before

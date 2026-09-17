@@ -13,6 +13,7 @@ from .bioreactors import (
     write_bioreactor,
 )
 from .connection import get_connection
+from .maintenance import database_size, vacuum_database
 from .migrate import apply_migration, ensure_columns, ensure_indexes
 from .models import (
     Condition,
@@ -74,6 +75,7 @@ __all__ = [
     "check_prerequisites",
     "create_model",
     "create_project",
+    "database_size",
     "delete_bioreactor",
     "delete_model",
     "delete_project",
@@ -106,6 +108,7 @@ __all__ = [
     "save_project_with_backup",
     "unique_project_name",
     "update_model",
+    "vacuum_database",
     "write_bioreactor",
     "write_manifest",
 ]

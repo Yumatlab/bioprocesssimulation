@@ -450,6 +450,25 @@ in between were not lost, they were deliberately not written. The resumed run
 computes at the full Δt again. If you need a run for an evaluation, leave the
 value at 1.
 
+### When the file stays large after deleting
+
+Deleting a project does not make the database file smaller. SQLite marks the
+pages as free and keeps them for its own later use, so a file that has held a
+term of long runs stays the size of the largest it ever was — measured here:
+119 MB with not a single project left in it.
+
+**Load Project → Compact Database…** rebuilds the file and gives that space
+back. The size line at the top right of that window says how much is at stake
+("78.88 MB, about 78.31 MB of it unused space from deleted projects"), and the
+question before it repeats the two things worth knowing:
+
+- **Nothing in the database changes** — no project, no parameter, no measured
+  value. Only the number of pages the same content sits on.
+- It takes a few seconds, the application waits for it, and a copy of the file
+  is written next to it first (`SimulationAppDB.pre-vacuum.db`).
+
+Measured on a file bloated to 82.7 MB: 0.6 MB afterwards, 0.06 s.
+
 ### Student view
 
 **Settings…** can lock the run controls: Δt stays visible but unchangeable, and

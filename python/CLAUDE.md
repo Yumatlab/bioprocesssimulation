@@ -958,6 +958,11 @@ standen sie gar nicht.
 - **Ein Projekt ohne den Parameter sagt es.** Die Gruppe erscheint trotzdem,
   mit einem Satz statt eines Schalters: ein fehlendes Bedienelement ist von
   einem nicht gefundenen nicht zu unterscheiden.
+- **Ein Parameter ohne Beschreibung ist ein Name.** Die vier Flags kamen ohne
+  eine in die Datenbank — `add_flags` schrieb nur Name, TeX und Wert —, und
+  damit stand im Tooltip nur „f_awpO2". Die Beschreibung steht jetzt an den
+  Parametern und wird beim Start nachgetragen, wo sie fehlt (40 Zeilen im
+  Template, in drei Tabellen: jedes Projekt trägt seine eigene Kopie).
 
 **Pichia bleibt außen vor — und jetzt ist auch klar, warum.**
 `tools/tune_pichia.py` ist der Messstand dazu, aufgebaut wie `tune_po2.py`,
@@ -1209,6 +1214,33 @@ Lauf: `create_project` liest nichts anderes.
 - **`isVisibleTo(parent)`, nicht `isVisible()`** — der Test dazu wäre sonst
   immer grün und immer leer: in einem nie gezeigten Dialog meldet jedes
   Widget `False`. Dieselbe Falle wie in UX-Punkt 7.
+
+### Platz zurückgeben: die eine Stelle ohne `get_connection`
+
+Ein gelöschtes Projekt macht die Datei nicht kleiner — SQLite merkt die Seiten
+als frei vor und behält sie. Gemessen auf einer Arbeitskopie: 119 MB ohne ein
+einziges Projekt darin, und die produktive MATLAB-Datenbank bestand zu 98,9 %
+aus freien Seiten. `db/maintenance.py` gibt sie zurück, **Load Project →
+Compact Database…** ist der Knopf dazu.
+
+- **`VACUUM` läuft nicht in einer Transaktion**, und `get_connection` öffnet
+  genau eine. Deshalb ist das die einzige Stelle im Projekt mit einer eigenen
+  `sqlite3.connect(..., isolation_level=None)` — die Regel wird gebrochen und
+  im Modulkopf benannt, statt still umgangen zu werden.
+- **Ohne Checkpoint schrumpft nichts.** Im WAL-Modus schreibt VACUUM die neu
+  gebauten Seiten ins Log; die Hauptdatei behält ihre Größe, bis
+  zurückgefaltet und abgeschnitten wird. Gemessen ohne die Zeile: 78,88 MB
+  vorher, 78,88 MB nachher, Freiliste leer — die Arbeit war getan und
+  unsichtbar. `PRAGMA wal_checkpoint(TRUNCATE)` gehört dazu, und der Test
+  prüft die **Dateigröße auf der Platte**, nicht die Freiliste.
+- **Vorher eine Kopie**, über die Backup-API wie überall sonst. VACUUM ist
+  atomar und rollt zurück wie jede Anweisung, schreibt aber jede Seite der
+  Datei neu; dieses Projekt schreibt keine Datenbank ohne Kopie daneben um.
+- **Die Zeile über der Liste sagt, was zu holen ist** („78,88 MB, davon etwa
+  78,31 MB ungenutzt"). „78,88 MB" allein gibt niemandem einen Grund, etwas zu
+  drücken.
+- Gemessen: 82,7 MB → 0,6 MB in 0,06 s, Projektliste, `dataTab`-Zeilen und
+  `integrity_check` unverändert.
 
 ## Projekte, Organismen und Bioreaktoren übertragen
 

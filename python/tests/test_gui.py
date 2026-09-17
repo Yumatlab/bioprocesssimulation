@@ -673,3 +673,42 @@ def test_the_closing_dialog_can_be_told_not_to_ask(tmp_path):
     assert problem == ""
     assert back.ask_storage_on_save is False
     assert back.storage_interval == 5, "hidden, not forgotten"
+
+
+def test_load_project_offers_to_compact_the_database(qapp, db_copy):
+    """The window that shows the size is the one that can do something about it."""
+    from biofermentation.gui.windows.select_project import SelectProjectWindow
+
+    window = SelectProjectWindow(db_copy)
+    assert window.compact_button.text() == "Compact Database…"
+    assert "back to the disk" in window.compact_button.toolTip()
+    # The label says how much of the file is empty, so the button has a reason.
+    assert "database" in window.size_label.text()
+    window.close()
+
+
+def test_the_size_line_says_how_much_is_unused(qapp, db_copy):
+    """"78.88 MB" alone gives nobody a reason to press anything."""
+    import sqlite3
+
+    from biofermentation.gui.windows.select_project import SelectProjectWindow
+
+    conn = sqlite3.connect(db_copy)
+    try:
+        conn.execute("CREATE TABLE ballast (x BLOB)")
+        conn.executemany("INSERT INTO ballast VALUES (?)", [(b"0" * 4000,)] * 2000)
+        conn.commit()
+        conn.execute("DROP TABLE ballast")
+        conn.commit()
+    finally:
+        conn.close()
+
+    window = SelectProjectWindow(db_copy)
+    assert "unused space from deleted projects" in window.size_label.text()
+
+    from biofermentation.db import vacuum_database
+
+    vacuum_database(db_copy)
+    window.refresh()
+    assert "nothing to reclaim" in window.size_label.text()
+    window.close()

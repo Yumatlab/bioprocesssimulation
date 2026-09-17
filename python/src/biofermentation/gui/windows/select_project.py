@@ -190,6 +190,11 @@ class SelectProjectWindow(QWidget):
         buttons = QHBoxLayout()
         self.return_button = QPushButton("Return")
         self.delete_button = QPushButton("Delete Selected Project")
+        self.compact_button = QPushButton("Compact Database…")
+        self.compact_button.setToolTip(
+            "Give the space of deleted projects back to the disk. Nothing in "
+            "the database changes — only how many pages it sits on."
+        )
         self.create_button = QPushButton("Create New Project")
         self.import_button = QPushButton("Import Project…")
         self.import_button.setToolTip(
@@ -198,6 +203,7 @@ class SelectProjectWindow(QWidget):
         self.select_button = QPushButton("Select")
         buttons.addWidget(self.return_button)
         buttons.addWidget(self.delete_button)
+        buttons.addWidget(self.compact_button)
         buttons.addStretch()
         buttons.addWidget(self.import_button)
         buttons.addWidget(self.create_button)
@@ -209,6 +215,7 @@ class SelectProjectWindow(QWidget):
         self.import_button.clicked.connect(self.import_requested.emit)
         self.select_button.clicked.connect(self._select)
         self.delete_button.clicked.connect(self._delete)
+        self.compact_button.clicked.connect(lambda: self.compact())
 
         self.refresh()
 
@@ -220,6 +227,21 @@ class SelectProjectWindow(QWidget):
         self._update_count()
         self._update_buttons()
 
+    def compact(self) -> dict | None:
+        """Rebuild the database file so deleted projects stop costing space.
+
+        Here rather than in a menu because this is the window that shows the
+        size and the window somebody has just deleted a project in — the two
+        moments at which the question comes up at all.
+        """
+        from ..dialogs.compacting import compact_with_progress, report
+
+        result = compact_with_progress(self, self.db_path)
+        if result is not None:
+            self.refresh()
+            report(self, result)
+        return result
+
     def _update_count(self, *_) -> None:
         """How many rows the filter lets through, and how large the file is.
 
@@ -227,9 +249,15 @@ class SelectProjectWindow(QWidget):
         that lost its projects.
         """
         shown, total = self.proxy.rowCount(), self.model.rowCount()
-        size = self.db_path.stat().st_size / 1024 / 1024 if self.db_path.is_file() else 0.0
         counted = f"{shown} of {total} projects" if shown != total else f"{total} projects"
-        self.size_label.setText(f"{counted} — database {size:.2f} MB")
+        try:
+            from ..dialogs.compacting import describe
+
+            self.size_label.setText(f"{counted} — database {describe(self.db_path)}")
+        except Exception:
+            # A size line is not worth a window that will not open.
+            size = self.db_path.stat().st_size / 1024 / 1024 if self.db_path.is_file() else 0.0
+            self.size_label.setText(f"{counted} — database {size:.2f} MB")
 
     def selected_project(self) -> dict | None:
         row = self._source_row()

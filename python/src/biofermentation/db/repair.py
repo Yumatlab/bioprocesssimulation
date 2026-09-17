@@ -203,11 +203,49 @@ def remove_dead_parameters(
 #: output is limited. The pH controller has none — it is a P controller with
 #: a dead band — so it has no switch either.
 ANTI_WINDUP_PARAMETERS = (
-    {"name": "f_awpO2", "tex": "aw_{pO_2}", "order": 20},
-    {"name": "f_awtemp", "tex": "aw_{\\vartheta}", "order": 21},
-    {"name": "f_awLW", "tex": "aw_{LW}", "order": 22},
-    {"name": "f_awfeed", "tex": "aw_{feed}", "order": 23},
+    {
+        "name": "f_awpO2",
+        "tex": "aw_{pO_2}",
+        "order": 20,
+        "description": (
+            "Anti-windup for the pO2 controllers: holds the integral while the "
+            "stirrer, the aeration or the gas mixing is at its limit"
+        ),
+    },
+    {
+        "name": "f_awtemp",
+        "tex": "aw_{\\vartheta}",
+        "order": 21,
+        "description": (
+            "Anti-windup for the temperature controller. Without effect: its "
+            "output never reaches the stops of the split range"
+        ),
+    },
+    {
+        "name": "f_awLW",
+        "tex": "aw_{LW}",
+        "order": 22,
+        "description": (
+            "Anti-windup for the liquid weight controller: holds the integral "
+            "while the harvest pump is at its limit"
+        ),
+    },
+    {
+        "name": "f_awfeed",
+        "tex": "aw_{feed}",
+        "order": 23,
+        "description": (
+            "Anti-windup for the feed controller: holds the integral while the "
+            "feed pump is at its limit"
+        ),
+    },
 )
+
+#: Where a parameter's description is stored. Three copies, because a project
+#: carries its own of everything — that is what makes a stored run
+#: reproducible, and it is also why a description added later has to be
+#: written in three places.
+DESCRIBED_TABLES = ("default_modelTab", "model_parameterTab", "project_parameterTab")
 
 #: Where a flag belongs: categoryTab row 'Flags', section 'Parameters',
 #: reading_rate 'cyclic' — changeable while the simulation runs, which is the
@@ -232,7 +270,7 @@ def add_flags(
     model and `project_parameterTab` for every project, always as 0. Nothing
     changes behaviour by being added; the switch has to be thrown.
     """
-    report = {"added": [], "rows": 0, "applied": not dry_run}
+    report = {"added": [], "described": 0, "rows": 0, "applied": not dry_run}
     with get_connection(db_path, readonly=True) as conn:
         category = conn.execute(
             "SELECT categoryID FROM categoryTab WHERE name = ?", (FLAG_CATEGORY,)
@@ -249,7 +287,36 @@ def add_flags(
             == 0
         ]
         report["added"] = [entry["name"] for entry in missing]
-    if dry_run or not missing:
+        # A database that got the flags before they had a description — the
+        # first run of this function wrote none — keeps the rows and needs
+        # only the text. Counted separately, because adding a parameter and
+        # naming one are different repairs.
+        report["described"] = sum(
+            conn.execute(
+                f"SELECT COUNT(*) FROM {table} d JOIN parameterTab p "
+                "ON p.parameterID = d.parameterID "
+                f"WHERE p.name IN ({', '.join('?' * len(parameters))}) "
+                "AND (d.description IS NULL OR d.description = '')",
+                tuple(entry["name"] for entry in parameters),
+            ).fetchone()[0]
+            for table in DESCRIBED_TABLES
+        )
+
+    if dry_run:
+        return report
+
+    if report["described"]:
+        with get_connection(db_path) as conn:
+            for entry in parameters:
+                for table in DESCRIBED_TABLES:
+                    report["rows"] += conn.execute(
+                        f"UPDATE {table} SET description = ? WHERE parameterID = "
+                        "(SELECT parameterID FROM parameterTab WHERE name = ?) "
+                        "AND (description IS NULL OR description = '')",
+                        (entry["description"], entry["name"]),
+                    ).rowcount
+
+    if not missing:
         return report
 
     with get_connection(db_path) as conn:
@@ -279,22 +346,23 @@ def add_flags(
             report["rows"] += 1
             for organism_id in organisms:
                 conn.execute(
-                    "INSERT INTO default_modelTab (organismID, parameterID, value)"
-                    " VALUES (?, ?, 0)",
-                    (organism_id, next_id),
+                    "INSERT INTO default_modelTab (organismID, parameterID, value,"
+                    " description) VALUES (?, ?, 0, ?)",
+                    (organism_id, next_id, entry["description"]),
                 )
                 report["rows"] += 1
             for model_id in models:
                 conn.execute(
-                    "INSERT INTO model_parameterTab (modelID, parameterID, value) VALUES (?, ?, 0)",
-                    (model_id, next_id),
+                    "INSERT INTO model_parameterTab (modelID, parameterID, value,"
+                    " description) VALUES (?, ?, 0, ?)",
+                    (model_id, next_id, entry["description"]),
                 )
                 report["rows"] += 1
             for project_id in projects:
                 conn.execute(
-                    "INSERT INTO project_parameterTab (projectID, parameterID, value)"
-                    " VALUES (?, ?, 0)",
-                    (project_id, next_id),
+                    "INSERT INTO project_parameterTab (projectID, parameterID, value,"
+                    " description) VALUES (?, ?, 0, ?)",
+                    (project_id, next_id, entry["description"]),
                 )
                 report["rows"] += 1
             next_id += 1

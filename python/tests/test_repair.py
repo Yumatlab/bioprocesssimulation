@@ -353,3 +353,42 @@ def test_a_tuned_gain_of_somebody_else_is_left_alone(db_copy: Path):
             "(SELECT parameterID FROM parameterTab WHERE name = 'KP_feedR2')",
         )
     assert "KP_feedR2" not in correct_pichia_feed_gains(db_copy)["changed"]
+
+
+def test_every_anti_windup_flag_carries_a_description(db_copy: Path):
+    """A parameter without one shows its bare name in the tooltip.
+
+    They were added without any — `add_flags` wrote name, TeX and value — so
+    `f_awpO2` stood in the dialog explaining nothing. The text is written into
+    all three tables that keep a copy, and filled in on a database that
+    already has the rows.
+    """
+    from biofermentation.db.connection import get_connection
+    from biofermentation.db.repair import ANTI_WINDUP_PARAMETERS, DESCRIBED_TABLES, add_flags
+
+    with get_connection(db_copy) as conn:
+        for table in DESCRIBED_TABLES:
+            conn.execute(
+                f"UPDATE {table} SET description = NULL WHERE parameterID IN "
+                "(SELECT parameterID FROM parameterTab WHERE name LIKE 'f_aw%')"
+            )
+
+    found = add_flags(db_copy)
+    assert found["added"] == [], "the parameters themselves are there"
+    assert found["described"] > 0, "but the text is missing"
+
+    applied = add_flags(db_copy, dry_run=False)
+    assert applied["rows"] == found["described"]
+    assert add_flags(db_copy, dry_run=False)["described"] == 0, "idempotent"
+
+    expected = {entry["name"]: entry["description"] for entry in ANTI_WINDUP_PARAMETERS}
+    with get_connection(db_copy, readonly=True) as conn:
+        for table in DESCRIBED_TABLES:
+            rows = conn.execute(
+                f"SELECT p.name, d.description FROM {table} d "
+                "JOIN parameterTab p ON p.parameterID = d.parameterID "
+                "WHERE p.name LIKE 'f_aw%'"
+            ).fetchall()
+            assert rows, table
+            for row in rows:
+                assert row["description"] == expected[row["name"]], f"{table}: {row['name']}"
