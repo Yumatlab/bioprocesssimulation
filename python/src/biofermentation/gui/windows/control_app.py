@@ -42,7 +42,7 @@ from ...resources import app_icon_path
 from ..settings import load_settings
 from ..values import format_value, mode_table
 from ..widgets import CONTROL_PANELS, ControllerView, ControlPanel, PhaseGrid, StatusLamp
-from ..widgets.log_view import OPERATION_EVENT, LogView
+from ..widgets.log_view import OPERATION_EVENT, PARAMETER_EVENT, LogView
 from ..widgets.variable_pool import VariablePool
 
 #: Provenance and licence. The middle paragraph is the one the original's
@@ -736,13 +736,20 @@ class ControlWindow(QMainWindow):
     # ---------------------------------------------------------- actions --
 
     def _set_parameter(self, name: str, value: float) -> None:
-        """Every write goes through the guard, so no tick sees it half done."""
+        """Every write goes through the guard, so no tick sees it half done.
+
+        Typed as a parameter change, like the dialog path. It used to take the
+        default type and land under "Process", so "Include parameter updates"
+        could not hide a setpoint someone had turned on a panel — the one kind
+        of parameter change that happens most often.
+        """
         with self.runner.editing() as state:
             old = state.p.get(name)
             state.p[name] = value
             self.note(
                 f"Parameter {name} changed from {self._named(name, old)}"
-                f" to {self._named(name, value)}"
+                f" to {self._named(name, value)}",
+                PARAMETER_EVENT,
             )
 
     def _set_dt(self, seconds: int) -> None:

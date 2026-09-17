@@ -541,6 +541,24 @@ def test_a_log_entry_carries_a_title_a_clock_and_the_process_time(window):
     assert entry.datetime in line
 
 
+def test_a_setpoint_turned_on_a_panel_counts_as_a_parameter_update(window):
+    """Es war der häufigste Fall und der einzige, den der Filter nicht sah.
+
+    _set_parameter nahm den Vorgabetyp und landete unter "Process". Wer den
+    Haken "Include parameter updates" entfernte, sah die Sollwerte, die er
+    gerade selbst am Panel gedreht hatte, weiterhin.
+    """
+    from biofermentation.gui.widgets.log_view import PARAMETER_EVENT
+
+    window._set_parameter("pHw", 6.9)
+    entry = window.log_view.entries[-1]
+    assert entry.event_type == PARAMETER_EVENT
+    assert "pHw" in entry.message
+
+    window.log_view.parameter_checkbox.setChecked(False)
+    assert "pHw" not in window.log_view.view.toPlainText()
+
+
 def test_the_log_can_hide_parameter_updates(window):
     window.note("Parameter KP_pH has been changed", "Parameter Value Change")
     window.note("Process paused", "Process")
