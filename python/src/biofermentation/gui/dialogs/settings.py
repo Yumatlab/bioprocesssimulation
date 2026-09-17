@@ -130,14 +130,20 @@ class SettingsDialog(QDialog):
 
         self.storage_note = _note("")
         store_layout.addWidget(self.storage_note)
+
+        self.ask_box = QCheckBox("Offer this again in the closing dialog")
+        self.ask_box.setChecked(settings.ask_storage_on_save)
+        self.ask_box.setToolTip(
+            "Unticked, saving uses the value above without asking — one "
+            "decision for a whole course instead of one per student."
+        )
+        store_layout.addWidget(self.ask_box)
         store_layout.addWidget(
             _note(
                 "Δt is what the controllers are tuned for and is not the place "
                 "to save room — this is. The run itself is unchanged: every "
                 "step is computed and plotted, only fewer are written to the "
-                "file. What a reopened project can show is what was stored. "
-                "This is the default; the closing dialog offers it again for "
-                "the run in hand."
+                "file. What a reopened project can show is what was stored."
             )
         )
         self.storage_box.valueChanged.connect(self._describe_storage)
@@ -196,6 +202,7 @@ class SettingsDialog(QDialog):
             couple_refresh_to_dt=self.couple_box.isChecked(),
             refresh_seconds=self.refresh_box.value(),
             storage_interval=self.storage_box.value(),
+            ask_storage_on_save=self.ask_box.isChecked(),
         )
 
     def accept(self) -> None:

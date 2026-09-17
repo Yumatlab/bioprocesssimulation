@@ -141,13 +141,13 @@ FEED_PANEL = PanelSpec(
             "c_{S{n}Lw} [g/l]",
             actual="cS{n}L",
             actual_label="c_{S{n}L} [g/l]",
-            decimals=4,
+            decimals=3,
             modes=(1,),
         ),
-        FieldSpec("FR{n}w", "F_{R{n}w} [l/h]", decimals=4, modes=(0,)),
+        FieldSpec("FR{n}w", "F_{R{n}w} [l/h]", decimals=3, modes=(0,)),
         # Read-only, as in the original: the maximum belongs to the reservoir,
         # not to the moment. It is set in Parameters or by a phase.
-        FieldSpec("FR{n}max", "F_{R{n}max} [l/h]", decimals=4, read_only=True),
+        FieldSpec("FR{n}max", "F_{R{n}max} [l/h]", decimals=3, read_only=True),
     ],
     switches=[SwitchSpec("f_feed", "Feed")],
     # One block per reservoir; the project says how many there are.

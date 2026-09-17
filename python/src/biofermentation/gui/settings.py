@@ -57,6 +57,10 @@ class Settings:
     #: 1 443 624 values. Every fifth step is a fifth of the file and the same
     #: simulation.
     storage_interval: int = 1
+    #: Whether the closing dialog asks for the resolution again. Off, it uses
+    #: `storage_interval` silently — one decision for the whole course instead
+    #: of a question every student answers differently.
+    ask_storage_on_save: bool = True
 
     def shows(self, tab: str) -> bool:
         return tab not in self.hidden_tabs
@@ -81,6 +85,7 @@ class Settings:
             "couple_refresh_to_dt": bool(self.couple_refresh_to_dt),
             "refresh_seconds": float(self.refresh_seconds),
             "storage_interval": int(self.storage_interval),
+            "ask_storage_on_save": bool(self.ask_storage_on_save),
         }
 
 
@@ -129,6 +134,7 @@ def load_settings(path: Path | None = None) -> tuple[Settings, str]:
             couple_refresh_to_dt=bool(document.get("couple_refresh_to_dt", True)),
             refresh_seconds=refresh,
             storage_interval=interval,
+            ask_storage_on_save=bool(document.get("ask_storage_on_save", True)),
         ), ""
     except (ValueError, yaml.YAMLError, OSError) as error:
         return Settings(), f"{path.name}: {error}"
@@ -151,6 +157,8 @@ def save_settings(settings: Settings, path: Path | None = None) -> Path:
         "#               goes Δt/refresh times faster than the real process.\n"
         "# storage_interval: write only every n-th step. 1 is everything.\n"
         "#               Δt stays what it is — this is file size, not accuracy.\n"
+        "# ask_storage_on_save: whether the closing dialog offers that field\n"
+        "#               again. false uses the setting above without asking.\n"
         + yaml.safe_dump(settings.as_document(), sort_keys=True, allow_unicode=True),
         encoding="utf-8",
     )

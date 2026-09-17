@@ -1641,3 +1641,44 @@ def test_an_older_database_is_given_the_switches_when_it_is_opened(db):
     assert values and set(values) == {0.0}, "added as off, so nothing computes differently"
     # Idempotent: opening the application twice adds them once.
     assert _ensure_switch_parameters(db) == []
+
+
+def test_the_stored_resolution_can_be_hidden_from_the_closing_dialog(qapp):
+    """Hidden, the field still carries the setting into the save.
+
+    The box exists either way, so `storage_interval()` answers the same
+    question whether or not anybody was asked it.
+    """
+    from biofermentation.gui.dialogs.closing import ClosingDialog
+
+    info = ProjectInfo(
+        projectID=1,
+        name="Demo",
+        description="",
+        author="",
+        created_on=None,
+        recent_use=None,
+        organismID=1,
+        organism_name="E. coli",
+        function_file="Escherichia_coli",
+        initialization_file=None,
+        reservoirs=1,
+        bioreactorID=1,
+        bioreactor_name="BIOSTAT ED",
+        modelID=1,
+    )
+    asked = ClosingDialog(info, storage_interval=5, dt_seconds=2.0, ask_storage=True)
+    assert asked.storage_box.isVisibleTo(asked)
+    assert asked.storage_interval() == 5
+
+    quiet = ClosingDialog(info, storage_interval=5, dt_seconds=2.0, ask_storage=False)
+    assert not quiet.storage_box.isVisibleTo(quiet), "the row is not built"
+    assert quiet.storage_interval() == 5, "and the setting still reaches the save"
+
+
+def test_the_feed_panel_shows_three_decimals(qapp):
+    """Four was more than a pump rate is known to."""
+    from biofermentation.gui.widgets.panel_specs import FEED_PANEL
+
+    decimals = {spec.parameter: spec.decimals for spec in FEED_PANEL.fields}
+    assert decimals == {"cS{n}Lw": 3, "FR{n}w": 3, "FR{n}max": 3}

@@ -314,10 +314,17 @@ look at first for a version 4:
 
 **Technically:**
 
-- **Anti-windup reaches E. coli only.** Three loops have a switch in their
-  Parameters dialog (pO2, liquid weight, feed) and the E. coli model reads all
-  three. The Pichia model is not wired up, and `f_awtemp` has no reader — see
-  the manual, "Anti-windup", for the measurement behind that.
+- **Anti-windup is wired in both organisms.** Three loops have a switch in
+  their Parameters dialog (pO2, liquid weight, feed); `f_awtemp` has no reader
+  — see the manual, "Anti-windup", for the measurement behind that.
+- **Pichia's control chain does not close, and the reason is measured.** Its
+  closed-loop feed carries the gains of the pO2 feed controller, sign and all,
+  so the pump never opens; and it reads the *measured* concentration, which
+  never moves, because `meas_transfer_function` converts the step width twice.
+  That second one is MATLAB's own arithmetic and is covered by the verified
+  reference run, so correcting it is a decision, not a fix.
+  `python tools/tune_pichia.py` prints all of it, including the gains that
+  would hold the setpoint once it is decided.
 - **`PhaseFeedEditor`** from the MATLAB version is not ported.
 - **Two plot settings have no effect**: `axisyoffset` and
   `axisylabeloffsetabove`/`-below`.

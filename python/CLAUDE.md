@@ -932,12 +932,56 @@ standen sie gar nicht.
   mit einem Satz statt eines Schalters: ein fehlendes Bedienelement ist von
   einem nicht gefundenen nicht zu unterscheiden.
 
-**Pichia bleibt außen vor.** Dort steht pO2 über die ganze Laufzeit über
-100 % — die oben genannte Überschwingung der Sauerstoffbilanz, nicht die
-Reglereinstellung. Auch mit den dokumentierten Werten für
-`yXpOgr`/`yCpO`/`qOpXm` bleibt es bei RMS 93, mit alten wie mit neuen
-Verstärkungen. Solange die Bilanz pO2 > 100 % zulässt, ist dort nichts zu
-tunen.
+**Pichia bleibt außen vor — und jetzt ist auch klar, warum.**
+`tools/tune_pichia.py` ist der Messstand dazu, aufgebaut wie `tune_po2.py`,
+und er kommt zu einem anderen Ergebnis: **es gibt dort nichts zu tunen, weil
+kein Regelkreis einen Arbeitspunkt hat.** Drei Befunde, alle gemessen, alle
+als Test festgehalten.
+
+1. **Das Anti-Windup des Rührerreglers stand in der falschen Einheit.**
+   `clamp(cI_agi, 0, NStmax)` begrenzt einen normierten Term mit einer Grenze
+   in min⁻¹: die Obergrenze 1500 kann nie greifen, die Untergrenze 0 immer —
+   der I-Anteil kann nicht mehr negativ werden, und ein einmal hochgefahrener
+   Rührer kommt nicht mehr herunter. Gemessen an Projekt 519, `Mode_pO2` = 1:
+   pO2 endet bei **108,7 %** mit abgeschaltetem Schalter und bei **78,3 %**
+   mit eingeschaltetem (RMS gegen 20 %: 96 → 72). Der Schalter **ersetzt** die
+   Klammer, er tritt nicht neben sie: aus ist bitgleich die Quelle, an ist
+   konditionale Integration an den echten Grenzen [0,3, 1,0]. Nachgemessen über
+   alle vier pO2-Modi: mit allen Schaltern aus ist der Lauf bitgleich zu vorher.
+2. **Die Verstärkungen des Methanol-Feeds haben das falsche Vorzeichen.**
+   `KP_feedR2`/`KI_feedR2`/`KD_feedR2` = −2/−15/−0,009 sind **exakt** die Werte
+   von `KP_feedpO2`/`KI_feedpO2`/`KD_feedpO2` — dort ist ein negatives
+   Vorzeichen richtig (viel pO2 heißt: es darf mehr gefüttert werden), auf
+   einem Substratkreis mit `cS2Lw − cS2L` kehrt es den Regler um: zu wenig
+   Methanol ergibt einen positiven Fehler, eine negative Stellgröße und eine
+   Pumpe, die zubleibt. Gemessen: Pumpe 100 % der Zeit am Anschlag, `cS2L`
+   bleibt bei 0,001 g/l gegen einen Sollwert von 1,5.
+3. **Und selbst mit richtigem Vorzeichen regelt der Kreis nichts**, weil er
+   auf ein eingefrorenes Signal regelt. `meas_transfer_function` rechnet
+   `T = dt / 3600` auf ein dt, das bereits in Stunden vorliegt; ein Schritt
+   schließt damit 2,6e-09 des Abstands. **Das ist MATLABs eigene Arithmetik**
+   und verifiziert — der E.-coli-Referenzlauf stimmt bei `pHLm`, `thetaLm`,
+   `pO2m` und `cS1Lm` auf 1e-12 überein. E. coli fällt es nicht auf, weil sein
+   Feed-Regler die *echte* Konzentration liest; Pichias liest die gemessene.
+   Mit einmal statt zweimal umgerechneter Schrittweite folgt `cS2Lm` dem
+   wahren Wert (1,086 gegen 1,092) und der Kreis schließt sich.
+
+**Deshalb sind keine neuen Pichia-Verstärkungen eingetragen.** Der Messstand
+sagt, welche es wären, wenn Punkt 3 entschieden ist — 0,5 / 2 / 0,002 hält
+`cS2L` bei 1,60 g/l gegen 1,5, die Pumpe nie am Anschlag, Biomasse stabil bei
+20 g/l; 15/500/0,02 (die E.-coli-Werte für Reservoir 1) treiben die
+Konzentration auf 82 g/l und die Kultur über die Methanoltoxizität auf 10,7
+g/l zurück. Eingetragen wird davon nichts, solange der Regler auf eine
+eingefrorene Messung schaut: eine Verstärkung, die man nicht prüfen kann, ist
+geraten.
+
+**Der pO2-Kreis ist außerdem versorgungsbegrenzt.** Im Late-Stage-Modell sitzt
+der Rührer in **100 %** der Schritte an einem Anschlag, bei jedem
+Verstärkungssatz — auch mit dem Zehnfachen, dem Zehntel, ohne reinen
+Sauerstoff und mit halber Luft. Selbst am unteren Anschlag liefert der Kessel
+mehr Sauerstoff, als die Kultur aufnimmt; pO2 bleibt bei 72–80 % gegen einen
+Sollwert von 20 %. Solange der Feed nicht läuft, wächst nichts, und solange
+nichts wächst, hat der pO2-Regler nichts zu tun. **Die Kette hängt am Feed.**
 
 ### Offen aus Phase 3
 

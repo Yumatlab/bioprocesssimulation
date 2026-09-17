@@ -28,6 +28,7 @@ from ..base import OrganismMetadata, OrganismModel
 from ..registry import register
 from ..shared import (
     CONTROL_LOOPS,
+    anti_windup,
     clamp,
     henry_co2,
     henry_o2,
@@ -35,6 +36,7 @@ from ..shared import (
     init_common_variables,
     init_controller_states,
     init_physical_constants,
+    integrate,
     meas_transfer_function,
     pt1_filter,
 )
@@ -328,11 +330,13 @@ class PichiaPastoris(OrganismModel):
 
             # One step further behind than E. coli.
             a.cP_feedpO2 = a.ce_feedpO2[prev] * p.KP_feedpO2
-            a.cI_feedpO2 = (
-                a.cI_feedpO2 + (a.ce_feedpO2[prev] + a.ce_feedpO2[back]) / 2 * dt * p.KI_feedpO2
-            )
+            increment = (a.ce_feedpO2[prev] + a.ce_feedpO2[back]) / 2 * dt * p.KI_feedpO2
             a.cD_feedpO2 = (a.ce_feedpO2[prev] - a.ce_feedpO2[back]) / dt * p.KD_feedpO2
 
+            raw = ((a.cP_feedpO2 + a.cI_feedpO2 + increment + a.cD_feedpO2) * 100 + a.yfeedpO2) / 2
+            a.cI_feedpO2 = integrate(
+                a.cI_feedpO2, increment, raw, 0.0, 100.0, active=anti_windup(p, a, "f_awpO2")
+            )
             a.yfeedpO2 = ((a.cP_feedpO2 + a.cI_feedpO2 + a.cD_feedpO2) * 100 + a.yfeedpO2) / 2
             a.yfeedpO2 = clamp(a.yfeedpO2, 0.0, 100.0)
             v.FR1[i] = a.yfeedpO2 / 100 * p.FR1max
@@ -355,9 +359,8 @@ class PichiaPastoris(OrganismModel):
                 a[f"ce_feedR{n}"][i] = a[f"cE_feedR{n}"] / (cSLwmax - cSLwmin)
 
                 a[f"cP_feedR{n}"] = a[f"ce_feedR{n}"][prev] * p[f"KP_feedR{n}"]
-                a[f"cI_feedR{n}"] = (
-                    a[f"cI_feedR{n}"]
-                    + (a[f"ce_feedR{n}"][prev] + a[f"ce_feedR{n}"][back])
+                increment = (
+                    (a[f"ce_feedR{n}"][prev] + a[f"ce_feedR{n}"][back])
                     / 2
                     * dt
                     * p[f"KI_feedR{n}"]
@@ -366,6 +369,14 @@ class PichiaPastoris(OrganismModel):
                     (a[f"ce_feedR{n}"][prev] - a[f"ce_feedR{n}"][back]) / dt * p[f"KD_feedR{n}"]
                 )
 
+                a[f"cI_feedR{n}"] = integrate(
+                    a[f"cI_feedR{n}"],
+                    increment,
+                    a[f"cP_feedR{n}"] + a[f"cI_feedR{n}"] + increment + a[f"cD_feedR{n}"],
+                    0.0,
+                    1.0,
+                    active=anti_windup(p, a, "f_awfeed"),
+                )
                 yFR = clamp(a[f"cP_feedR{n}"] + a[f"cI_feedR{n}"] + a[f"cD_feedR{n}"], 0.0, 1.0)
                 v[f"FR{n}"][i] = p[f"FR{n}max"] * yFR
 
@@ -386,20 +397,36 @@ class PichiaPastoris(OrganismModel):
             a.ce_agi[i] = a.cE_agi / (100 - 1)
 
             a.cP_agi = a.ce_agi[prev] * p.KP_agi
-            a.cI_agi = a.cI_agi + (a.ce_agi[prev] + a.ce_agi[back]) / 2 * dt * p.KI_agi
+            increment = (a.ce_agi[prev] + a.ce_agi[back]) / 2 * dt * p.KI_agi
             # Derivative on the measurement, not on the error: a setpoint
             # change no longer produces a derivative kick.
             a.cD_agi = -p.KD_agi * (v.pO2[prev] - v.pO2[back]) / dt
 
+            # **The switch replaces the original's clamp, it does not join
+            # it.** What the source does here is anti-windup with the wrong
+            # unit: cI_agi is a normalised term that yNSt clamps to [0.3, 1],
+            # and the limit applied to it is NStmax in rpm. The upper bound of
+            # 1500 can never bind; the lower bound of 0 does, and it stops the
+            # integral from ever going negative — so once the stirrer has been
+            # driven up it cannot be brought down again, and pO2 stays above
+            # its setpoint for the rest of the run. Measured on project 519,
+            # Mode_pO2 = 1: pO2 = 112.6 % with NSt at its maximum of 1500 rpm.
+            #
+            # Off, that is reproduced exactly. On, the integral is held only
+            # when the output is already at one of *its own* limits and the
+            # increment points further out.
+            active = anti_windup(p, a, "f_awpO2")
+            a.cI_agi = integrate(
+                a.cI_agi,
+                increment,
+                a.cP_agi + a.cI_agi + increment + a.cD_agi,
+                0.3,
+                1.0,
+                active=active,
+            )
             yNSt = clamp(a.cP_agi + a.cI_agi + a.cD_agi, 0.3, 1.0)
-            # Anti-windup with the wrong unit, reproduced from the original:
-            # cI_agi is a normalised term that yNSt clamps to [0.3, 1], but
-            # the limit here is NStmax in rpm. The upper bound of 1500 can
-            # never bind; the lower bound of 0 does, and it stops the integral
-            # from ever going negative. With KI_agi = 1000 and dt = 0.005 that
-            # lets pO2 overshoot far past 100 %. Whether the MATLAB run shows
-            # the same is a question for the reference run.
-            a.cI_agi = clamp(a.cI_agi, 0.0, p.NStmax)
+            if not active:
+                a.cI_agi = clamp(a.cI_agi, 0.0, p.NStmax)
             v.NSt[i] = yNSt * p.NStmax
 
         elif p.Mode_pO2 == 2:  # aeration
@@ -408,11 +435,17 @@ class PichiaPastoris(OrganismModel):
             a.ce_aeration[i] = a.cE_aeration / (100 - 1)
 
             a.cP_aeration = a.ce_aeration[prev] * p.KP_aeration
-            a.cI_aeration = (
-                a.cI_aeration + (a.ce_aeration[i] + a.ce_aeration[prev]) / 2 * dt * p.KI_aeration
-            )
+            increment = (a.ce_aeration[i] + a.ce_aeration[prev]) / 2 * dt * p.KI_aeration
             a.cD_aeration = (a.ce_aeration[i] - a.ce_aeration[prev]) / dt * p.KD_aeration
 
+            a.cI_aeration = integrate(
+                a.cI_aeration,
+                increment,
+                (a.cP_aeration + a.cI_aeration + increment + a.cD_aeration) * 100,
+                30.0,
+                100.0,
+                active=anti_windup(p, a, "f_awpO2"),
+            )
             yaeration = (a.cP_aeration + a.cI_aeration + a.cD_aeration) * 100
             diff = 0.0
             if yaeration < 30:
@@ -433,10 +466,17 @@ class PichiaPastoris(OrganismModel):
             a.ce_gasmix[i] = a.cE_gasmix / (1 - p.xOAIR)
 
             a.cP_gasmix = a.ce_gasmix[prev] * p.KP_gasmix
-            a.cI_gasmix[i] = (
-                a.cI_gasmix[prev] + (a.ce_gasmix[prev] + a.ce_gasmix[back]) / 2 * dt * p.KI_gasmix
-            )
+            increment = (a.ce_gasmix[prev] + a.ce_gasmix[back]) / 2 * dt * p.KI_gasmix
             a.cD_gasmix = (a.ce_gasmix[prev] - a.ce_gasmix[back]) / dt * p.KD_gasmix
+
+            a.cI_gasmix[i] = integrate(
+                a.cI_gasmix[prev],
+                increment,
+                (a.cP_gasmix + a.cI_gasmix[prev] + increment + a.cD_gasmix) * 100,
+                p.xOAIR * 100,
+                100.0,
+                active=anti_windup(p, a, "f_awpO2"),
+            )
 
             ygasmix = (a.cP_gasmix + a.cI_gasmix[prev] + a.cD_gasmix) * 100
             ygasmix = clamp(ygasmix, p.xOAIR * 100, 100.0)
@@ -499,9 +539,17 @@ class PichiaPastoris(OrganismModel):
 
             cP_LW = a.ce_LW[i] * p.KP_LW
             a.cP_LW = cP_LW
-            a.cI_LW[i] = a.cI_LW[prev] + (a.ce_LW[i] + a.ce_LW[prev]) / 2 * dt * p.KI_LW
+            increment = (a.ce_LW[i] + a.ce_LW[prev]) / 2 * dt * p.KI_LW
             cD_LW = (a.ce_LW[i] - a.ce_LW[prev]) / dt * p.KD_LW
             a.cD_LW = cD_LW
+            a.cI_LW[i] = integrate(
+                a.cI_LW[prev],
+                increment,
+                (cP_LW + a.cI_LW[prev] + increment + cD_LW) * 100,
+                0.0,
+                100.0,
+                active=anti_windup(p, a, "f_awLW"),
+            )
 
             yLW = clamp((cP_LW + a.cI_LW[i] + cD_LW) * 100, 0.0, 100.0)
             v.FH[i] = yLW / 100 * p.FHmax

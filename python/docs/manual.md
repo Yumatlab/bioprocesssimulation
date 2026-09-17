@@ -217,6 +217,14 @@ between −2.3 and +3.2 over a two-hour batch against a setpoint 12 K away, on a
 loop whose stops sit at −10 and +10000. There is nothing there to wind up, and a
 switch that changes nothing would only suggest otherwise.
 
+**For *Pichia* the switch does more than hold an integrator.** Its stirrer
+controller carries an anti-windup of its own from the MATLAB source, written in
+the wrong unit: it keeps the integral from ever going negative, so a stirrer
+that has once been driven up cannot come down again. With the switch off that
+is reproduced exactly; with it on, the integral is free and pO2 ends at 78 %
+instead of 109 % on the shipped Pichia project. Neither reaches the 20 %
+setpoint — see section 9.
+
 ---
 
 ## 5. How a process runs: phases
@@ -425,7 +433,10 @@ stopped.
 
 **The value can be changed again when saving.** The closing dialog carries the
 same field, preset from the setting. That is the only moment at which anybody
-knows how long the run actually turned out to be.
+knows how long the run actually turned out to be. The check box **"Offer this
+again in the closing dialog"** takes that question away: unticked, saving uses
+the value set here without asking — one decision for a whole course instead of
+one per student.
 
 **What a thinned project shows when loaded:** exactly the points that were
 stored. Plot, data table and export then have the coarser resolution — the steps
@@ -462,6 +473,18 @@ one.
 **Unchecked in detail:** `Mode_pH` = Manual, `Mode_temp` = Manual and
 `Mode_pO2` = Aeration / Gasmix / Feed. The reference run does not use them. The
 pulse feed is only tested structurally.
+
+**The *Pichia* control loops do not close, and this is measured.** Its
+closed-loop feed carries the gains of the pO2 feed controller — the same three
+numbers, negative — which inverts a substrate loop: too little methanol gives a
+positive error, a negative output, and a pump that stays shut. And it reads the
+*measured* concentration, which barely moves: the first-order lag converts the
+step width twice, so a step closes 2.6·10⁻⁹ of the gap. That second one is the
+MATLAB original's own arithmetic and is part of what the reference run verifies,
+so it is left as it is and named here instead. The consequence for a user is
+concrete: with *Pichia*, **Closed loop on the feed does nothing**, and because
+nothing grows, pO2 stays far above its setpoint whatever the controller gains
+are. `python tools/tune_pichia.py` prints the whole chain of measurements.
 
 **A known quirk:** some time series are computed but not stored. The offgas
 fractions are called `xO2` and `xCO2` in the model and have no row at all in

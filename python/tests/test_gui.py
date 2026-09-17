@@ -661,3 +661,15 @@ def test_the_starting_screen_offers_settings_where_the_configurator_was(qapp):
     assert hasattr(screen, "settings_button")
     assert not hasattr(screen, "model_configurator_button")
     assert screen.settings_button.isEnabled()
+
+
+def test_the_closing_dialog_can_be_told_not_to_ask(tmp_path):
+    """One decision for a whole course instead of one per student."""
+    from biofermentation.gui.settings import Settings, load_settings, save_settings
+
+    path = tmp_path / "settings.yaml"
+    save_settings(Settings(storage_interval=5, ask_storage_on_save=False), path)
+    back, problem = load_settings(path)
+    assert problem == ""
+    assert back.ask_storage_on_save is False
+    assert back.storage_interval == 5, "hidden, not forgotten"

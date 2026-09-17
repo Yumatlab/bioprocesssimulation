@@ -983,3 +983,75 @@ def test_the_temperature_master_stays_away_from_its_stops(registry):
     heating_stop = 100.0 / p["KP_temp2h"]
     assert offsets.min() > cooling_stop, "the cooling stop is reached — wire f_awtemp"
     assert offsets.max() < heating_stop
+
+
+def test_pichia_reads_the_same_three_flags(registry):
+    """The switch reaches both organisms, or it reaches neither honestly."""
+    import re
+
+    from biofermentation.gui.widgets.panel_specs import CONTROL_PANELS
+
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src/biofermentation/organisms/pichia_pastoris/model.py"
+    ).read_text(encoding="utf-8")
+    read = set(re.findall(r'anti_windup\(p, a, "([^"]+)"\)', source))
+    offered = {spec.anti_windup for spec in CONTROL_PANELS if spec.anti_windup}
+    assert read == offered
+
+
+def test_the_pichia_stirrer_integral_can_only_fall_with_the_switch_on(registry):
+    """The original clamps the integral in the wrong unit; the switch replaces it.
+
+    `clamp(cI_agi, 0, NStmax)` is anti-windup applied to a normalised term with
+    a limit in rpm: the upper bound of 1500 cannot bind, the lower bound of 0
+    always can, and once the stirrer has been driven up the integral can never
+    come back down. Measured on the shipped Pichia parameters, Mode_pO2 = 1:
+    pO2 ends at 108.7 % with the switch off and at 78.3 % with it on.
+    """
+    import numpy as np
+
+    from biofermentation.core.runner import build_state, run_steps
+    from biofermentation.db import load_phases
+    from biofermentation.organisms import get_organism
+
+    def run(extra):
+        p = dict(load_phases(TEMPLATE_DB, 519).p) | {
+            "f_Inoc": 1.0,
+            "f_InocStart": 1.0,
+            "Mode_pO2": 1.0,
+        } | extra
+        model = get_organism("pichia_pastoris")
+        state = build_state(p, model, dt=2 / 3600)
+        run_steps(state, model, 1800)
+        return state, float(np.asarray(state.v.pO2)[state.idx])
+
+    off_state, off_pO2 = run({})
+    on_state, on_pO2 = run({"f_awpO2": 1.0})
+
+    assert off_state.a.cI_agi >= 0.0, "the original's clamp keeps the integral positive"
+    assert on_state.a.cI_agi < off_state.a.cI_agi, "released, it can fall again"
+    # The setpoint is 20 %; neither run reaches it (see tools/tune_pichia.py),
+    # but the released integrator gets measurably closer.
+    assert on_pO2 < off_pO2 - 20.0, f"off {off_pO2:.1f} %, on {on_pO2:.1f} %"
+
+
+def test_pichia_measurements_do_not_move_and_that_is_matlab(registry):
+    """The lag the whole Pichia feed loop hangs on, held down by a test.
+
+    `meas_transfer_function` divides a dt that is already in hours by 3600
+    again, so a step closes 2.6e-09 of the gap between the true value and the
+    measured one. It is MATLAB's own arithmetic — the E. coli reference run
+    agrees on the measured quantities to 1e-12 — and it is why Pichia's
+    closed-loop feed, which reads `cS2Lm` rather than `cS2L`, cannot hold a
+    setpoint at any gain.
+
+    If somebody decides to correct it, this test fails and the decision has to
+    be written down with the reference run it changes.
+    """
+    from biofermentation.organisms.shared import meas_transfer_function
+
+    dt = 2 / 3600  # hours, as the state carries it
+    moved = meas_transfer_function(current_value=10.0, previous_value=0.0, tau=60.0, dt=dt)
+    assert moved == pytest.approx(10.0 * dt / 3600 / 60, rel=1e-12)
+    assert moved < 1e-7, "the measurement is frozen for any practical run"

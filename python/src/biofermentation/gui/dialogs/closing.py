@@ -63,6 +63,7 @@ class ClosingDialog(QDialog):
         *,
         running: bool = False,
         storage_interval: int = 1,
+        ask_storage: bool = True,
         dt_seconds: float = 0.0,
         parent: QWidget | None = None,
     ):
@@ -90,18 +91,22 @@ class ClosingDialog(QDialog):
         form.addRow("Description:", self.description_field)
 
         self._dt_seconds = float(dt_seconds or 0)
+        # The box exists either way, so `storage_interval()` answers the same
+        # question whether or not it was asked; hidden, it simply carries the
+        # setting through.
         self.storage_box = QSpinBox()
         self.storage_box.setRange(1, 3600)
         self.storage_box.setValue(max(1, int(storage_interval)))
         self.storage_box.setMaximumWidth(140)
         self.storage_note = QLabel()
         self.storage_note.setStyleSheet("color: #6a6a6a;")
-        storage_row = QHBoxLayout()
-        storage_row.addWidget(self.storage_box)
-        storage_row.addWidget(self.storage_note, 1)
-        form.addRow("Store one point per:", storage_row)
         self.storage_box.valueChanged.connect(self._describe_storage)
         self._describe_storage(self.storage_box.value())
+        if ask_storage:
+            storage_row = QHBoxLayout()
+            storage_row.addWidget(self.storage_box)
+            storage_row.addWidget(self.storage_note, 1)
+            form.addRow("Store one point per:", storage_row)
 
         layout.addLayout(form)
 

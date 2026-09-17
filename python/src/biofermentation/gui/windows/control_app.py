@@ -1046,6 +1046,7 @@ class ControlWindow(QMainWindow):
             self.setup.info,
             running=was_running,
             storage_interval=self.settings.storage_interval,
+            ask_storage=self.settings.ask_storage_on_save,
             dt_seconds=float(self.runner.state.p.get("deltatsec", 0) or 0),
             parent=self,
         )
