@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -248,7 +249,16 @@ class _EditorBase(QDialog):
 
 
 class ControllerParametersDialog(_EditorBase):
-    """The gains of one controller, as DialogBox2 to DialogBox6 show them."""
+    """The gains of one controller, as DialogBox2 to DialogBox6 show them.
+
+    **More than four groups go into two columns.** Only pO2 has that many: its
+    five are the four manipulated variables plus the sensor, and stacked they
+    made a dialog taller than a laptop screen. Three PID triples in a column
+    are a list; five are a scroll.
+    """
+
+    #: Above this many groups the dialog lays them out two per row.
+    COLUMN_LIMIT = 4
 
     def __init__(self, spec, p, *, reservoirs: int = 1, editable: bool = True, parent=None):
         super().__init__(f"{spec.title} Parameters", parent)
@@ -275,6 +285,7 @@ class ControllerParametersDialog(_EditorBase):
                 )
 
         shown = 0
+        boxes: list[QGroupBox] = []
         for group in groups:
             box = QGroupBox(group.title)
             form = QFormLayout(box)
@@ -289,9 +300,27 @@ class ControllerParametersDialog(_EditorBase):
                 form.addRow(_rich(tex_to_html(label) + ":"), widget)
                 shown += 1
             if form.rowCount():
+                boxes.append(box)
+
+        if len(boxes) > self.COLUMN_LIMIT:
+            grid = QGridLayout()
+            for position, box in enumerate(boxes):
+                row, column = divmod(position, 2)
+                # An odd one at the end takes the whole row rather than half
+                # of it: half a row with nothing beside it reads as a gap.
+                if position == len(boxes) - 1 and len(boxes) % 2:
+                    grid.addWidget(box, row, 0, 1, 2)
+                else:
+                    grid.addWidget(box, row, column)
+            grid.setColumnStretch(0, 1)
+            grid.setColumnStretch(1, 1)
+            layout.addLayout(grid)
+        else:
+            for box in boxes:
                 layout.addWidget(box)
 
         if spec.anti_windup:
+            # Full width under the grid: it carries a paragraph of its own.
             layout.addWidget(self._anti_windup_box(spec, p, editable=editable))
             shown += 1
 

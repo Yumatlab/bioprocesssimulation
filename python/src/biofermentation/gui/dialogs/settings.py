@@ -38,7 +38,11 @@ class SettingsDialog(QDialog):
     def __init__(self, parent=None, *, path: Path | None = None):
         super().__init__(parent)
         self.setWindowTitle("Settings")
-        self.setMinimumWidth(440)
+        # Wide enough for the explanations, which are what this dialog is
+        # mostly made of: at 440 px every note wrapped into four or five lines
+        # and the group they belong to was taller than the setting itself.
+        # 680 puts each of them on two.
+        self.setMinimumWidth(680)
         self._path = path
         settings, problem = load_settings(path)
 
@@ -150,6 +154,9 @@ class SettingsDialog(QDialog):
         self._describe_storage(self.storage_box.value())
         layout.addWidget(store)
 
+        # The slack goes here, so the closing note keeps its place above the
+        # buttons instead of drifting into the middle of the dialog.
+        layout.addStretch()
         layout.addWidget(
             _note("Takes effect the next time a project is opened, not in a window already open.")
         )
@@ -160,6 +167,15 @@ class SettingsDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+        # Opened at what it asks for, at the width it is given. A word-wrapped
+        # note reports its height without knowing how wide it will be, so the
+        # hint is generous — 795 px where the layout would fit in 615 — and
+        # the stretch above puts that slack at the bottom. Taking
+        # `heightForWidth` instead clipped the last note by two lines: it is
+        # the group boxes that report it too tightly, and a dialog that hides
+        # the end of a sentence is worse than one with room to spare.
+        self.resize(max(self.minimumWidth(), self.sizeHint().width()), self.sizeHint().height())
 
     def _follow_coupling(self, coupled: bool) -> None:
         """A field that changes nothing belongs greyed out."""

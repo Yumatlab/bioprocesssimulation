@@ -912,6 +912,22 @@ standen sie gar nicht.
 - **Die Änderungsliste des Phasendialogs liest einen Schalter als Stellung**,
   nicht als Zahl: „f_acid: Off → On". Ein Protokoll, in dem „0 → 1" steht,
   zwingt den Leser, die Bedeutung selbst nachzuschlagen.
+- **Mehr als vier Gruppen stehen zu zweit nebeneinander** (`COLUMN_LIMIT`).
+  Das betrifft nur pO2: seine fünf Gruppen sind die vier Stellgrößen plus der
+  Sensor, und untereinander ergaben sie einen Dialog von 837 px Höhe — mit
+  Raster 557 bei gleicher Breite. Eine ungerade letzte Gruppe nimmt die ganze
+  Zeile, ebenso das Anti-Windup-Feld darunter: eine halbe Zeile mit nichts
+  daneben liest sich als Lücke. pH und Temperatur haben drei Gruppen und
+  bleiben einspaltig — die Regel greift nur, wo sie gebraucht wird.
+- **Der Einstellungsdialog ist 680 px breit, und seine Höhe kommt vom
+  großzügigen Hinweis.** Er besteht überwiegend aus Erklärungen; bei 440 px
+  brach jede Notiz auf vier bis fünf Zeilen um. Ein umbrechendes `QLabel`
+  meldet seine Höhe, ohne seine künftige Breite zu kennen: `sizeHint()` sagt
+  795 px, wo das Layout mit 615 auskäme. Über `heightForWidth` zu gehen klingt
+  richtig und schneidet die letzte Notiz um zwei Zeilen ab — die Gruppenkästen
+  melden sie zu knapp. Deshalb der großzügige Wert plus ein `addStretch()`,
+  das den Überschuss nach unten schiebt: ein Dialog mit Luft ist besser als
+  einer, der das Ende eines Satzes verbirgt.
 - **Drei Kreise haben einen Schalter, zwei nicht, und die zwei aus
   verschiedenen Gründen.** pH hat keinen Integrator (P-Regler mit Totband).
   Der Temperatur-Master hat einen, **erreicht seine Anschläge aber nie**:

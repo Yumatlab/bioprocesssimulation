@@ -1765,3 +1765,67 @@ def test_the_full_parameter_dialog_draws_flags_the_same_way(window):
     )
     assert isinstance(dialog._boxes["f_acid"], SwitchBox)
     assert not isinstance(dialog._boxes["pHw"], SwitchBox)
+
+
+# ------------------------------------------------- how a dialog is shaped --
+
+
+def _group_boxes(dialog):
+    from PySide6.QtWidgets import QGroupBox
+
+    dialog.resize(dialog.sizeHint())
+    dialog.show()
+    return [box for box in dialog.findChildren(QGroupBox) if box.title()]
+
+
+def test_the_po2_gains_stand_two_by_two(window):
+    """Five groups in a column made a dialog taller than a laptop screen.
+
+    pO2 is the only controller with more than four: the four manipulated
+    variables and the sensor. Measured before and after, at the same width:
+    837 px tall against 557.
+    """
+    from biofermentation.gui.dialogs.parameters import ControllerParametersDialog
+    from biofermentation.gui.widgets.panel_specs import CONTROL_PANELS
+
+    spec = next(s for s in CONTROL_PANELS if s.title == "pO2-Control")
+    dialog = ControllerParametersDialog(spec, window.runner.state.p, reservoirs=1)
+    boxes = {box.title(): box.geometry() for box in _group_boxes(dialog)}
+
+    assert boxes["Agitation"].y() == boxes["Gasmix"].y(), "first row"
+    assert boxes["Agitation"].x() < boxes["Gasmix"].x()
+    assert boxes["Aeration"].y() == boxes["Feed"].y(), "second row"
+    assert boxes["Aeration"].y() > boxes["Agitation"].y()
+    # The odd one out takes the whole row rather than half of it.
+    assert boxes["Sensor"].width() > boxes["Agitation"].width()
+    assert boxes["Anti-windup"].y() > boxes["Sensor"].y()
+    assert dialog.sizeHint().height() < 700
+
+
+def test_a_controller_with_three_groups_stays_in_one_column(window):
+    """The rule earns its keep only where it is needed."""
+    from biofermentation.gui.dialogs.parameters import ControllerParametersDialog
+    from biofermentation.gui.widgets.panel_specs import CONTROL_PANELS
+
+    for title in ("pH-Control", "Temperature-Control"):
+        spec = next(s for s in CONTROL_PANELS if s.title == title)
+        dialog = ControllerParametersDialog(spec, window.runner.state.p, reservoirs=1)
+        tops = [box.geometry().y() for box in _group_boxes(dialog)]
+        assert len(tops) == len(set(tops)), f"{title} put two groups on one row"
+
+
+def test_the_settings_dialog_is_wide_enough_to_read(qapp, tmp_path):
+    """It is mostly explanation, and at 440 px every note wrapped five times."""
+    from PySide6.QtWidgets import QLabel
+
+    from biofermentation.gui.dialogs.settings import SettingsDialog
+
+    dialog = SettingsDialog(path=tmp_path / "settings.yaml")
+    dialog.show()
+    assert dialog.width() >= 680
+
+    # Nothing may be cut off at the bottom: a dialog that hides the end of a
+    # sentence is worse than one with room to spare.
+    for label in dialog.findChildren(QLabel):
+        bottom = label.mapTo(dialog, label.rect().bottomLeft()).y()
+        assert bottom <= dialog.height(), f"clipped: {label.text()[:40]}"
