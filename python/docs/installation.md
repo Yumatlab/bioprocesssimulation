@@ -13,7 +13,12 @@ latest tag.
 | System | File | Use |
 |---|---|---|
 | Windows | `BiofermentationSimulation.exe` | double-click, no installation |
-| macOS | `Biofermentation Simulation.app` | drag into `/Applications` |
+| macOS | `BiofermentationSimulation-macos.zip` | unzip, drag the app into `/Applications` |
+
+The macOS download is a zip because an `.app` is a folder, and a folder does
+not survive the way GitHub hands files out: the executable bit and the internal
+symlinks are lost, and what arrives is a few hundred loose files. The archive is
+made on the build machine with macOS's own `ditto`, which keeps both.
 
 ### The warning on first start
 
@@ -32,9 +37,47 @@ After that it starts normally.
 
 Both only have to be done once.
 
-If you want certainty, check the checksum of the downloaded file against the one
-in the release entry — that is the statement that carries weight, not the
-signature.
+### Checking that the file is the one that was built
+
+Every release lists the SHA-256 of each file, in its text and as
+`SHA256SUMS.txt`. A checksum that matches says the bytes on your disk are the
+bytes the build produced; it is the statement that carries weight here, and it
+costs one command.
+
+**Windows**, in PowerShell, in the folder you downloaded into:
+
+```powershell
+Get-FileHash .\BiofermentationSimulation.exe -Algorithm SHA256
+```
+
+**macOS**, in Terminal:
+
+```bash
+shasum -a 256 ~/Downloads/BiofermentationSimulation-macos.zip
+```
+
+Compare what comes back with the line in the release. Upper and lower case do
+not matter; every other character does. If they differ, do not open the file —
+either the download broke or it is not the file that was built.
+
+**One step further**, if this repository is public: every build is attested by
+GitHub, which records that this exact file came out of this exact commit in
+this workflow. With the [GitHub CLI](https://cli.github.com/) installed:
+
+```bash
+gh attestation verify BiofermentationSimulation-macos.zip --repo Yumatlab/bioprocesssimulation
+```
+
+That is a stronger statement than a code-signing certificate, and it costs
+nothing. It is not available for a private repository on a free plan — the
+release then carries the checksums alone, and the build step that would have
+produced the attestation is allowed to fail without taking the release with
+it.
+
+> **A private repository has one more consequence:** only people invited to it
+> can download a release at all. To hand the application to a course, either
+> make the repository public or pass the two files on another way — and then
+> the checksums from the release are what somebody compares against.
 
 ### Where the data lives
 
@@ -113,8 +156,15 @@ git push origin v3.0.0
 ```
 
 The CI first runs the tests on all three systems, then builds on Windows and
-macOS and attaches both results to a release entry. No build without green tests
-— `needs: test`.
+macOS and attaches both results to a release entry, together with their SHA-256
+checksums in `SHA256SUMS.txt` and in the release text. No build without green
+tests — `needs: test`.
+
+**Build first, tag second.** The same matrix runs from the Actions tab through
+*Run workflow* without producing a release, and that is the order to use: a tag
+whose build fails is a release to withdraw. Cross-compiling does not exist in
+PyInstaller, so this is also the only way to find out whether the Windows file
+works at all.
 
 ---
 

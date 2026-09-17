@@ -62,6 +62,11 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: test
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      # For the provenance attestation below. Harmless where it does not run.
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -69,11 +74,11 @@ jobs:
           - os: windows-latest
             spec: build/windows.spec
             artefact: BiofermentationSimulation-windows
-            path: python/dist/BiofermentationSimulation.exe
+            asset: dist/BiofermentationSimulation.exe
           - os: macos-latest
             spec: build/macos.spec
             artefact: BiofermentationSimulation-macos
-            path: python/dist/Biofermentation Simulation.app
+            asset: dist/BiofermentationSimulation-macos.zip
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -86,16 +91,46 @@ jobs:
       - name: Build
         run: pyinstaller --noconfirm ${{ matrix.spec }}
         working-directory: python
+      # **A .app is a directory, and an artefact is not.** upload-artifact
+      # does not keep file permissions or symlinks, so uploading the bundle
+      # as a tree hands the operator a few hundred loose files with the
+      # executable bit stripped — and the release step then attaches every one
+      # of them as its own asset. `ditto -c -k --keepParent` is macOS's own
+      # archiver and the only one that keeps a bundle a bundle.
+      - name: Pack the macOS bundle
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent "dist/Biofermentation Simulation.app" "${{ matrix.asset }}"
+        working-directory: python
       # A build that produces a file which cannot start is worse than none.
+      # The import is what the built file does first; the size is what says
+      # PyInstaller actually put the interpreter and Qt inside it.
       - name: Smoke test the build
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -c "import biofermentation.gui.app"
         working-directory: python
+      - name: The asset is there and is not empty
+        shell: bash
+        run: |
+          size=$(wc -c < "${{ matrix.asset }}")
+          echo "${{ matrix.asset }} is $size bytes"
+          test "$size" -gt 20000000
+        working-directory: python
+      # Proof that this file was built from this commit, by GitHub, in this
+      # workflow — which is a stronger statement than any signature this
+      # project could afford. It needs a public repository (or Enterprise
+      # Cloud); on a private one the step fails and must not take the release
+      # with it, so it is allowed to fail and the checksums carry on alone.
+      - name: Attest where this file came from
+        id: attest
+        continue-on-error: true
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: python/${{ matrix.asset }}
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artefact }}
-          path: ${{ matrix.path }}
+          path: python/${{ matrix.asset }}
           if-no-files-found: error
 
   release:
@@ -108,11 +143,36 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artefacts
+      # download-artifact puts each one in a folder of its own; the release
+      # wants the files themselves, and the checksum list wants them in one
+      # directory so the names in it are the names somebody downloads.
+      - name: Collect the files and check them off
+        run: |
+          mkdir -p release
+          find artefacts -type f -exec mv {} release/ \;
+          cd release
+          # Written outside and moved in, so the list cannot end up containing
+          # itself — which it does whenever the shell expands the glob after
+          # the redirection has already created the file.
+          sha256sum * > ../SHA256SUMS.txt
+          mv ../SHA256SUMS.txt .
+          {
+            echo "### Checksums (SHA-256)"
+            echo
+            echo '```'
+            cat SHA256SUMS.txt
+            echo '```'
+            echo
+            echo "Neither build is signed: real signing costs a yearly Apple"
+            echo "membership and a Windows certificate. Windows therefore warns"
+            echo "about an unknown publisher and macOS refuses the first"
+            echo "double-click — \`docs/installation.md\` says how to allow them,"
+            echo "and how to compare the checksum above against the file you"
+            echo "downloaded. That comparison is the statement that carries"
+            echo "weight here, not the signature."
+          } > ../body.md
       - uses: softprops/action-gh-release@v2
         with:
-          files: artefacts/**
-          body: |
-            Neither build is signed. Windows warns about an unknown
-            publisher, macOS refuses the first double-click — see
-            docs/installation.md for how to allow them.
+          files: release/*
+          body_path: body.md
           generate_release_notes: true

@@ -844,6 +844,42 @@ will. Drei Dinge daran sind teuer erkauft:
   (ohne jede Signatur weist Gatekeeper das Bündel ab) und `lsregister -f`,
   damit Finder und Spotlight es sofort kennen.
 
+### Was ein Release ausliefert
+
+Drei Dinge waren am Ausliefern falsch, und alle drei wären erst am fertigen
+Release aufgefallen.
+
+- **Ein `.app` ist ein Verzeichnis, ein Artefakt nicht.** `upload-artifact`
+  erhält weder Dateirechte noch Symlinks; das Bündel als Baum hochzuladen
+  hätte dem Anwender ein paar hundert lose Dateien ohne Ausführungsrecht
+  gegeben, und `files: artefacts/**` hätte jede einzelne davon als eigenes
+  Asset angehängt. Gepackt wird jetzt auf dem Build-Rechner mit
+  `ditto -c -k --keepParent` — macOS' eigenem Archivierer, dem einzigen, der
+  ein Bündel ein Bündel bleiben lässt.
+- **Prüfsummen, weil die Doku sie versprochen hat.** `installation.md` sagt
+  seit jeher, man solle die Prüfsumme gegen den Release-Eintrag halten, und
+  der Release hatte keine. Jetzt `SHA256SUMS.txt` als Asset und derselbe
+  Block im Release-Text, dazu in der Doku die zwei Befehle (`Get-FileHash`,
+  `shasum -a 256`). Die Liste wird außerhalb des Ordners geschrieben und
+  hineingeschoben, sonst steht sie je nach Shell in sich selbst.
+- **Provenance darf scheitern.** `actions/attest-build-provenance` beweist,
+  dass genau diese Datei aus genau diesem Commit in diesem Workflow kam —
+  stärker als jede Signatur, die dieses Projekt sich leisten kann. Sie
+  braucht ein **öffentliches** Repository (oder Enterprise Cloud), und dieses
+  ist privat: der Schritt steht auf `continue-on-error`, damit er den Release
+  nicht mitnimmt, und wird von allein wirksam, sobald das Repository
+  öffentlich wird.
+
+**Ein privates Repository heißt außerdem: niemand außerhalb kann den Release
+herunterladen.** Wer die Anwendung an einen Kurs gibt, macht das Repository
+öffentlich oder reicht die zwei Dateien anders weiter — und dann sind die
+Prüfsummen aus dem Release das, wogegen jemand vergleicht.
+
+**Bauen vor dem Taggen.** `workflow_dispatch` ist genau dafür da: dieselbe
+Matrix ohne Release. Ein Tag, dessen Build scheitert, ist ein Release, den man
+zurückziehen muss — und weil PyInstaller nicht cross-kompiliert, ist das auch
+der einzige Weg herauszufinden, ob die Windows-Datei überhaupt läuft.
+
 ### Offen aus Phase 7
 
 - **Der Windows-Build ist ungetestet.** Cross-Compiling gibt es bei
