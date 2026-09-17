@@ -155,7 +155,56 @@ def test_the_licence_is_declared_where_anyone_would_look():
     assert "creativecommons.org/licenses/by/4.0" in ABOUT_TEXT
     assert "Lena Sophia Kaletsch" in ABOUT_TEXT
     assert "previous developer" in ABOUT_TEXT
-    assert "## Lizenz" in (root / "README.md").read_text(encoding="utf-8")
+    assert "## Licence" in (root / "README.md").read_text(encoding="utf-8")
+
+
+def test_every_link_between_the_documents_points_somewhere():
+    """A renamed document leaves dead links behind, and nothing complains.
+
+    The documents were German and are now English, filenames included. A link
+    to `handbuch.md` still reads perfectly well in a diff; it simply no longer
+    resolves. Markdown has no compiler, so this is the compiler.
+    """
+    import re
+
+    root = BUILD_DIR.parent
+    # The repository's own README too: it links across into python/docs/.
+    pages = [root.parent / "README.md", root / "README.md", *sorted((root / "docs").glob("*.md"))]
+    dead = []
+    for page in pages:
+        text = page.read_text(encoding="utf-8")
+        for target in re.findall(r"\]\((?!https?:|mailto:)([^)#]+)", text):
+            if not (page.parent / target).exists():
+                dead.append(f"{page.name} -> {target}")
+    assert dead == [], f"links pointing nowhere: {dead}"
+
+
+def test_the_documentation_is_in_english():
+    """The study programme is taught in English, so the documents are too.
+
+    Checked by the words that would betray a German paragraph — the articles,
+    not the technical terms, because `Bioreaktor` could sit in a quoted UI
+    string while `und` could not sit in an English sentence.
+
+    CLAUDE.md is deliberately not in this list: it is the working file of the
+    project, not something that is handed out, and both docs/README.md and
+    docs/development.md say so.
+    """
+    import re
+
+    german = re.compile(
+        r"\b(und|oder|nicht|werden|wird|eine|einen|einem|einer|diese|dieses|"
+        r"dieser|nach|durch|über|auch|kann|muss|sind|dass|beim|vom)\b",
+        re.IGNORECASE,
+    )
+    root = BUILD_DIR.parent
+    pages = [root.parent / "README.md", root / "README.md", *sorted((root / "docs").glob("*.md"))]
+    for page in pages:
+        text = page.read_text(encoding="utf-8")
+        # Code fences hold the odd German string; prose is what is checked.
+        prose = re.sub(r"```.*?```", "", text, flags=re.S)
+        hits = sorted(set(match.lower() for match in german.findall(prose)))
+        assert not hits, f"{page.name} still reads German: {hits}"
 
 
 # --------------------------------------------------------- the resources --

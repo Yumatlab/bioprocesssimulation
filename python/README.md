@@ -1,35 +1,35 @@
 # Biofermentation Simulation
 
-Simulation von Bioreaktorprozessen (Batch, Fed-Batch, Induktion) für
-verschiedene Mikroorganismen. Python-Portierung der MATLAB-App-Designer-
-Anwendung Version 2.x.
+Simulation of bioreactor processes (batch, fed-batch, induction) for different
+microorganisms. A Python port of the MATLAB App Designer application, version
+2.x.
 
-Pro Zeitschritt werden Regler (pO2, pH, Temperatur, Füllstand), Fütterung und
-Stoffbilanzen berechnet; ein Phasenautomat schaltet Prozessphasen anhand
-konfigurierbarer Start- und Endbedingungen weiter.
+Every time step computes the controllers (pO2, pH, temperature, liquid weight),
+the feed and the mass balances; a phase automaton advances the process phases on
+configurable start and end conditions.
 
-## Stand
+## Status
 
-Version 3.0 — die Portierung ist funktionsfertig. Phasen 0 bis 7 abgeschlossen
-(Datenschicht, Simulationskern, Phasenautomat, Oberfläche, Plot-Engine,
-Verteilung); Phase 8, das Handbuch, ist offen. Das E.-coli-Modell ist gegen
-einen MATLAB-Referenzlauf verifiziert (`docs/verifikation_escherichia_coli.md`),
-das Pichia-Modell bewusst nicht — die Begründung steht dort ebenfalls.
+Version 3.0 — the port is feature-complete. Phases 0 to 8 are finished (data
+layer, simulation core, phase automaton, interface, plot engine, distribution,
+documentation). The *E. coli* model is verified against a MATLAB reference run
+(`docs/verification_escherichia_coli.md`); the Pichia model deliberately is not
+— the reason is in the same document.
 
-Der aktuelle Fortschritt und alle offenen Punkte stehen in `CLAUDE.md`.
+The current progress and every open point are in `CLAUDE.md`.
 
-## Dokumentation
+## Documentation
 
-| Sie wollen… | Lesen Sie |
+| You want to… | Read |
 |---|---|
-| die Anwendung bedienen | [`docs/handbuch.md`](docs/handbuch.md) |
-| sie installieren | [`docs/installation.md`](docs/installation.md) |
-| wissen, wie sie gebaut ist | [`docs/architektur.md`](docs/architektur.md) |
-| sie weiterentwickeln | [`docs/weiterentwicklung.md`](docs/weiterentwicklung.md) |
-| wissen, ob die Zahlen stimmen | [`docs/verifikation_escherichia_coli.md`](docs/verifikation_escherichia_coli.md) |
-| wissen, *warum* sie so gebaut ist | [`CLAUDE.md`](CLAUDE.md) |
+| operate the application | [`docs/manual.md`](docs/manual.md) |
+| install it | [`docs/installation.md`](docs/installation.md) |
+| know how it is built | [`docs/architecture.md`](docs/architecture.md) |
+| develop it further | [`docs/development.md`](docs/development.md) |
+| know whether the numbers hold up | [`docs/verification_escherichia_coli.md`](docs/verification_escherichia_coli.md) |
+| know *why* it is built this way | [`CLAUDE.md`](CLAUDE.md) |
 
-## Entwicklungsumgebung
+## Development environment
 
 ```bash
 python3.11 -m venv .venv
@@ -39,45 +39,45 @@ pytest
 ruff check .
 ```
 
-## Struktur
+## Structure
 
 ```
 src/biofermentation/
-  db/          Datenbankzugriff (Phase 1)
-  core/        Simulationszustand, Preallokation, Runner (Phase 2/4)
-  organisms/   Organismusmodelle + Plugin-Registry (Phase 2)
-  control/     Phasenautomat und Regler (Phase 3)
-  gui/         PySide6-Oberfläche (Phasen 4-6)
+  db/          database access (phase 1)
+  core/        simulation state, preallocation, runner (phases 2/4)
+  organisms/   organism models + plugin registry (phase 2)
+  control/     phase automaton and controllers (phase 3)
+  gui/         PySide6 interface (phases 4-6)
   resources/   SimulationAppDB_template.db
-tests/         pytest, inklusive MATLAB-Referenzläufe
-build/         PyInstaller-Spec-Dateien (Phase 7)
-docs/          Handbuch (Phase 8)
+tests/         pytest, including the MATLAB reference runs
+build/         PyInstaller spec files (phase 7)
+docs/          documentation (phase 8)
 ```
 
-## Neues Organismusmodell
+## A new organism model
 
-Zwei Wege, beide ohne Eingriff in bestehenden Code:
+Two ways, neither of them touching existing code:
 
-- **Nur Parameter:** `definition.yaml` im Organismus-Ordner anlegen; ein
-  Import-Skript befüllt die Parametertabellen der Datenbank.
-- **Neue Kinetik:** Unterklasse von `OrganismModel` schreiben und mit
-  `@register` versehen. Die Registry findet sie beim Start automatisch.
+- **Parameters only:** create a `definition.yaml` in the organism folder; an
+  import script fills the parameter tables of the database.
+- **New kinetics:** write a subclass of `OrganismModel` and mark it with
+  `@register`. The registry finds it automatically at start.
 
-Details in [`docs/weiterentwicklung.md`](docs/weiterentwicklung.md),
-Schnittstelle in `src/biofermentation/organisms/base.py`.
+The details are in [`docs/development.md`](docs/development.md), the interface
+in `src/biofermentation/organisms/base.py`.
 
-## Lizenz
+## Licence
 
-MIT — siehe [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
 
-Die Portierung stammt von der MATLAB-Anwendung Version 2.2 ab, die unter
-[CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) steht. Diese führt
-die Arbeit der **Vorentwicklerin Lena Sophia Kaletsch** fort, von der Version
-1.3 der Biofermentation Simulation App stammt (01.03.2024), und beruht
-ihrerseits auf dem BIOSIM-Programm von Prof. Dr.-Ing. R. Luttmann. Diese
-Namensnennung steht in `LICENSE` und im Info-Tab der Anwendung und muss jede
-Kopie begleiten.
+The port descends from the MATLAB application version 2.2, which is under
+[CC BY 4.0](http://creativecommons.org/licenses/by/4.0/). That application
+continues the work of the **previous developer Lena Sophia Kaletsch**, who wrote
+version 1.3 of the Biofermentation Simulation App (01.03.2024), and rests in turn
+on the BIOSIM program conceived by Prof. Dr.-Ing. R. Luttmann. This attribution
+is in `LICENSE` and in the application's Information tab, and has to accompany
+every copy.
 
-Eine **gepackte** Fassung enthält zusätzlich Qt über PySide6 unter der LGPLv3.
-Wer sie weitergibt, übernimmt deren Pflichten; siehe
+A **packaged** version additionally contains Qt through PySide6 under the
+LGPLv3. Anyone distributing it takes on those obligations; see
 `docs/installation.md`.

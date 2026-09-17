@@ -1,44 +1,44 @@
 # Biofermentation Simulation
 
-Simulation von Bioreaktorprozessen (Batch, Fed-Batch, Induktion) für
-verschiedene Mikroorganismen. Pro Zeitschritt werden Regler (pO2, pH,
-Temperatur, Füllstand), Fütterung und Stoffbilanzen gerechnet; ein
-Phasenautomat schaltet Prozessphasen anhand konfigurierbarer Start- und
-Endbedingungen weiter.
+Simulation of bioreactor processes (batch, fed-batch, induction) for different
+microorganisms. Every time step computes the controllers (pO2, pH, temperature,
+liquid weight), the feed and the mass balances; a phase automaton advances the
+process phases on configurable start and end conditions.
 
-Dieses Repository enthält **zwei Fassungen derselben Anwendung**.
+This repository holds **two versions of the same application**.
 
-| Ordner | Fassung | Stand |
+| Folder | Version | Status |
 |---|---|---|
-| [`matlab/`](matlab/) | MATLAB App Designer | Version 2.2, der Stand der Masterarbeit (Tag `v2.2`) |
-| [`python/`](python/) | Python, PySide6 | Version 3.0, die Neuimplementierung |
+| [`matlab/`](matlab/) | MATLAB App Designer | version 2.2, the state of the master's thesis (tag `v2.2`) |
+| [`python/`](python/) | Python, PySide6 | version 3.0, the reimplementation |
 
-Sie stehen nebeneinander, nicht übereinander: die MATLAB-Fassung ist die
-Vorlage, aus der portiert wurde, und bleibt als solche lesbar und lauffähig.
+They stand beside each other, not on top of each other: the MATLAB version is
+the template that was ported from, and stays readable and runnable as such.
 
-**Die Python-Fassung ist die, die weiterentwickelt wird.** Sie rechnet dieselbe
-Simulation — das *Escherichia-coli*-Modell ist gegen einen Referenzlauf der
-MATLAB-Anwendung verifiziert, nachzulesen in
-[`python/docs/verifikation_escherichia_coli.md`](python/docs/verifikation_escherichia_coli.md).
-Was sie zusätzlich kann und woran sie anders gebaut ist, steht in
+**The Python version is the one being developed further.** It computes the same
+simulation — the *Escherichia coli* model is verified against a reference run of
+the MATLAB application, as documented in
+[`python/docs/verification_escherichia_coli.md`](python/docs/verification_escherichia_coli.md).
+What it can do in addition, and where it is built differently, is in
 [`python/CLAUDE.md`](python/CLAUDE.md).
 
-## Womit anfangen
+## Where to start
 
-- **Anwenden**: fertige Installationsdateien für Windows und macOS hängen an
-  jedem Release. Einrichtung und bekannte Einschränkungen in
+- **Using it**: ready-made installation files for Windows and macOS are attached
+  to every release. Setup and known limitations are in
   [`python/docs/installation.md`](python/docs/installation.md).
-- **Entwickeln**: `python/README.md` beschreibt die Entwicklungsumgebung und
-  wie ein neues Organismusmodell entsteht.
-- **Nachvollziehen, wie es gebaut ist**: `python/CLAUDE.md` ist der lange Text
-  dazu — Datenmodell, Reglerlogik, Datenbankregeln und jede Entscheidung, die
-  nicht selbsterklärend war.
+- **Developing**: `python/README.md` describes the development environment and
+  how a new organism model comes about.
+- **Understanding how it is built**: `python/CLAUDE.md` is the long text for
+  that — data model, controller logic, database rules and every decision that
+  was not self-explanatory. It is written in German; everything in
+  `python/docs/` is English.
 
-## Lizenz
+## Licence
 
-Die Python-Fassung steht unter der MIT-Lizenz, siehe
-[`python/LICENSE`](python/LICENSE). Die MATLAB-Anwendung steht unter
-[CC BY 4.0](http://creativecommons.org/licenses/by/4.0/); sie führt die Arbeit
-der Vorentwicklerin **Lena Sophia Kaletsch** fort (Version 1.3, 01.03.2024)
-und beruht auf dem BIOSIM-Programm von Prof. Dr.-Ing. R. Luttmann. Entwickelt
-für das Labor für Bioprozessautomatisierung der HAW Hamburg.
+The Python version is under the MIT licence, see
+[`python/LICENSE`](python/LICENSE). The MATLAB application is under
+[CC BY 4.0](http://creativecommons.org/licenses/by/4.0/); it continues the work
+of the previous developer **Lena Sophia Kaletsch** (version 1.3, 01.03.2024) and
+rests on the BIOSIM program conceived by Prof. Dr.-Ing. R. Luttmann. Developed
+for the Laboratory of Bioprocess Automation at the HAW Hamburg.

@@ -1,42 +1,42 @@
-# Dokumentation
+# Documentation
 
-Fünf Dokumente, je eines pro Frage.
+Five documents, one per question.
 
-| Sie wollen… | Lesen Sie |
+| You want to… | Read |
 |---|---|
-| die Anwendung **bedienen** | [`handbuch.md`](handbuch.md) |
-| sie **installieren** oder verteilen | [`installation.md`](installation.md) |
-| wissen, wie sie **gebaut** ist | [`architektur.md`](architektur.md) |
-| sie **weiterentwickeln** | [`weiterentwicklung.md`](weiterentwicklung.md) |
-| wissen, ob die **Zahlen stimmen** | [`verifikation_escherichia_coli.md`](verifikation_escherichia_coli.md) |
+| **operate** the application | [`manual.md`](manual.md) |
+| **install** or distribute it | [`installation.md`](installation.md) |
+| know how it is **built** | [`architecture.md`](architecture.md) |
+| **develop it further** | [`development.md`](development.md) |
+| know whether the **numbers hold up** | [`verification_escherichia_coli.md`](verification_escherichia_coli.md) |
 
-Dazu, eine Ebene höher: [`../CLAUDE.md`](../CLAUDE.md) — *warum* die Anwendung
-so gebaut ist, wie sie gebaut ist. Jede Regel mit ihrer Begründung und jede
-Messung mit ihrer Zahl. Das ist die Datei, die ein KI-Assistent zuerst liest,
-und die, in die neue Erkenntnisse gehören.
+And, one level up: [`../CLAUDE.md`](../CLAUDE.md) — *why* the application is
+built the way it is. Every rule with its reason and every measurement with its
+number. It is the file an AI assistant reads first, and the one new findings
+belong in. It is the only file here still written in German.
 
-## Einstieg in zehn Minuten
+## Ten minutes to get started
 
-1. [`installation.md`](installation.md) → Anwendung starten
-2. [`handbuch.md`](handbuch.md), Abschnitt 2 → erstes Projekt anlegen,
-   beimpfen, laufen lassen
-3. [`handbuch.md`](handbuch.md), Abschnitt 4 → die fünf Regler verstehen
+1. [`installation.md`](installation.md) → start the application
+2. [`manual.md`](manual.md), section 2 → create a first project, inoculate it,
+   let it run
+3. [`manual.md`](manual.md), section 4 → understand the five controllers
 
-Wer danach weitermachen will, nimmt
-[`weiterentwicklung.md`](weiterentwicklung.md) — dort steht auch der fertige
-Startprompt für eine Version 4 mit Claude Code.
+Anyone who wants to carry on from there takes
+[`development.md`](development.md) — it also holds the finished starter prompt
+for a version 4 with Claude Code.
 
-## Als PDF
+## As PDF
 
-Für alle, die lieber auf Papier oder im Reader lesen:
+For everyone who would rather read on paper or in a reader:
 
 ```bash
 pip install -e ".[docs]"
 python tools/make_pdfs.py
 ```
 
-Das legt `docs/pdf/` an — je ein gesetztes PDF mit Seitenzahlen, 31 Seiten
-zusammen. Gesetzt wird mit Chrome im Hintergrund; fehlt es, weicht das
-Werkzeug auf Qt aus und sagt es. Die PDFs liegen nicht im Repository: sie sind
-jederzeit neu erzeugbar, und als Binärdateien in der Historie wären sie nur
-Rauschen.
+That creates `docs/pdf/` — one typeset PDF each, with page numbers, 31 pages
+together. Typesetting is done with Chrome in the background; if it is missing,
+the tool falls back to Qt and says so. The PDFs are not in the repository: they
+can be regenerated at any time, and as binaries in the history they would only
+be noise.

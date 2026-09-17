@@ -153,7 +153,7 @@ def to_html(source: Path) -> str:
 
     Links between the documents are rewritten to their PDF names — target and
     visible text both. A reader who has this folder has all of them, and a
-    link that reads "architektur.md" points at a file they do not have.
+    link that reads "architecture.md" points at a file they do not have.
 
     Only inside an anchor, though. The prose names the markdown files on
     purpose in a few places: they are the source, and someone who wants to
@@ -184,7 +184,7 @@ def to_html(source: Path) -> str:
     )
     title = source.stem.replace("_", " ").capitalize()
     return f"""<!doctype html>
-<html lang="de"><head><meta charset="utf-8"><title>{title}</title>
+<html lang="en"><head><meta charset="utf-8"><title>{title}</title>
 <style>{STYLESHEET}</style></head><body>
 {body}
 <p class="provenance">Biofermentation Simulation {version()} —
@@ -215,7 +215,7 @@ def render_with_chrome(browser: Path, html: str, target: Path) -> bool:
         )
     if target.is_file() and target.stat().st_size > 0:
         return True
-    print(f"  Chrome meldete: {(result.stderr or result.stdout).strip()[:200]}")
+    print(f"  Chrome reported: {(result.stderr or result.stdout).strip()[:200]}")
     return False
 
 
@@ -254,13 +254,13 @@ def main() -> int:
 
     browser = chrome()
     if browser is None:
-        print("Kein Chrome gefunden — Notweg über Qt, also ohne Seitenzahlen.")
+        print("No Chrome found — falling back to Qt, so without page numbers.")
     else:
-        print(f"Setze mit {browser.name}")
+        print(f"Typesetting with {browser.name}")
 
     sources = sorted(DOCS.glob("*.md"))
     if not sources:
-        print(f"Keine Markdown-Dateien in {DOCS}")
+        print(f"No markdown files in {DOCS}")
         return 1
 
     written = 0
@@ -275,9 +275,9 @@ def main() -> int:
             written += 1
             print(f"  {target.name:34} {target.stat().st_size // 1024:5} KB")
         else:
-            print(f"  {target.name:34} FEHLGESCHLAGEN")
+            print(f"  {target.name:34} FAILED")
 
-    print(f"\n{written} von {len(sources)} Dateien in {target_dir}")
+    print(f"\n{written} of {len(sources)} files in {target_dir}")
     return 0 if written == len(sources) else 1
 
 

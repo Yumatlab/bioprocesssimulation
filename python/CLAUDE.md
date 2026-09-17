@@ -15,7 +15,7 @@ Plattformen: Windows und macOS, verteilt als einzelne ausführbare Datei.
 | `~/Documents/Biofermentation Simulation Version 2.2/Anweisungen/CLAUDE.md` | **Fachliche Referenz.** Beschreibt die MATLAB-Architektur: Datenmodell (`app.p`/`app.v`/`app.a`), Preallokations-Prinzip, Phasenautomat, Reglerlogik, DB-Regeln, bekannte Schema-Probleme. Diese Datei ist der Ist-Zustand, aus dem portiert wird — nicht der Zielzustand. |
 | `~/Documents/Biofermentation Simulation Version 2.2/Anweisungen/Projektplan_Python_Migration.md` | **Phasenplan.** Neun Phasen mit Abschnittsnummern; wird eingehalten. |
 | `~/Documents/Biofermentation Simulation Version 2.2/` | MATLAB-Quellcode als Übersetzungsvorlage (`Escherichia_coli/`, `Pichia_pastoris/`, `*.mlapp`). |
-| `docs/verifikation_escherichia_coli.md` | **Verifikationsbericht.** Wogegen geprüft wurde, mit welchem Ergebnis, in welchem Fenster und warum es keine globale Toleranz geben kann. |
+| `docs/verification_escherichia_coli.md` | **Verifikationsbericht.** Wogegen geprüft wurde, mit welchem Ergebnis, in welchem Fenster und warum es keine globale Toleranz geben kann. |
 
 Der MATLAB-Code wird **nicht** verändert. Er ist Lesequelle, sonst nichts.
 
@@ -1329,15 +1329,23 @@ Kopieren der `.db` ohne WAL sind sie verloren.
 `docs/` beantwortet fünf Fragen und keine zweimal. Ein Wegweiser
 (`docs/README.md`) sagt, welche welche ist.
 
+**Die Dokumentation ist englisch, diese Datei nicht.** Der Studiengang wird auf
+Englisch gehalten; ein Handbuch, das die Hälfte der Leser nicht lesen kann, ist
+keines. Übersetzt wurde an Ort und Stelle, mit englischen Dateinamen — zwei
+Sprachfassungen nebeneinander laufen nach der dritten Änderung auseinander, und
+dann weiß niemand, welche gilt. `CLAUDE.md` bleibt deutsch: sie ist die
+Arbeitsdatei dieses Projekts und keine Abgabe. `docs/README.md` und
+`docs/development.md` sagen beide, dass sie es ist.
+
 | Datei | Frage |
 |---|---|
-| `handbuch.md` | Wie bediene ich das? |
+| `manual.md` | Wie bediene ich das? |
 | `installation.md` | Wie installiere und verteile ich das? |
-| `architektur.md` | Wie ist das gebaut? |
-| `weiterentwicklung.md` | Wie entwickle ich es weiter? |
-| `verifikation_escherichia_coli.md` | Stimmen die Zahlen? |
+| `architecture.md` | Wie ist das gebaut? |
+| `development.md` | Wie entwickle ich es weiter? |
+| `verification_escherichia_coli.md` | Stimmen die Zahlen? |
 
-- **Diese Datei bleibt das Warum.** `architektur.md` ist die Landkarte und
+- **Diese Datei bleibt das Warum.** `architecture.md` ist die Landkarte und
   verweist hierher, statt die Begründungen zu wiederholen — zwei Texte über
   dieselbe Sache laufen nach der dritten Änderung auseinander, und dann weiß
   niemand mehr, welcher gilt.
@@ -1350,7 +1358,7 @@ Kopieren der `.db` ohne WAL sind sie verloren.
   ordnet sie keinem Organismus zu" war zu freundlich.
   Ebenso nachgemessen: die Schrittweite ist 2 s aus `deltatsec` und nicht die
   18 s aus `DEFAULT_DT` — `gui/app.py` überschreibt sie beim Öffnen.
-- **`weiterentwicklung.md` enthält den Startprompt für eine Version 4.** Er
+- **`development.md` enthält den Startprompt für eine Version 4.** Er
   ist nicht Beiwerk, sondern der Kern des Dokuments: er nennt die sieben
   Regeln, deren Verletzung hier schon Schaden angerichtet hat, und verlangt
   Messungen statt Behauptungen. Die Zielgruppe ist eine Masterstudentin der
