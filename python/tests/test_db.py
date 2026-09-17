@@ -607,6 +607,31 @@ def test_backup_is_written_and_is_a_usable_database(db_copy: Path):
         )
 
 
+def test_the_cascade_has_an_index_to_walk_along(db_copy: Path):
+    """Ohne die läuft ein Löschvorgang gegen eine Wand.
+
+    SQLite legt für einen Fremdschlüssel keinen Index an. Ohne einen auf
+    dataTab.timeID muss es beim Löschen eines Projekts für jede gelöschte
+    Zeitzeile die ganze dataTab durchsuchen. Gemessen an zwei Stunden
+    Prozesszeit — 3 601 Zeitzeilen, 201 656 Datenzeilen — waren das 22,84 s
+    gegen 0,28 s mit Index.
+
+    Der Test prüft nicht die Zeit, sondern dass der Index da ist: eine
+    Zeitmessung in einer Testsuite misst die Laune des Rechners mit.
+    """
+    import sqlite3
+
+    with sqlite3.connect(f"file:{db_copy}?mode=ro", uri=True) as conn:
+        indexed = {
+            (row[1], column[2])
+            for table in ("timeTab", "dataTab", "processTab", "logTab")
+            for row in conn.execute(f"PRAGMA index_list('{table}')")
+            for column in conn.execute(f"PRAGMA index_info('{row[1]}')")
+        }
+    for pair in (("timeTab_projectID", "projectID"), ("dataTab_timeID", "timeID")):
+        assert pair in indexed, f"{pair[0]} fehlt — das Löschen wird unbenutzbar langsam"
+
+
 def test_empty_project_loads_without_data(db_copy: Path):
     """Most projects in the template have no phases and no series at all."""
     setup = load_phases(db_copy, 733)

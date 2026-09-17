@@ -397,6 +397,32 @@ INSERT INTO sqlite_sequence (name, seq)
      WHERE name NOT IN (SELECT name FROM sqlite_sequence);
 DROP TABLE _seq_backup;
 
+-- ---------------------------------------------------------------------
+-- 8. Indizes auf die Fremdschlüssel, an denen die Kaskade entlangläuft.
+--
+-- SQLite legt für einen Fremdschlüssel keinen Index an. Beim Löschen eines
+-- Projekts muss es dann für JEDE gelöschte Zeitzeile die ganze dataTab
+-- durchsuchen, um deren Datenzeilen zu finden. Bei zwei Stunden Prozesszeit
+-- sind das 3 601 Zeitzeilen gegen 201 656 Datenzeilen.
+--
+-- Gemessen an genau diesem Projekt:
+--     ohne Index   22,84 s
+--     mit Index     0,28 s      -- Faktor 80
+--
+-- Die Schreibkosten sind nicht messbar (0,54 gegen 0,53 s fürs Speichern);
+-- bezahlt wird mit Dateigröße, 8,1 auf 11,0 MB.
+--
+-- Das ist die Antwort, die in CLAUDE.md schon vorgesehen war: "Ist das
+-- Löschen zu langsam, ist der Index das Mittel, nicht das Abschalten der
+-- Integritätsprüfung."
+CREATE INDEX IF NOT EXISTS timeTab_projectID          ON timeTab (projectID);
+CREATE INDEX IF NOT EXISTS dataTab_timeID             ON dataTab (timeID);
+CREATE INDEX IF NOT EXISTS dataTab_variableID         ON dataTab (variableID);
+CREATE INDEX IF NOT EXISTS processTab_projectID       ON processTab (projectID);
+CREATE INDEX IF NOT EXISTS logTab_projectID           ON logTab (projectID);
+CREATE INDEX IF NOT EXISTS process_parameterTab_processID
+    ON process_parameterTab (processID);
+
 COMMIT;
 
 PRAGMA legacy_alter_table = OFF;

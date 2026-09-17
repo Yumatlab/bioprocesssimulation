@@ -216,6 +216,27 @@ Deshalb stehen sie als `LOG_COLUMNS` in `migrate.py`.
    **Die Referenz-CSVs behalten ihn**: sie halten fest, was der MATLAB-Lauf
    hatte, nicht was diese Datenbank haben soll.
 
+8. **Kein einziger Index auf einem Fremdschlüssel.** SQLite legt für einen
+   Fremdschlüssel keinen an, und in dieser Datenbank stand auch keiner von
+   Hand: alles, was es gab, kam von UNIQUE- und Primärschlüsseln. Beim
+   Löschen eines Projekts muss SQLite deshalb für **jede** gelöschte
+   `timeTab`-Zeile die ganze `dataTab` durchsuchen.
+
+   Gemessen an zwei Stunden Prozesszeit — 3 601 Zeitzeilen gegen 201 656
+   Datenzeilen:
+
+   | | Löschen |
+   |---|---|
+   | ohne Index | **22,84 s** |
+   | mit Index | **0,28 s** |
+
+   Die Schreibkosten sind nicht messbar (0,54 gegen 0,53 s fürs Speichern);
+   bezahlt wird mit Dateigröße, 8,1 auf 11,0 MB. Sechs Indizes stehen jetzt
+   in `migrate_schema.sql`, `CREATE INDEX IF NOT EXISTS`, also idempotent wie
+   der Rest. **Behoben** — und es ist genau die Antwort, die in der
+   Anforderung an Phase 5 schon vorgesehen war: „Ist das Löschen zu langsam,
+   ist der Index das Mittel, nicht das Abschalten der Integritätsprüfung."
+
 Die produktive DB hatte zusätzlich eine inkonsistente Freelist
 (`integrity_check` meldete vier nie benutzte Seiten). Das Template ist über
 `VACUUM INTO` erzeugt und dadurch bereinigt.
