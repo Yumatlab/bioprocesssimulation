@@ -50,6 +50,10 @@ def data_files() -> list[tuple[str, str]]:
         (str(resources / "styles"), "biofermentation/resources/styles"),
         (str(resources / "layouts"), "biofermentation/resources/layouts"),
         (str(resources / "icons"), "biofermentation/resources/icons"),
+        # Die beiden Hochschullogos des Info-Tabs. Fehlen sie, zeigt der
+        # Tab eine leere Zeile statt eines kaputten Bildes - aber eine
+        # ausgelieferte Anwendung soll sagen, woher sie kommt.
+        (str(resources / "logos"), "biofermentation/resources/logos"),
         # Organism plugins ship their parameter definitions as YAML.
         (
             str(PACKAGE / "organisms" / "escherichia_coli" / "definition.yaml"),

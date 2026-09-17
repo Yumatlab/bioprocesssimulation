@@ -72,11 +72,9 @@ laboratory of Bioprocess Automation at the University of Applied Sciences
 Hamburg.</p>
 
 <p style="color:#6a6a6a">A packaged build also contains Qt by way of PySide6,
-under the GNU Lesser General Public License v3.</p>
-
-<p style="color:#6a6a6a">The two institutional logos of the original are not
-reproduced here: they are the university's image assets, not part of this
-port.</p>
+under the GNU Lesser General Public License v3. The two institutional marks
+below belong to the HAW Hamburg and are not covered by the MIT licence of
+this software.</p>
 """
 
 
@@ -541,8 +539,11 @@ class ControlWindow(QMainWindow):
     def _about_box(self) -> QGroupBox:
         """Provenance and licence, as the original's Information tab has them.
 
-        The two logos of the original are not reproduced — they are the
-        university's image assets, not part of this port.
+        The application's own mark sits at the left of the text; the two
+        institutional logos stand at the foot, apart from it and from each
+        other. Which is the point: `app_icon_path()` says what this program
+        is, the two below say where it comes from, and running them together
+        would suggest the university drew the first one.
         """
         from .starting_screen import VERSION
 
@@ -572,7 +573,45 @@ class ControlWindow(QMainWindow):
         body.setOpenExternalLinks(True)
         body.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
         layout.addWidget(body)
+        layout.addWidget(self._institutional_marks())
         return box
+
+    #: How tall the institutional logos are drawn. They are stored at twice
+    #: that so they stay sharp on a high-resolution screen.
+    LOGO_HEIGHT = 56
+
+    def _institutional_marks(self) -> QWidget:
+        """Where this software comes from: the HAW Hamburg and the BPA lab.
+
+        Left-aligned in a row of their own, below the text that names them.
+        A logo the reader cannot place is decoration; one under the sentence
+        that says "developed for the laboratory of Bioprocess Automation at
+        the University of Applied Sciences Hamburg" is a source.
+
+        A missing file leaves an empty row rather than a broken image — they
+        are the one resource in this application that a fork is expected to
+        remove.
+        """
+        from ...resources import institutional_logos
+
+        strip = QWidget()
+        row = QHBoxLayout(strip)
+        row.setContentsMargins(0, 10, 0, 0)
+        row.setSpacing(18)
+        for path in institutional_logos():
+            pixmap = QPixmap(str(path))
+            if pixmap.isNull():
+                continue
+            label = QLabel()
+            label.setPixmap(
+                pixmap.scaledToHeight(
+                    self.LOGO_HEIGHT, Qt.TransformationMode.SmoothTransformation
+                )
+            )
+            label.setToolTip(path.stem.upper())
+            row.addWidget(label, 0)
+        row.addStretch(1)
+        return strip
 
     # ------------------------------------------------------------ state --
 

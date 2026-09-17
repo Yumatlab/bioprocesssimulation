@@ -44,3 +44,22 @@ contains third-party libraries under their own licences, chief among them Qt
 by way of PySide6, which is distributed under the GNU Lesser General Public
 License version 3. Redistributing such a build carries the obligations of
 that licence — see docs/installation.md.
+
+--------------------------------------------------------------------------
+Trademarks
+--------------------------------------------------------------------------
+
+The two institutional marks shown in the Information tab and stored under
+src/biofermentation/resources/logos/ — the logo of the Hochschule für
+Angewandte Wissenschaften Hamburg and the mark of its Bioprocess Automation
+laboratory — are the property of that institution. They are **not** covered
+by the MIT licence above.
+
+The MIT licence grants rights to the software. It grants no right to use
+these marks. They are here because this software was written in that
+laboratory and is handed over to it; they say where it comes from.
+
+A fork that is no longer the HAW Hamburg's software has to remove them.
+`resources.INSTITUTIONAL_LOGOS` names the two files, `bundled_files()` lists
+the folder, and the Information tab draws an empty row when it is gone —
+deleting the folder is enough and breaks nothing.

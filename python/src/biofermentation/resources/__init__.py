@@ -32,6 +32,16 @@ DEFAULTS_DIR = HERE / "defaults"
 STYLES_DIR = HERE / "styles"
 LAYOUTS_DIR = HERE / "layouts"
 ICONS_DIR = HERE / "icons"
+LOGOS_DIR = HERE / "logos"
+
+#: The two marks of the laboratory this software was written for, as they
+#: appear in the Information tab. They are **not** the application's own mark
+#: — that is `app_icon_path()`. These say where it comes from.
+#:
+#: They are the institution's trademarks and are not covered by the MIT
+#: licence of the code; see LICENSE. A fork that is no longer the HAW's
+#: software has to take them out.
+INSTITUTIONAL_LOGOS = ("haw.png", "bpa.png")
 
 
 def app_icon_path(size: int | None = None) -> Path:
@@ -43,6 +53,16 @@ def app_icon_path(size: int | None = None) -> Path:
     if size is None:
         return ICONS_DIR / "logo.png"
     return ICONS_DIR / f"logo_{size}.png"
+
+
+def logo_path(name: str) -> Path:
+    """One of the institutional logos by file name."""
+    return LOGOS_DIR / name
+
+
+def institutional_logos() -> list[Path]:
+    """The logos that exist, in the order they are shown."""
+    return [path for path in (logo_path(n) for n in INSTITUTIONAL_LOGOS) if path.is_file()]
 
 
 def platform_icon_path() -> Path:
@@ -114,19 +134,24 @@ def bundled_files() -> dict[str, Path]:
         "template database": TEMPLATE_DB,
         "default data set": DEFAULTS_DIR,
         "stylesheet": STYLES_DIR / "default.qss",
+        "institutional logos": LOGOS_DIR,
     }
 
 
 __all__ = [
     "DATABASE_ENV",
     "DEFAULTS_DIR",
+    "INSTITUTIONAL_LOGOS",
     "IS_FROZEN",
     "LAYOUTS_DIR",
+    "LOGOS_DIR",
     "STYLES_DIR",
     "TEMPLATE_DB",
     "bundled_files",
     "copy_template",
     "default_database",
+    "institutional_logos",
+    "logo_path",
     "resource_root",
     "user_data_dir",
 ]

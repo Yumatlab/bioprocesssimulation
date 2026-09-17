@@ -63,6 +63,34 @@ def test_the_bundle_is_stamped_with_the_package_version():
     assert 'path = "src/biofermentation/__init__.py"' in pyproject
 
 
+def test_the_institutional_logos_ship_and_are_marked_as_not_ours(specs):
+    """Sie sagen, woher die Software kommt — und sind nicht mitlizenziert.
+
+    Die MIT-Lizenz gilt für den Code. Eine Marke überträgt sie nicht, und ein
+    Repository, das öffentlich werden kann, muss das sagen: sonst nimmt ein
+    Fork die Logos einfach mit.
+    """
+    from biofermentation.resources import INSTITUTIONAL_LOGOS, institutional_logos
+
+    found = institutional_logos()
+    assert len(found) == len(INSTITUTIONAL_LOGOS), "ein Logo fehlt auf der Platte"
+    for path in found:
+        assert path.stat().st_size < 200_000, f"{path.name} ist zu groß für ein UI-Bild"
+
+    declared = [str(source).replace("\\", "/") for source, _ in specs.data_files()]
+    assert any(source.endswith("resources/logos") for source in declared), (
+        "der Ordner fehlt im PyInstaller-Bau — die gebaute Anwendung zeigt dann nichts"
+    )
+
+    # Zeilenumbrüche zusammengefaltet, bevor verglichen wird. Eine Behauptung
+    # über einen Satz, der im Fließtext umbricht, trifft sonst nie — und geht
+    # als "alles in Ordnung" durch, weil sie nur eine Zeichenkette sucht.
+    licence = " ".join((BUILD_DIR.parent / "LICENSE").read_text(encoding="utf-8").split())
+    assert "Trademarks" in licence
+    assert "**not** covered by the MIT licence above" in licence
+    assert "has to remove them" in licence
+
+
 def test_the_licence_is_declared_where_anyone_would_look():
     """Four places, and the port was missing from all of them.
 

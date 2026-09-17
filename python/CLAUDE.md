@@ -1150,9 +1150,25 @@ Kopieren der `.db` ohne WAL sind sie verloren.
 - **Die Optik ist eine Textdatei.** `resources/styles/default.qss`; eine
   `style.qss` neben der Datenbank ersetzt sie. Farben, Abstände und Schriften
   ohne Python und ohne Neuübersetzung.
-- **Die Anwendung hat ein eigenes Zeichen.** Das Logo des Originals ist ein
-  Bildmittel der Hochschule und bleibt draußen; `resources/icons/` trägt
-  stattdessen ein eigenes. Quelle ist `logo.png` (1024², transparent),
+- **Die Anwendung hat ein eigenes Zeichen — und daneben zwei fremde.**
+  `resources/icons/` trägt das eigene; es sagt, *was* das Programm ist.
+  `resources/logos/` trägt die beiden Marken der HAW Hamburg und ihres Labors
+  für Bioprozessautomatisierung; sie sagen, *woher* es kommt, und stehen
+  deshalb im Info-Tab unter dem Satz, der die Hochschule nennt, und nicht
+  neben dem eigenen Zeichen — nebeneinander läse sich das, als hätte die
+  Hochschule das erste gezeichnet.
+
+  **Die MIT-Lizenz überträgt keine Marke.** Das steht in `LICENSE` unter
+  „Trademarks", und es steht dort, weil das Repository öffentlich werden
+  kann: ein Fork nähme die Logos sonst einfach mit. Ein Fork, der nicht mehr
+  die Software der HAW ist, löscht den Ordner — die Zeile im Info-Tab bleibt
+  dann leer, und nichts geht kaputt.
+
+  **Ein CMYK-JPEG bringt sein ICC-Profil mit.** Das BPA-Logo war 2,0 MB groß,
+  davon 1,79 MB Farbprofil. Nach `convert("RGB")` steckt es weiter in
+  `im.info` und landet wieder in der Ausgabedatei — ein 137 × 128 großes PNG
+  wog damit 1354 KB. Verworfen sind es 18 KB. Qt zeichnet CMYK ohnehin nicht
+  zuverlässig, die Umwandlung ist also nicht nur eine Größenfrage. Quelle ist `logo.png` (1024², transparent),
   daneben die Kantenlängen 32–512, `icon.ico` und `icon.icns`. Zu erreichen
   über `resources.app_icon_path(size)` und `platform_icon_path()`; gesetzt
   wird es einmal auf der `QApplication`, alle Fenster erben es. Beide
