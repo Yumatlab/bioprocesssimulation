@@ -1799,7 +1799,13 @@ def test_the_po2_gains_stand_two_by_two(window):
     # The odd one out takes the whole row rather than half of it.
     assert boxes["Sensor"].width() > boxes["Agitation"].width()
     assert boxes["Anti-windup"].y() > boxes["Sensor"].y()
-    assert dialog.sizeHint().height() < 700
+
+    # **A relation, not a pixel count.** Font metrics differ per system —
+    # this project has been caught by that twice — so what is asserted is
+    # that the grid is shorter than the same groups in a column would be,
+    # which holds whatever the font.
+    stacked = sum(box.height() for box in boxes.values())
+    assert dialog.height() < stacked, f"{dialog.height()} px against {stacked} stacked"
 
 
 def test_a_controller_with_three_groups_stays_in_one_column(window):
