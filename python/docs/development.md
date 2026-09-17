@@ -317,14 +317,18 @@ look at first for a version 4:
 - **Anti-windup is wired in both organisms.** Three loops have a switch in
   their Parameters dialog (pO2, liquid weight, feed); `f_awtemp` has no reader
   — see the manual, "Anti-windup", for the measurement behind that.
-- **Pichia's control chain does not close, and the reason is measured.** Its
-  closed-loop feed carries the gains of the pO2 feed controller, sign and all,
-  so the pump never opens; and it reads the *measured* concentration, which
-  never moves, because `meas_transfer_function` converts the step width twice.
-  That second one is MATLAB's own arithmetic and is covered by the verified
-  reference run, so correcting it is a decision, not a fix.
-  `python tools/tune_pichia.py` prints all of it, including the gains that
-  would hold the setpoint once it is decided.
+- **Pichia's feed works now, through one deliberate deviation.** Its
+  closed-loop feed carried the gains of the pO2 feed controller, sign and all,
+  and read a measured concentration that never moved because
+  `meas_transfer_function` converts the step width twice. The gains are
+  measured values now, and Pichia calls `sensor_lag` instead — E. coli keeps
+  the original arithmetic, which its reference run verifies. The full
+  reasoning is the fifth deliberate deviation in `CLAUDE.md`.
+- **Pichia's pO2 loop has no operating point.** The stirrer is at a stop 100 %
+  of the time and eight gain sets across three orders of magnitude give the
+  same RMS to the decimal. It is the oxygen supply, not the controller;
+  `python tools/tune_pichia.py po2` prints the measurement. Whoever wants a
+  controllable pO2 there has to change the gassing or the setpoint.
 - **`PhaseFeedEditor`** from the MATLAB version is not ported.
 - **Two plot settings have no effect**: `axisyoffset` and
   `axisylabeloffsetabove`/`-below`.

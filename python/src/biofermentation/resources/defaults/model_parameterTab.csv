@@ -372,9 +372,9 @@ model_parameterID,modelID,parameterID,value,description
 22545,2,139,15.0,Gain of P part of feed controller of reservoir 1
 22546,2,140,500.0,Gain of I part of feed controller of reservoir 1
 22547,2,141,0.02,Gain of D part of feed controller of reservoir 1
-22548,2,142,-2.0,Gain of P part of feed controller of reservoir 2
-22549,2,143,-15.0,Gain of I part of feed controller of reservoir 2
-22550,2,144,-0.009,Gain of D part of feed controller of reservoir 2
+22548,2,142,1.0,Gain of P part of feed controller of reservoir 2
+22549,2,143,5.0,Gain of I part of feed controller of reservoir 2
+22550,2,144,0.005,Gain of D part of feed controller of reservoir 2
 22551,2,148,10.0,
 22552,2,149,60.0,
 22553,2,151,0.0,Setpoint for difference between measured pH and wanted pH
@@ -651,9 +651,9 @@ model_parameterID,modelID,parameterID,value,description
 23171,5,139,15.0,Gain of P part of feed controller of reservoir 1
 23172,5,140,500.0,Gain of I part of feed controller of reservoir 1
 23173,5,141,0.02,Gain of D part of feed controller of reservoir 1
-23174,5,142,-2.0,Gain of P part of feed controller of reservoir 2
-23175,5,143,-15.0,Gain of I part of feed controller of reservoir 2
-23176,5,144,-0.009,Gain of D part of feed controller of reservoir 2
+23174,5,142,1.0,Gain of P part of feed controller of reservoir 2
+23175,5,143,5.0,Gain of I part of feed controller of reservoir 2
+23176,5,144,0.005,Gain of D part of feed controller of reservoir 2
 23177,5,148,100.0,
 23178,5,149,600.0,
 23179,5,151,0.0,Setpoint for difference between measured pH and wanted pH

@@ -299,3 +299,57 @@ def test_the_reference_run_keeps_its_record_of_tmax():
     builds its state from them and never asks the database."""
     reference = REPO_ROOT / "tests" / "reference_data" / "ecoli_reference_p.csv"
     assert "tmax" in reference.read_text(encoding="utf-8")
+
+
+def test_the_pichia_feed_gains_are_no_longer_the_oxygen_controller_s(db_copy: Path):
+    """The three stored values were, digit for digit, the pO2 feed gains.
+
+    Negative is right there — a high pO2 means the culture can take more
+    substrate — and wrong on a substrate loop, whose error is
+    `cS2Lw - cS2L`: too little methanol then gives a negative output and a
+    pump that stays shut. Measured before the correction: the pump at its stop
+    for 100 % of an eight-hour run.
+    """
+    from biofermentation.db.connection import get_connection
+    from biofermentation.db.repair import PICHIA_FEED_GAINS, correct_pichia_feed_gains
+
+    # The template ships corrected, so the fixture is turned back first.
+    with get_connection(db_copy) as conn:
+        for name, (shipped, _measured) in PICHIA_FEED_GAINS.items():
+            conn.execute(
+                "UPDATE default_modelTab SET value = ? WHERE parameterID = "
+                "(SELECT parameterID FROM parameterTab WHERE name = ?)",
+                (shipped, name),
+            )
+
+    found = correct_pichia_feed_gains(db_copy)
+    assert set(found["changed"]) == set(PICHIA_FEED_GAINS)
+    assert found["rows"] == 0, "a dry run writes nothing"
+
+    applied = correct_pichia_feed_gains(db_copy, dry_run=False)
+    assert applied["rows"] > 0
+    assert correct_pichia_feed_gains(db_copy, dry_run=False)["changed"] == {}, "idempotent"
+
+    with get_connection(db_copy, readonly=True) as conn:
+        values = {
+            row["name"]: row["value"]
+            for row in conn.execute(
+                "SELECT p.name, d.value FROM default_modelTab d "
+                "JOIN parameterTab p ON p.parameterID = d.parameterID "
+                "WHERE p.name LIKE '%_feedR2'"
+            )
+        }
+    assert values == {name: measured for name, (_, measured) in PICHIA_FEED_GAINS.items()}
+
+
+def test_a_tuned_gain_of_somebody_else_is_left_alone(db_copy: Path):
+    """Only a value still standing at the shipped number is replaced."""
+    from biofermentation.db.connection import get_connection
+    from biofermentation.db.repair import correct_pichia_feed_gains
+
+    with get_connection(db_copy) as conn:
+        conn.execute(
+            "UPDATE default_modelTab SET value = -0.5 WHERE parameterID = "
+            "(SELECT parameterID FROM parameterTab WHERE name = 'KP_feedR2')",
+        )
+    assert "KP_feedR2" not in correct_pichia_feed_gains(db_copy)["changed"]

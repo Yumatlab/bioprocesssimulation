@@ -938,7 +938,7 @@ und er kommt zu einem anderen Ergebnis: **es gibt dort nichts zu tunen, weil
 kein Regelkreis einen Arbeitspunkt hat.** Drei Befunde, alle gemessen, alle
 als Test festgehalten.
 
-1. **Das Anti-Windup des Rührerreglers stand in der falschen Einheit.**
+1. **Das Anti-Windup des Rührerreglers steht in der falschen Einheit.**
    `clamp(cI_agi, 0, NStmax)` begrenzt einen normierten Term mit einer Grenze
    in min⁻¹: die Obergrenze 1500 kann nie greifen, die Untergrenze 0 immer —
    der I-Anteil kann nicht mehr negativ werden, und ein einmal hochgefahrener
@@ -966,22 +966,52 @@ als Test festgehalten.
    Mit einmal statt zweimal umgerechneter Schrittweite folgt `cS2Lm` dem
    wahren Wert (1,086 gegen 1,092) und der Kreis schließt sich.
 
-**Deshalb sind keine neuen Pichia-Verstärkungen eingetragen.** Der Messstand
-sagt, welche es wären, wenn Punkt 3 entschieden ist — 0,5 / 2 / 0,002 hält
-`cS2L` bei 1,60 g/l gegen 1,5, die Pumpe nie am Anschlag, Biomasse stabil bei
-20 g/l; 15/500/0,02 (die E.-coli-Werte für Reservoir 1) treiben die
-Konzentration auf 82 g/l und die Kultur über die Methanoltoxizität auf 10,7
-g/l zurück. Eingetragen wird davon nichts, solange der Regler auf eine
-eingefrorene Messung schaut: eine Verstärkung, die man nicht prüfen kann, ist
-geraten.
+**Punkt 3 ist entschieden — `sensor_lag`, nur für Pichia**, siehe die fünfte
+Abweichung oben. Damit ist Punkt 2 prüfbar geworden, und die Verstärkungen
+sind gemessen und eingetragen:
 
-**Der pO2-Kreis ist außerdem versorgungsbegrenzt.** Im Late-Stage-Modell sitzt
-der Rührer in **100 %** der Schritte an einem Anschlag, bei jedem
-Verstärkungssatz — auch mit dem Zehnfachen, dem Zehntel, ohne reinen
-Sauerstoff und mit halber Luft. Selbst am unteren Anschlag liefert der Kessel
-mehr Sauerstoff, als die Kultur aufnimmt; pO2 bleibt bei 72–80 % gegen einen
-Sollwert von 20 %. Solange der Feed nicht läuft, wächst nichts, und solange
-nichts wächst, hat der pO2-Regler nichts zu tun. **Die Kette hängt am Feed.**
+| | `KP_feedR2` | `KI_feedR2` | `KD_feedR2` |
+|---|---|---|---|
+| vorher (= pO2-Feed-Regler) | −2 | −15 | −0,009 |
+| **jetzt** | **1** | **5** | **0,005** |
+
+Über acht Stunden Late-Stage-Modell: `cS2L` endet bei 1,38 g/l gegen einen
+Sollwert von 1,5, Tail-RMS 0,237, die Pumpe **nie** am Anschlag, Stellweg
+0,076 l/h summiert, Biomasse 21,0 g/l. Geprüft gegen Sollwerte von 1,0 bis
+3,0 g/l, Schrittweiten 2/5/10 s und die halbe Reservoirkonzentration — Tail-RMS
+bleibt bei 0,20 bis 0,55, ohne Anschlag. Die Alternativen: 3/30/0,01 ist beim
+RMS besser (0,144), sitzt aber zu 28 % am Anschlag und fährt den dreifachen
+Stellweg; 15/500/0,02 (E. coli, Reservoir 1) treibt die Konzentration auf
+82 g/l und die Kultur über die Methanoltoxizität auf 10,7 g/l zurück.
+
+Eingetragen über `repair.correct_pichia_feed_gains()` in `default_modelTab`
+und `model_parameterTab`, angewendet auf Template und CSV-Satz. **Bestehende
+Projekte behalten ihre Werte** — dieselbe Regel wie bei jeder anderen
+Default-Änderung, und der Grund, warum ein gespeicherter Lauf reproduzierbar
+bleibt. Ersetzt wird nur, was noch auf der Ausgangszahl steht; wer selbst
+abgestimmt hat, bleibt unbehelligt.
+
+**Was der Feed für den Rest bewirkt** (acht Stunden, Late-Stage-Modell): die
+Kultur wächst von 20 auf 21,0 g/l statt auf 17,4 zurückzufallen, und die
+Sauerstoffaufnahme verdreifacht sich fast (OUR 0,585 gegen 0,204). Mit
+eingeschaltetem Anti-Windup fällt der pO2-RMS von 61,6 auf **29,6**.
+
+**Der pO2-Kreis bleibt versorgungsbegrenzt, auch mit laufendem Feed.** Der
+Rührer sitzt in **100 %** der Schritte an einem Anschlag, und acht
+Verstärkungssätze über drei Größenordnungen (KP 0,5 bis 20, KI 30 bis 2000)
+liefern **denselben** RMS von 29,6 und dasselbe Endergebnis von 46,2 %.
+Gemessen, nicht geschätzt: **an diesem Kreis ist nichts zu tunen**, weil er
+keinen Arbeitspunkt hat. Bei 8 l/min Luft plus 1 l/min Sauerstoff in acht
+Litern liegt das Gleichgewicht selbst bei der Mindestdrehzahl von 450 min⁻¹
+weit über dem Sollwert von 20 %.
+
+Was es ändern würde, ist die Prozessführung, nicht der Regler: 4 l/min Luft
+ohne reinen Sauerstoff bringen pO2 auf 24,8 % (RMS 10,6), 1 l/min auf 23,7 %
+(RMS 6,1). Ein Sollwert von 60 % ist mit der mitgelieferten Begasung
+erreichbar und lässt den Rührer bei 853 min⁻¹ stehen — dort regelt der Kreis
+wirklich. Deshalb bleiben `KP_agi`/`KI_agi`/`KD_agi` unverändert: eine
+Verstärkung, die an jedem gemessenen Punkt dasselbe Ergebnis liefert, ist
+nicht abgestimmt, sondern folgenlos.
 
 ### Offen aus Phase 3
 
@@ -1308,6 +1338,53 @@ Kopieren der `.db` ohne WAL sind sie verloren.
   Summe seiner Komponenten**, jedes Flag schreibt seinen eigenen Fluss, und
   pO2 bleibt unter dem Gleichgewicht seines eigenen Gasstroms. Die
   Summenprüfung ist die schärfste davon — sie hätte beide Defekte gefunden.
+
+  **Die fünfte Abweichung: die Messwertverzögerung, und nur bei Pichia.**
+  Sie ist von anderer Art als die vier oben — kein Logikfehler, sondern ein
+  Einheitenfehler, und sie wird **nicht für beide Organismen** korrigiert.
+
+  `meas_transfer_function` rechnet
+
+  ```python
+  T = dt / 3600          # dt liegt bereits in Stunden vor
+  return previous + (T / tau) * (K * current - previous)
+  ```
+
+  Das Original übergibt `app.a.deltat` und teilt durch 3600, um von Sekunden
+  auf Stunden zu kommen. In der Portierung ist `dt` schon in Stunden, also
+  wird ein zweites Mal geteilt — und `tau` steht daneben in Sekunden. Ein
+  Schritt schließt damit `dt/3600/tau` = **2,6e-09** des Abstands zwischen
+  wahrem und gemessenem Wert: **jede Messgröße bleibt auf ihrem Anfangswert
+  stehen.** Richtig wäre `dt/(tau/3600)` = 1/30 je Schritt bei tau = 60 s und
+  Δt = 2 s. Die beiden liegen nicht einen, sondern **zwei** Umrechnungen
+  auseinander, Faktor 3600² = 12 960 000 — die naheliegende Vermutung 3600 ist
+  falsch, und `test_the_two_lags_differ_by_the_conversion_squared` schreibt es
+  deshalb hin.
+
+  **E. coli behält die Originalarithmetik.** Der Referenzlauf verifiziert sie:
+  `pHLm`, `thetaLm`, `pO2m` und `cS1Lm` stimmen auf 1e-12 mit MATLAB überein.
+  Das Original friert seine Messwerte also genauso ein, und eine Korrektur
+  hier würde genau das kaputtmachen, wofür die Verifikation da ist. E. coli
+  merkt nichts davon: sein Feed-Regler liest die *echte* Konzentration.
+
+  **Pichia bekommt `sensor_lag`** — dieselbe Formel mit einer statt zwei
+  Umrechnungen. Begründung, in dieser Reihenfolge:
+
+  1. **Es gibt genau einen Leser einer Messgröße in dieser Anwendung**, und
+     der steht im Pichia-Modell: `cSL = v[f"cS{n}Lm"][prev]` im Closed-Loop-
+     Feed. Alle anderen Messreihen werden geschrieben und nie zurückgelesen —
+     sie sind für Plot, Datentabelle und Export da. Die Abweichung berührt
+     also genau einen Regelkreis und sonst keine Rechnung.
+  2. **Ein Regler auf einer Konstanten regelt nichts.** Mit dem Original
+     bleibt `cS2Lm` bei 0,000006 g/l, während `cS2L` auf 1,6 steigt; der
+     Fehler bleibt bei seinem Sollwert stehen und der I-Anteil rampt die
+     Pumpe weiter, bis die Kultur an der Methanoltoxizität stirbt.
+  3. **Pichia ist nicht verifiziert** (kein Referenzlauf aus der aktuellen
+     Quelle, siehe `docs/verification_escherichia_coli.md`). Hier ist also
+     nichts zu verlieren, was es gibt — anders als bei E. coli.
+
+  `test_the_two_organisms_measure_differently_and_on_purpose` bewacht beide
+  Aufrufstellen; wer eine vertauscht, bekommt einen roten Test.
 - **Qt bleibt aus `core/` heraus, bis auf eine Datei.** `core/runner.py`
   läuft ohne Oberfläche und ohne PySide6; nur `core/simulation_runner.py`
   importiert Qt, und `core/__init__.py` zieht sie nicht mit herein. Ein

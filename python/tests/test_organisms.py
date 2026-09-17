@@ -1036,22 +1036,93 @@ def test_the_pichia_stirrer_integral_can_only_fall_with_the_switch_on(registry):
     assert on_pO2 < off_pO2 - 20.0, f"off {off_pO2:.1f} %, on {on_pO2:.1f} %"
 
 
-def test_pichia_measurements_do_not_move_and_that_is_matlab(registry):
-    """The lag the whole Pichia feed loop hangs on, held down by a test.
+def test_the_two_organisms_measure_differently_and_on_purpose(registry):
+    """The fifth deliberate deviation, guarded at its two call sites.
 
-    `meas_transfer_function` divides a dt that is already in hours by 3600
-    again, so a step closes 2.6e-09 of the gap between the true value and the
-    measured one. It is MATLAB's own arithmetic — the E. coli reference run
-    agrees on the measured quantities to 1e-12 — and it is why Pichia's
-    closed-loop feed, which reads `cS2Lm` rather than `cS2L`, cannot hold a
-    setpoint at any gain.
+    `meas_transfer_function` divides a dt that is already in hours by 3600 a
+    second time, so a step closes 2.6e-09 of the gap and the measured series
+    never leave their initial value. That is MATLAB's own arithmetic and the
+    E. coli reference run verifies it — `pHLm`, `thetaLm`, `pO2m` and `cS1Lm`
+    agree to 1e-12 — so E. coli keeps calling it.
 
-    If somebody decides to correct it, this test fails and the decision has to
-    be written down with the reference run it changes.
+    Pichia does not, because it is the only model that reads a measured series
+    back: its closed-loop feed controls `cS2Lm`, and a controller on a
+    constant cannot hold anything. It calls `sensor_lag`, which converts once.
+
+    If somebody swaps either call, this test says so.
     """
-    from biofermentation.organisms.shared import meas_transfer_function
+    root = Path(__file__).resolve().parents[1] / "src/biofermentation/organisms"
+    ecoli = (root / "escherichia_coli/model.py").read_text(encoding="utf-8")
+    pichia = (root / "pichia_pastoris/model.py").read_text(encoding="utf-8")
+
+    assert ecoli.count("meas_transfer_function(") == 4, "E. coli keeps the verified arithmetic"
+    assert "sensor_lag(" not in ecoli
+    assert pichia.count("sensor_lag(") == 5
+    assert "meas_transfer_function(" not in pichia
+
+
+def test_the_two_lags_differ_by_the_conversion_squared(registry):
+    """dt/3600/tau against dt*3600/tau — the factor is 3600^2, not 3600.
+
+    The original divides where the units ask for a multiplication, so the two
+    are two conversions apart, not one: 12 960 000. Written down because the
+    obvious guess is wrong, and a wrong factor in a comment is worse than none.
+    """
+    from biofermentation.organisms.shared import meas_transfer_function, sensor_lag
 
     dt = 2 / 3600  # hours, as the state carries it
-    moved = meas_transfer_function(current_value=10.0, previous_value=0.0, tau=60.0, dt=dt)
-    assert moved == pytest.approx(10.0 * dt / 3600 / 60, rel=1e-12)
-    assert moved < 1e-7, "the measurement is frozen for any practical run"
+    frozen = meas_transfer_function(current_value=10.0, previous_value=0.0, tau=60.0, dt=dt)
+    moving = sensor_lag(current_value=10.0, previous_value=0.0, tau=60.0, dt=dt)
+
+    assert frozen == pytest.approx(10.0 * dt / 3600 / 60, rel=1e-12)
+    assert frozen < 1e-7, "the original freezes the measurement"
+    # tau = 60 s at dt = 2 s closes a thirtieth of the gap per step.
+    assert moving == pytest.approx(10.0 / 30.0, rel=1e-12)
+    assert moving / frozen == pytest.approx(3600.0**2, rel=1e-9)
+
+
+def test_the_pichia_feed_now_holds_its_setpoint(registry):
+    """What the deviation and the corrected gains are for, measured.
+
+    The late-stage model is the configuration this loop exists for: the
+    glycerol batch is over, `R_feed` is on reservoir 2 and the methanol feed
+    holds `cS2L` at 1.5 g/l. With the shipped gains — a copy of the pO2 feed
+    controller's, negative — the pump never opened at all.
+    """
+    import shutil
+    import tempfile
+
+    import numpy as np
+
+    from biofermentation.core.runner import build_state, run_steps
+    from biofermentation.db import create_project, load_phases
+    from biofermentation.organisms import get_organism
+
+    database = Path(tempfile.mkdtemp()) / "sim.db"
+    shutil.copy(TEMPLATE_DB, database)
+    project = create_project(database, "FeedTest", 2)  # Pichia model (late stage)
+    p = dict(load_phases(database, project).p) | {
+        "f_Inoc": 1.0,
+        "f_InocStart": 1.0,
+        "f_feed": 1.0,
+        "Mode_feed": 1.0,
+    }
+    assert p["KP_feedR2"] == 1.0, "the corrected gains ship with the template"
+    assert p["R_feed"] == 2.0, "this model feeds methanol"
+
+    model = get_organism("pichia_pastoris")
+    state = build_state(p, model, dt=2 / 3600)
+    run_steps(state, model, 3600)  # two hours
+
+    stop = state.idx + 1
+    measured = np.asarray(state.v.cS2Lm[:stop], float)
+    true = np.asarray(state.v.cS2L[:stop], float)
+    pump = np.asarray(state.v.FR2[:stop], float)
+
+    assert measured[-1] > 0.5, "the sensor follows the process"
+    assert abs(measured[-1] - true[-1]) < 0.2, "and follows it closely"
+    assert 0.5 < true[-1] < 3.0, f"held near the setpoint of {p['cS2Lw']}, got {true[-1]:.3f}"
+    assert pump[-1] > 0.0, "the pump runs"
+    assert pump.max() < float(p["FR2max"]), "and never at its stop"
+
+

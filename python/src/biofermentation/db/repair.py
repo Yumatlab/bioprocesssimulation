@@ -304,6 +304,89 @@ def add_flags(
     return report
 
 
+#: The gains of Pichia's closed-loop feed on reservoir 2, as shipped and as
+#: measured. The three stored values are, digit for digit, `KP_feedpO2`,
+#: `KI_feedpO2` and `KD_feedpO2` — a copy of the pO2 feed controller, where a
+#: negative sign is right because a high pO2 means the culture can take more
+#: substrate. On a substrate loop, whose error is `cS2Lw - cS2L`, the same
+#: sign inverts the controller: too little methanol gives a positive error, a
+#: negative output, and a pump that stays shut for the whole run.
+#:
+#: The replacements are measured, not guessed. `tools/tune_pichia.py` is the
+#: bench; over eight hours of the late-stage model they hold cS2L at 1.38 g/l
+#: against a setpoint of 1.5 with the pump never once at a stop, and they hold
+#: across setpoints from 1.0 to 3.0 g/l, step widths of 2, 5 and 10 s and half
+#: the reservoir concentration.
+PICHIA_FEED_GAINS = {
+    "KP_feedR2": (-2.0, 1.0),
+    "KI_feedR2": (-15.0, 5.0),
+    "KD_feedR2": (-0.009, 0.005),
+}
+
+
+def correct_pichia_feed_gains(db_path: Path | str, *, dry_run: bool = True) -> dict:
+    """Turn the inverted feed gains of reservoir 2 into measured ones.
+
+    Only the organism defaults and the models are touched — `default_modelTab`
+    and `model_parameterTab`. **A project that already exists keeps its own
+    values**, which is the same rule every other change to a default follows
+    and the reason a stored run stays reproducible.
+
+    Only a value that still stands at the shipped number is replaced. Anybody
+    who has tuned their own is left alone, and a second run changes nothing.
+    """
+    report = {"changed": {}, "rows": 0, "applied": not dry_run}
+    with get_connection(db_path, readonly=True) as conn:
+        organism = conn.execute(
+            "SELECT organismID FROM organismTab WHERE name LIKE 'Pichia%'"
+        ).fetchone()
+        if organism is None:
+            return report
+        organism_id = organism["organismID"]
+        models = [
+            row["modelID"]
+            for row in conn.execute(
+                "SELECT modelID FROM modelTab WHERE organismID = ?", (organism_id,)
+            )
+        ]
+        ids = {
+            row["name"]: row["parameterID"]
+            for row in conn.execute(
+                "SELECT name, parameterID FROM parameterTab WHERE name IN "
+                f"({', '.join('?' * len(PICHIA_FEED_GAINS))})",
+                tuple(PICHIA_FEED_GAINS),
+            )
+        }
+        for name, (shipped, measured) in PICHIA_FEED_GAINS.items():
+            if name not in ids:
+                continue
+            stands = conn.execute(
+                "SELECT COUNT(*) FROM default_modelTab WHERE organismID = ? "
+                "AND parameterID = ? AND value = ?",
+                (organism_id, ids[name], shipped),
+            ).fetchone()[0]
+            if stands:
+                report["changed"][name] = (shipped, measured)
+
+    if dry_run or not report["changed"]:
+        return report
+
+    with get_connection(db_path) as conn:
+        for name, (shipped, measured) in report["changed"].items():
+            report["rows"] += conn.execute(
+                "UPDATE default_modelTab SET value = ? WHERE organismID = ? "
+                "AND parameterID = ? AND value = ?",
+                (measured, organism_id, ids[name], shipped),
+            ).rowcount
+            for model_id in models:
+                report["rows"] += conn.execute(
+                    "UPDATE model_parameterTab SET value = ? WHERE modelID = ? "
+                    "AND parameterID = ? AND value = ?",
+                    (measured, model_id, ids[name], shipped),
+                ).rowcount
+    return report
+
+
 def repair(
     db_path: Path | str,
     *,

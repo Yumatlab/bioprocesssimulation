@@ -246,6 +246,19 @@ The Pichia translation follows the source that does exist line by line and is
 backed by structural and plausibility tests — that is weaker than a verification
 and is not presented as one here.
 
+**One deliberate deviation now separates the two organisms**, and it is here
+rather than only in `CLAUDE.md` because it touches what this report claims.
+`meas_transfer_function` converts the step width twice, which leaves every
+measured series standing at its initial value. The table of measured
+quantities above is the evidence that MATLAB does the same: `pHLm`, `thetaLm`,
+`pO2m` and `cS1Lm` agree to 1e-12 — they agree on standing still. **E. coli
+therefore keeps that arithmetic unchanged, and every number in this report
+still holds.** Pichia calls a corrected `sensor_lag`, because it is the only
+model that reads a measured series back into the simulation and a controller
+on a constant cannot hold a setpoint. Nothing in this comparison is affected
+by that, and `test_the_two_organisms_measure_differently_and_on_purpose`
+guards both call sites.
+
 The thesis run stays in place as a fixture. With its seven phases it is the
 natural template for the phase automaton of phase 3, as soon as the Pichia model
 is brought up to date.

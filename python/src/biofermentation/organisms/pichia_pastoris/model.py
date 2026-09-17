@@ -37,8 +37,8 @@ from ..shared import (
     init_controller_states,
     init_physical_constants,
     integrate,
-    meas_transfer_function,
     pt1_filter,
+    sensor_lag,
 )
 from .ode import LuttmannTerms, ode_expression, ode_induction, ode_luttmann, ode_volume
 
@@ -280,11 +280,16 @@ class PichiaPastoris(OrganismModel):
         v.QS1in[i] = (v.FR1[prev] * p.cS1R1 + v.FR2[prev] * p.cS1R2) / v.VL[i]
         v.QS2in[i] = (v.FR1[prev] * p.cS2R1 + v.FR2[prev] * p.cS2R2) / v.VL[i]
 
-        v.pHLm[i] = meas_transfer_function(v.pHL[prev], v.pHLm[prev], p.taupHL, dt)
-        v.pO2m[i] = meas_transfer_function(v.pO2[prev], v.pO2m[prev], p.taupO2, dt)
-        v.thetaLm[i] = meas_transfer_function(v.thetaL[prev], v.thetaLm[prev], p.tauthetaL, dt)
-        v.cS1Lm[i] = meas_transfer_function(v.cS1L[prev], v.cS1Lm[prev], p.taucS1L, dt)
-        v.cS2Lm[i] = meas_transfer_function(v.cS2L[prev], v.cS2Lm[prev], p.taucS2L, dt)
+        # `sensor_lag`, not `meas_transfer_function`: see the fifth deliberate
+        # deviation in CLAUDE.md. The original's double conversion freezes
+        # every measured series at its initial value, and this organism is the
+        # only one that reads one back — its closed-loop feed controls
+        # `cS2Lm`. E. coli keeps the original arithmetic; it is verified.
+        v.pHLm[i] = sensor_lag(v.pHL[prev], v.pHLm[prev], p.taupHL, dt)
+        v.pO2m[i] = sensor_lag(v.pO2[prev], v.pO2m[prev], p.taupO2, dt)
+        v.thetaLm[i] = sensor_lag(v.thetaL[prev], v.thetaLm[prev], p.tauthetaL, dt)
+        v.cS1Lm[i] = sensor_lag(v.cS1L[prev], v.cS1Lm[prev], p.taucS1L, dt)
+        v.cS2Lm[i] = sensor_lag(v.cS2L[prev], v.cS2Lm[prev], p.taucS2L, dt)
 
         v.t[i] = v.t[prev] + dt
 

@@ -300,6 +300,29 @@ def meas_transfer_function(
     return previous_value + (T / tau) * (K * current_value - previous_value)
 
 
+def sensor_lag(current_value: float, previous_value: float, tau: float, dt: float) -> float:
+    """A first-order sensor lag with the step width converted once.
+
+    The counterpart of `meas_transfer_function`, and the deliberate deviation
+    from it. `tau` is in seconds and `dt` in hours, so one conversion is
+    needed and exactly one is made:
+
+        previous + dt / (tau / 3600) * (current - previous)
+
+    The original divides a dt that is already in hours by 3600 a second time,
+    which leaves each step closing 2.6e-09 of the gap — the measurement never
+    leaves its initial value. That is the arithmetic the E. coli reference run
+    verifies, so `meas_transfer_function` keeps it and E. coli keeps calling
+    it. Pichia does not: its closed-loop feed is the **only** place in this
+    application where a measured series is read back by the simulation, and a
+    controller on a constant cannot hold anything at all.
+
+    With tau = 60 s and dt = 2 s the step factor is 1/30 instead of 2.6e-09,
+    which is a sensor that follows its process in a couple of minutes.
+    """
+    return previous_value + (dt / (tau / 3600.0)) * (current_value - previous_value)
+
+
 def integrate(
     previous: float,
     increment: float,

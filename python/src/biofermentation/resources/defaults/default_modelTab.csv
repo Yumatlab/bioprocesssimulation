@@ -312,9 +312,9 @@ default_modelparameterID,organismID,parameterID,value,description
 312,2,139,15.0,Gain of P part of feed controller of reservoir 1
 313,2,140,500.0,Gain of I part of feed controller of reservoir 1
 314,2,141,0.02,Gain of D part of feed controller of reservoir 1
-315,2,142,-2.0,Gain of P part of feed controller of reservoir 2
-316,2,143,-15.0,Gain of I part of feed controller of reservoir 2
-317,2,144,-0.009,Gain of D part of feed controller of reservoir 2
+315,2,142,1.0,Gain of P part of feed controller of reservoir 2
+316,2,143,5.0,Gain of I part of feed controller of reservoir 2
+317,2,144,0.005,Gain of D part of feed controller of reservoir 2
 318,2,148,100.0,
 319,2,149,600.0,
 320,2,151,0.0,Setpoint for difference between measured pH and wanted pH

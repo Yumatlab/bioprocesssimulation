@@ -474,17 +474,35 @@ one.
 `Mode_pO2` = Aeration / Gasmix / Feed. The reference run does not use them. The
 pulse feed is only tested structurally.
 
-**The *Pichia* control loops do not close, and this is measured.** Its
-closed-loop feed carries the gains of the pO2 feed controller — the same three
-numbers, negative — which inverts a substrate loop: too little methanol gives a
-positive error, a negative output, and a pump that stays shut. And it reads the
-*measured* concentration, which barely moves: the first-order lag converts the
-step width twice, so a step closes 2.6·10⁻⁹ of the gap. That second one is the
-MATLAB original's own arithmetic and is part of what the reference run verifies,
-so it is left as it is and named here instead. The consequence for a user is
-concrete: with *Pichia*, **Closed loop on the feed does nothing**, and because
-nothing grows, pO2 stays far above its setpoint whatever the controller gains
-are. `python tools/tune_pichia.py` prints the whole chain of measurements.
+**Two corrections to *Pichia*, both deliberate and both measured.** Its
+closed-loop feed used to do nothing at all, for two reasons that compounded.
+
+The gains of the methanol loop were, digit for digit, those of the pO2 feed
+controller — negative, which is right there and inverts a substrate loop: too
+little methanol gives a positive error, a negative output and a pump that stays
+shut. They are now measured values (1 / 5 / 0.005): over eight hours the loop
+holds `cS2L` at 1.38 g/l against a setpoint of 1.5 with the pump never once at
+a stop. **A project you created earlier keeps its own gains** — that is the
+same rule every default follows — so to get the new ones, create a new project.
+
+And the loop reads the *measured* concentration, which used to stand still: the
+first-order lag converted the step width twice, so a step closed 2.6·10⁻⁹ of the
+gap between the true value and the measured one. That is the MATLAB original's
+own arithmetic, and the *E. coli* reference run verifies it, so **E. coli keeps
+it** and only *Pichia* was changed. The measured series of a *Pichia* run —
+pH, temperature, pO2 and the two substrates — therefore follow their process
+now, where an *E. coli* run shows them standing at their initial value. The
+reasoning is in `CLAUDE.md` under the fifth deliberate deviation.
+
+**What this does not fix: pO2.** With the shipped gassing — 8 l/min air plus
+1 l/min oxygen into eight litres — the vessel delivers more oxygen at the
+stirrer's lowest speed than the culture takes up, so pO2 settles around 46 %
+against a setpoint of 20 % and the stirrer sits at its floor. Eight sets of
+controller gains across three orders of magnitude give the same result to the
+decimal: there is nothing to tune, the loop has no operating point. What helps
+is the process, not the controller — 4 l/min of air without pure oxygen brings
+pO2 to 24.8 %, and a setpoint of 60 % is reachable with the gassing as it is.
+`python tools/tune_pichia.py` prints every one of these measurements.
 
 **A known quirk:** some time series are computed but not stored. The offgas
 fractions are called `xO2` and `xCO2` in the model and have no row at all in
