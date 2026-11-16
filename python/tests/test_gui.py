@@ -349,7 +349,8 @@ def test_the_windows_render_to_png(tmp_path, qapp):
     from biofermentation.gui.screenshots import render
 
     written = render(tmp_path)
-    assert len(written) == 8
+    # Eight windows and the building blocks of the PCS tab (PCS plan, phase 1).
+    assert len(written) == 9
     for path in written:
         assert path.is_file() and path.stat().st_size > 2000
 

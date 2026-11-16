@@ -1179,6 +1179,211 @@ nicht durch einen Push:
 
 ---
 
+## Der PCS-Tab
+
+Plan: `python/Projektplan_PCS_Tab.md`. Phase 0 (Festlegen) am 14.11.2026,
+Phase 2 (Spezifikation, Layoutdatei) am 16.11.2026 gegen Commit `5347fe2`.
+Phase 1 (Bausteine) am 16.11.2026 nachgeholt; Phase 2 hing nicht von ihr ab.
+
+### Elementliste — jede Zeile mit ihrem Leser im Modell
+
+Zeilen: E. coli `organisms/escherichia_coli/model.py`, Pichia
+`organisms/pichia_pastoris/model.py`. Beide Modelle lesen jedes Flag an der
+gleichen Stelle und unter der gleichen Bedingung; die Unterschiede stehen unter
+den Befunden.
+
+| Element | Flag | wird gelesen, wenn | E. coli | Pichia | Rückmeldung |
+|---|---|---|---|---|---|
+| Säure | `f_acid` | `Mode_pH == 0` | 550 | 577 | `v.FT1` |
+| Lauge | `f_alkali` | `Mode_pH == 0` | 549 | 576 | `v.FT2` |
+| Feed | `f_feed`, `R_feed` | kein Exponential-/Pulsfeed und `Mode_pO2 != 4` | 325–326 | 350–351 | `v.FR{n}` |
+| Ernte | `f_harvest` | `Mode_harvest != 1` | 532 | 562 | `v.FH` |
+| Antischaum | `f_antifoam` | `a.ToI != 0` — nie bei Beimpfung zur Zeit 0 (Phase 2) | 537 | 566 | keine Flussreihe |
+| Begasung | `f_aeration` | `Mode_pO2` 0, 1, 4: ganz; 2, 3: nur N2/CO2 | 368, 476 | 395, 519 | `v.FnG` |
+| Luft | `f_air` | `Mode_pO2` nicht 2/3 und `f_aeration == 1` | 477 | 520 | `v.FnAIR` |
+| Sauerstoff | `f_O2` | `Mode_pO2` nicht 2/3 und `f_aeration == 1` | 499 | 521 | `v.FnO2` |
+| Stickstoff | `f_N2` | `f_aeration == 1`, jeder Modus | 369 | 396 | `v.FnN2` |
+| Kohlendioxid | `f_CO2` | `f_aeration == 1`, jeder Modus | 370 | 397 | `v.FnCO2` |
+| Rührer | `f_motor` | `Mode_pO2 != 1` | 469 | 513 | `v.NSt` |
+| Kühlung | `f_cooling` | `Mode_temp == 0` | 605 | 626 | `a.mdotC` |
+| Heizung | `f_heating` | `Mode_temp == 0` | 606, 651 | 627, 659 | Automatik `a.mdotH`; Hand: nicht gespeichert |
+| Beimpfung | `f_Inoc` | bleibt der vorhandene Knopf | 227 | 250 | `a.inoc_occ` |
+
+Füllstände werden in `_volume` geschrieben: E. coli 696–697 (`VL`, `VR1`,
+`VT2`, `VT1`), Pichia 702–704 (dazu `VR2`). Startwerte der Flüsse setzt
+`organisms/shared.py` 249–264 aus `f_motor`, `f_aeration`, `f_air`, `f_O2`,
+`f_N2`, `f_CO2`, `f_harvest` — ohne Modusprüfung, nur für Index 0.
+
+### Befunde aus Phase 0
+
+- **`f_FR1`, `f_FR2`, `f_FR3` haben keinen Leser** in `src/` (Suche über den
+  ganzen Baum). Kein Ventil dafür.
+- **`f_aeration` schaltet in `Mode_pO2` 2 und 3 das Gas nicht ab.**
+  `_aeration` kehrt dort sofort zurück (E. coli 474, Pichia 517); Luft, O2 und
+  `FnG` schreibt der Regler ohne Blick auf den Hauptschalter (E. coli 419–421,
+  464–465; Pichia 462–466, 507–510). Der Hauptschalter wirkt dann nur noch auf
+  N2/CO2. Steht er auf 0, bleiben `FnN2[i]`/`FnCO2[i]` auf der NaN-Vorbelegung,
+  die Summe `FnG[i]` wird NaN, `xOGin[i]` fällt auf 0 (E. coli 109–112) und
+  `carry_forward` setzt am Schrittende `FnG` auf den Vorwert. Der nächste
+  Schritt rechnet den Sauerstoffeintrag dann mit `xOGin = 0` bei
+  weiterlaufendem `FnG`. Gelesen, nicht gemessen; außerhalb des verifizierten
+  Fensters (`Mode_pO2 = 1`). Das Modell bleibt, wie es ist; der PCS-Tab sperrt
+  das Begasungsventil in 2/3 (Entscheidung 7).
+- **Feed hängt an `a`, nicht nur an `p`.** Exponential- und Pulsfeed setzt der
+  Phasenautomat über `a.switch_exp`/`a.switch_pulse` (`control/phases.py`
+  345, 356; zurückgesetzt 283–284, 310–311). Solange einer davon steht, liest
+  das Modell `f_feed` nicht. `PcsView.load` bekommt deshalb `state`, nicht
+  nur `p`.
+- **Welches Reservoir fließt, ist nicht immer `R_feed`.** E. coli schreibt bei
+  Exponential-, Pulsfeed und `Mode_pO2 = 4` immer `FR1` (283–323). Pichia
+  nimmt bei Exponential- und Pulsfeed `R_feed` (316–329), bei `Mode_pO2 = 4`
+  aber ebenfalls `FR1` (347). Die Leitung zeigt den Fluss aus `v`, das Ventil
+  den Befehl aus `p` — die Trennung zeigt das richtig, ohne Sonderlogik.
+- **Nur sechs Flags haben einen Panelschalter** (`gui/widgets/panel_specs.py`
+  33–34, 59–60, 123, 152): `f_alkali`, `f_acid`, `f_cooling`, `f_heating`,
+  `f_harvest`, `f_feed`; `f_feed` ohne `modes`. `f_motor`, `f_aeration`,
+  `f_air`, `f_O2`, `f_N2`, `f_CO2`, `f_antifoam` stehen nur in `parameterTab`
+  (Kategorie 8 „Flags", Typ `switch`). Ihre Bedingung und die Zusatzbedingung
+  des Feeds stehen deshalb in `pcs_specs.py`.
+- **Ernte:** das Modell prüft `Mode_harvest == 1` und liest sonst das Flag.
+  Das Panel bietet nur 0 und 1 an, also gleichwertig zu `== 0`.
+
+### Entscheidungen
+
+1. Tabname „PCS". 2. Direkt nach „Control Options". 3. Reservoirwahl nur im
+Feed-Panel; das Fließbild zeigt sie an. 4. Antischaum- und Erntegefäß ohne
+Füllstand. 5. Ventilklick schaltet sofort. 6. Beimpfung bleibt der vorhandene
+Knopf. 7. Begasungsventil in `Mode_pO2` 2/3 gesperrt, Tooltip nennt den
+pO2-Regler.
+
+### Regeln
+
+- **Befehl und Rückmeldung getrennt.** Das Ventil zeigt das Flag aus `p`, die
+  Leitung den Fluss aus `v`/`a`. Im Automatikbetrieb ist das Ventil gesperrt,
+  sein Symbol folgt dem Fluss, der Tooltip nennt den Regler.
+- **Ein Schreibweg.** Ventilklick → `_set_parameter` → `load_panels()`;
+  Paneländerung → `_set_parameter` → `pcs_view.load(state)`. Kein Panel wird
+  nach seiner eigenen Änderung neu geladen.
+- **Verdrahtung ist Code, Anordnung ist Text:** `pcs_specs.py` und `pcs.yaml`.
+  Kein Ventil für ein Flag, das kein Modell liest.
+
+### Stand nach Phase 2 (16.11.2026)
+
+Neu: `gui/pcs_specs.py`, `gui/pcs_layout.py`, `resources/layouts/pcs.yaml`,
+`tests/test_pcs_specs.py` (33 Tests, einer davon braucht Qt).
+
+- **`pcs_specs.py` liegt in `gui/`, nicht in `gui/widgets/`.** Jeder Import aus
+  `gui/widgets/` lädt über `widgets/__init__.py` PySide6; die Spezifikation ist
+  Daten und wird ohne Fenster getestet. Neben ihr liegt `pcs_layout.py`, wie
+  `panel_layout.py` neben `panel_specs.py`.
+- **Quellen tragen ihren Behälter:** `"p:Mode_pH"`, `"v:FT1"`, `"a:mdotC"`.
+  Bedingungen lesen nur `p` und `a` (`read()`), Flüsse und Füllstände `v` und `a`.
+- **`Lock(source, values, owner, complete=True)`:** das Ventil gehört dem
+  Bediener nur, solange der Wert in `values` liegt; sonst nennt
+  `ValveSpec.locked_by(p, a)` den `owner` für den Tooltip. `complete=False`
+  heißt: Sperre ist eine Entscheidung des Tabs, das Modell läse das Flag noch
+  (nur die Begasung, Entscheidung 7).
+- **Die Modusbedingung steht zweimal, ein Test hält sie zusammen.** Abweichung
+  vom Plan: die sechs Panel-Flags lesen ihre Bedingung nicht aus den
+  `SwitchSpec`s, weil `panel_specs.py` Qt lädt.
+  `test_the_panel_switches_carry_the_same_conditions` vergleicht Quelle, Werte
+  und Paneltitel (läuft nur mit PySide6).
+- **Sperren sind am Verhalten geprüft, nicht nur an der Quelle.** Für jedes
+  Ventil und jeden Wert jedes `Mode_`-Parameters (aus
+  `parameter_controlmodesTab.csv`) laufen zwei kurze Läufe mit Flag 0 und 1,
+  gesetzt *nach* `build_state` (sonst wirkt der modusblinde Startwert aus
+  `shared.py`). Gesperrt muss das Ventil genau dort sein, wo das Flag nichts
+  ändert — bitgleich. Gegenprobe: eine fehlende Rührersperre in
+  `Mode_pO2 = 1` und eine zu strenge Gassperre in `Mode_pO2 = 4` fallen beide
+  auf. `f_feed` teilen sich die Feed-Ventile; dort zählt nur die eigene Reihe.
+- **Leitungen heißen `<x>_line`, Pumpen `<x>_pump`** (seit Entscheidung 8), damit jede Id auf dem Blatt eindeutig ist
+  (Alarme zeigen über sie auf ihr Element).
+- **Heizleitung zählt nur in `Mode_temp = 1`** (`PipeSpec.counts_when`). Im
+  Handbetrieb heizt das Modell elektrisch und schreibt `a.mdotH` nicht
+  (E. coli 604–607) — der Wert stünde auf dem letzten Automatikstand.
+- **`pcs.yaml`:** `elements` (Pflicht, [x, y] in 0…1) und `pipes` (Knicke,
+  optional). Einträge für Reservoirs, die der Organismus nicht hat, sind
+  erlaubt (bis `MAX_RESERVOIRS = 3`). Fehler → Kreisanordnung um den Kessel
+  plus Grund; `load_pcs_layout` wirft nie.
+- **Tests ohne PySide6:** die `conftest.py` überspringt sonst alles.
+  `PYTHONPATH=src python -m pytest --noconftest tests/test_pcs_specs.py`.
+
+Befunde aus Phase 2:
+
+- **Antischaum dosiert nie, wenn bei t = 0 beimpft wurde.** Das Modell nimmt
+  `a.ToI != 0` als „beimpft"; `f_InocStart` und eine Beimpfung im ersten
+  Schritt (`ToI = t[prev] = 0`) lassen `ToI` auf 0. Gelesen und im Probelauf
+  bestätigt (das Flag ändert dann nichts); das Modell bleibt. Kein Lock, weil
+  `Lock` nur Werte aufzählt; die Probe setzt `a.ToI = 1e-6`.
+- **Projekt 519 hat negative Feed-Verstärkungen für Reservoir 2**
+  (`KP_feedR2 = -2`, `KI_feedR2 = -15`, `KD_feedR2 = -0.009`; Reservoir 1
+  positiv). Der Regler pumpt dann, wenn die Konzentration *über* dem Sollwert
+  liegt. Ob Absicht, nicht geprüft.
+
+Verschoben: **Menüeintrag „Settings → PCS layout…" kommt mit Phase 3.** Ohne
+Tab öffnete er eine Datei, die nichts bewirkt. `write_user_pcs_layout()`
+steht bereit.
+
+### Stand nach Phase 1 (16.11.2026)
+
+Neu: `gui/widgets/pcs_elements.py` (`ValveButton`, `TankGauge`,
+`VesselWidget`, `draw_pipe`), `tests/test_pcs.py`; Alarmfarben
+`ALARM_WARNING`, `ALARM_ALARM`, `ALARM_COLORS` in `indicators.py`; Bild
+`08_pcs_elements.png` in `gui/screenshots.py` (der Rendertest zählt jetzt 9).
+
+**Entscheidung 8 (16.11.2026): Symbole nach R&I, Farben nach ISA-101,
+Variante b.**
+
+- **Symbolik nach `matlab/RI.drawio`** (Symbole der DIN EN ISO 10628-2; die
+  Norm selbst nicht eingesehen). `pcs_specs.SYMBOLS = ("pump", "valve",
+  "control_valve", "motor")`, je `ValveSpec` ein `symbol`. Pumpen überall, wo
+  das Modell eine Pumpenrate dosiert (Säure, Lauge, Feed, Antischaum —
+  `FT1max` heißt „Pump rate acid"), Regelventile mit Membranantrieb auf den
+  Gasen (vor den MFCs), Absperrventile für Begasung gesamt, Kühlung, Heizung,
+  ein Motor für den Rührer. **Abweichung vom R&I (Wunsch des Anwenders):** die
+  Ernte läuft über ein Ventil am Reaktorboden (`harvest_valve`), nicht über
+  die Pumpe `FH` des Schemas. Ids: `acid_pump`, `alkali_pump`,
+  `antifoam_pump`, `feed{n}_pump`, `harvest_valve`; Gase `<gas>_valve`.
+- **Farben nach ISA-101, Variante b** (Leitgedanke aus Sekundärquellen, nicht
+  aus der Norm): Ausrüstung grau; Zustand ist Form — gefüllt dunkel = läuft
+  bzw. offen, hohl = steht bzw. zu; gesperrt = blasser plus Kennzeichen „A"
+  (Automatik). Gesättigte Farbe nur für Alarme. Eine aktive Leitung bekommt
+  eine gedeckte Medienfarbe; ein Test hält jede Medienfarbe unter Sättigung
+  0,45 und jede Alarmfarbe über 0,8.
+- **`ValveButton(label, symbol)`** ist ein checkbarer `QAbstractButton`.
+  `set_state_now()` lädt ohne Signal (wie `SlideSwitch`). `set_locked(owner)`
+  schaltet ab, zeichnet „A" und schreibt den Besitzer in den Tooltip; geladen
+  werden kann ein gesperrtes Element weiterhin, damit es dem Fluss folgt.
+- **`TankGauge`** ist eine Flasche (Schulter = 100 %), **`VesselWidget`** ein
+  Behälter mit gewölbtem Boden, max-/min-Marke, Welle bis zur Oberkante (dort
+  setzt das Layout den Motor), Rührer (gefüllt = dreht) und Begasungsring
+  tief im Behälter, Ablaufstutzen an der tiefsten Stelle des Klöpperbodens
+  (der Kessel läuft vollständig leer) bis zur Unterkante; Name links, Zahlen
+  rechts davon. `VesselWidget.outlet()` liefert den Endpunkt des Stutzens:
+  dort beginnt in Phase 3 die Ernteleitung (senkrecht hinunter bis zur Höhe
+  des ersten Knicks in `pcs.yaml`), nicht in der Kesselmitte. Die min-Marke
+  steht bei `VLmin / VLmax` (Projekt 716: 5 von 11 l, 45 %) — Daten, kein
+  Layout; der Anwender hat entschieden, sie so zu lassen, weil sie sich über
+  `VLmin` steuern lässt.
+- **Das M im Motor ist ein Pfad**, um die Mitte seines Umrisses zentriert.
+  Nach Schriftmetrik zentriert saß es sichtbar daneben (Platz für Akzente und
+  Unterlängen, plattformabhängig). Motor 28 px, Pumpe 26 px (Test: der Motor
+  ist nicht kleiner).
+  Beide: ▽ auf der Oberfläche, darunter Name und „3.20 l · 64 %" (wahrer
+  Anteil, Füllstand auf 0…1 begrenzt). Ohne Maximum (0, None, NaN) kein
+  Füllstand und kein Text — für Antischaum und Ernte.
+- **Leitungen** sind kein Widget, sondern `draw_pipe(painter, points, medium,
+  live, share=0.5)` für die Zeichenfläche in Phase 3. Aktiv: Medienfarbe,
+  4 px, Pfeil; inaktiv: grau, 1,5 px, kein Pfeil. Das R&I setzt den Pfeil an
+  den Eintritt ins Ziel — `share` erlaubt das; die Stelle kennt erst die
+  Zeichenfläche (Phase 3).
+- **`set_alarm(None | "warning" | "alarm")`** an jedem Baustein, sonst
+  `ValueError`. Warnung: gestrichelter Rahmen, Alarm: durchgezogen; beide mit
+  kleinem Dreieck und Ausrufezeichen. Noch ruft es niemand (Plan 5.6).
+- Keine Mindestbreite über 120 px (Test); Texte werden gekürzt.
+
+---
+
 ## Kessel und Organismen anlegen — ohne Python
 
 Zwei Dialoge derselben Bauart, **Library → Bioreactors…** und **Organisms…**
@@ -1514,6 +1719,34 @@ Kopieren der `.db` ohne WAL sind sie verloren.
   Template), damit ihre Striche auf gleicher Höhe liegen und die Skalen
   quer lesbar sind. Die Zeitachse nicht — sie wächst mit dem Lauf, und
   erzwungene Teilungen ergäben dort krumme Zahlen.
+- **Eine erzwungene Teilung ergibt krumme Werte, und pyqtgraph beschriftet
+  sie falsch.** Die Zahl der Nachkommastellen kommt dort aus
+  `ceil(-log10(spacing))` — richtig, solange der Schritt rund ist. Gemessen
+  an einem echten Plot: µ lief von −0,1 bis 0,5, fünf Teilungen legten die
+  Striche auf 0 / 0,12 / 0,24 / 0,36 / 0,48, und beschriftet wurden sie mit
+  **0 / 0,1 / 0,2 / 0,4 / 0,5**. Die „fehlende" 0,3 ist 0,36 aufgerundet, und
+  ein Wert von 0,10 sitzt sichtbar *unter* der Linie, die 0,1 zu sein
+  behauptet. Die Kurve war richtig, die Beschriftung nicht.
+
+  `HonestTicksAxis.tickStrings` zählt die Stellen deshalb aus den Zahlen
+  selbst: so wenige wie möglich, aber keine Beschriftung weiter als ein
+  Hundertstel des Schritts von ihrem eigenen Strich entfernt. Runde Schritte
+  bleiben rund (0 / 400 / 800), 0,12 wird 0,12, und ein Schritt, der sich gar
+  nicht schreiben lässt (Zeitachse in Dritteln), wird so weit gerundet, dass
+  er eindeutig bleibt.
+
+  **Nachgerechnet aus dem Bildschirmfoto des Anwenders**: Teilstriche bei
+  y = 149,5 / 391,5 / 633,5 / 875,5 / 1117,5, gleichabständig und oben wie
+  unten eingerückt; aus der Nachbarachse (θ_L, 0…50) ergibt sich die
+  Plotfläche 109,5…1318,5 px, und der Bereich [−0,1, 0,5] sagt genau diese
+  fünf Positionen voraus — auf ein halbes Pixel.
+
+  **Warum die Achse bei −0,1 beginnt, ist keine Abweichung.**
+  `auto_limits` folgt `calculateYLimits` wörtlich: ein negativer Messwert
+  zieht die Untergrenze auf `-ceil(|min|/scale)*scale` mit der Dekade der
+  Obergrenze. Ein einziger Schritt knapp unter null kostet damit eine ganze
+  Dekade Achse. Das ist die Quelle, nicht die Portierung — wer es ändern
+  will, ändert es als bewusste Abweichung und misst sie.
 - **Kein Gitter im Plot** und kein `(×0.001)` über den Achsen
   (`enableAutoSIPrefix(False)`).
 - **Kurvenendlabels mit `ignoreBounds=True`**, sonst zieht das Label hinter

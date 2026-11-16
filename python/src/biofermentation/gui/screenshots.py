@@ -54,6 +54,8 @@ def render(out_dir: Path, db_path: Path | None = None) -> list[Path]:
         create.table.selectRow(0)
     shoot(create, "03_create_project.png", (600, 620))
 
+    shoot(_pcs_elements(), "08_pcs_elements.png", (980, 260))
+
     control = _control_window(db_path)
     if control is not None:
         shoot(control, "04_control_app.png", (1290, 690))
@@ -74,6 +76,64 @@ def render(out_dir: Path, db_path: Path | None = None) -> list[Path]:
         shoot(figure, "07_figure_app.png", (1500, 815))
 
     return written
+
+
+def _pcs_elements():
+    """Every building block of the PCS tab, in the states that matter."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QWidget
+
+    from .pcs_specs import SYMBOLS
+    from .widgets.pcs_elements import (
+        TankGauge,
+        ValveButton,
+        VesselWidget,
+        draw_pipe,
+    )
+
+    class PipeDemo(QWidget):
+        """A live and an idle pipe of the same medium, one above the other."""
+
+        def paintEvent(self, event) -> None:  # noqa: N802 - Qt API
+            from PySide6.QtGui import QPainter
+
+            painter = QPainter(self)
+            width = self.width()
+            draw_pipe(painter, [(10, 40), (width - 40, 40), (width - 40, 90)], "feed", True)
+            draw_pipe(painter, [(10, 140), (width - 10, 140)], "feed", False)
+
+    sheet = QWidget()
+    row = QHBoxLayout(sheet)
+
+    # One row per symbol: stopped, running, locked by a controller, in alarm.
+    grid = QGridLayout()
+    for column, state in enumerate(("off", "on", "auto", "alarm")):
+        grid.addWidget(QLabel(state), 0, column + 1)
+    for line, symbol in enumerate(SYMBOLS, start=1):
+        grid.addWidget(QLabel(symbol), line, 0)
+        for column, state in enumerate(("off", "on", "auto", "alarm")):
+            element = ValveButton(symbol, symbol=symbol)
+            # No focus ring in a picture of states.
+            element.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            element.set_state_now(state != "off")
+            if state == "auto":
+                element.set_locked("a controller")
+            if state == "alarm":
+                element.set_alarm("alarm")
+            grid.addWidget(element, line, column + 1)
+    row.addLayout(grid)
+
+    reservoir = TankGauge("Reservoir 1")
+    reservoir.set_volume(3.2, 5.0)
+    antifoam = TankGauge("Antifoam")
+    antifoam.set_alarm("warning")
+    reactor = VesselWidget()
+    reactor.set_volume(10.0, 11.0, 5.0)  # VL0, VLmax, VLmin of project 716
+    reactor.set_stirring(True)
+    for element in (reservoir, antifoam, reactor):
+        row.addWidget(element)
+    row.addWidget(PipeDemo(), stretch=1)
+    return sheet
 
 
 def _control_window(db_path: Path):

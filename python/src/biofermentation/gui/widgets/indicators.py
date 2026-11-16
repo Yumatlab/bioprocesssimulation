@@ -81,6 +81,14 @@ ACCENT = QColor(0x2F, 0x7F, 0xD1)
 TEXT = QColor(0x4A, 0x4A, 0x4A)
 MUTED = QColor(0x9A, 0x9A, 0x9A)
 
+#: Alarm states (PCS plan, section 5). Named here so that a valve on the flow
+#: sheet, the lamp in the menu bar and the alarm banner mean the same thing
+#: by the same colour. Colour is never the only sign: whoever draws one of
+#: these also draws a frame and a symbol.
+ALARM_WARNING = QColor(0xE8, 0xA3, 0x17)
+ALARM_ALARM = QColor(0xD6, 0x2F, 0x2F)
+ALARM_COLORS = {"warning": ALARM_WARNING, "alarm": ALARM_ALARM}
+
 
 class StatusLamp(QWidget):
     """A filled circle. Qt has no uilamp."""

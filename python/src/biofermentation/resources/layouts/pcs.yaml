@@ -1,0 +1,73 @@
+# Where the elements of the PCS tab sit.
+#
+# Copy this file next to your database as pcs.yaml and change it there; the
+# application reads yours instead of this one and never writes to this file.
+#
+# Positions are fractions of the sheet: [x, y], x from the left edge (0) to
+# the right edge (1), y from the top (0) to the bottom (1). The sheet scales
+# with the window.
+#
+# A pipe runs from the centre of the element it starts at, through its bends,
+# to the centre of the element it ends at; the widgets cover the ends. A pipe
+# that is not listed under pipes is drawn as a straight line. A valve sits
+# where its position says — put it on its pipe.
+#
+# Every element has to appear once. If anything is wrong the application keeps
+# a plain arrangement (the reactor in the middle, everything else around it)
+# and says why in the log — it will not show half a sheet.
+#
+# Elements for a second reservoir may stay in the file for an organism with
+# one; they are simply not drawn.
+
+elements:
+  reactor:        [0.55, 0.50]
+  stirrer:        [0.55, 0.12]
+
+  # Gas, top left: four supplies into one manifold, one main valve.
+  air_supply:     [0.04, 0.08]
+  air_valve:      [0.14, 0.08]
+  o2_supply:      [0.04, 0.16]
+  o2_valve:       [0.14, 0.16]
+  n2_supply:      [0.04, 0.24]
+  n2_valve:       [0.14, 0.24]
+  co2_supply:     [0.04, 0.32]
+  co2_valve:      [0.14, 0.32]
+  gas_manifold:   [0.24, 0.20]
+  aeration_valve: [0.36, 0.20]
+
+  # Liquids, bottom left: one tank and one pump per line.
+  antifoam:       [0.06, 0.44]
+  antifoam_pump:  [0.24, 0.44]
+  alkali:         [0.06, 0.56]
+  alkali_pump:     [0.24, 0.56]
+  acid:           [0.06, 0.68]
+  acid_pump:       [0.24, 0.68]
+  reservoir1:     [0.06, 0.80]
+  feed1_pump:     [0.24, 0.80]
+  reservoir2:     [0.06, 0.92]
+  feed2_pump:     [0.24, 0.92]
+
+  # Right: the jacket. Below: the harvest, out of the bottom of the reactor.
+  cooling_supply: [0.94, 0.40]
+  cooling_valve:  [0.80, 0.40]
+  heating_supply: [0.94, 0.55]
+  heating_valve:  [0.80, 0.55]
+  harvest_valve:  [0.76, 0.95]
+  harvest:        [0.94, 0.82]
+
+pipes:
+  air_line:      [[0.24, 0.08]]
+  o2_line:       [[0.24, 0.16]]
+  n2_line:       [[0.24, 0.24]]
+  co2_line:      [[0.24, 0.32]]
+  aeration_line: [[0.50, 0.20], [0.50, 0.50]]
+  antifoam_line: [[0.42, 0.44]]
+  alkali_line:   [[0.42, 0.56]]
+  acid_line:     [[0.42, 0.68]]
+  feed1_line:    [[0.42, 0.80]]
+  feed2_line:    [[0.48, 0.92], [0.48, 0.80]]
+  cooling_line:  [[0.62, 0.40]]
+  heating_line:  [[0.62, 0.55]]
+  # Starts at the reactor's outlet nozzle, not at its centre: the sheet
+  # drops it straight down to the height of the first bend.
+  harvest_line:  [[0.94, 0.95]]
