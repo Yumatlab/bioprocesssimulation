@@ -143,11 +143,30 @@ def test_the_harvest_outlet_sits_under_the_lowest_point(qapp):
     assert outlet.x() == pytest.approx(vessel.width() / 2)
 
 
+def test_the_gas_lance_comes_in_through_the_lid(qapp):
+    """Left of the shaft, at the top edge, where the aeration pipe ends."""
+    vessel = VesselWidget()
+    vessel.resize(160, 230)
+    inlet = vessel.gas_inlet()
+    assert inlet.y() == vessel.rect().top()
+    assert 0 < inlet.x() < vessel.width() / 2
+    assert not vessel.grab().isNull()
+
+
 def test_the_stirrer_follows_what_it_is_told(qapp):
     vessel = VesselWidget()
     assert not vessel.stirring()
     vessel.set_stirring(True)
     assert vessel.stirring()
+
+
+def test_level_text_fits_under_a_narrow_bottle():
+    from biofermentation.gui.widgets.pcs_elements import level_text
+
+    assert level_text(0.787, 1.0, "l") == "0.79 l · 79 %"
+    assert level_text(5.0, 5.0, "l") == "5 l · 100 %"
+    assert level_text(10.25, 11.0, "l") == "10.2 l · 93 %"
+    assert level_text(None, 5.0, "l") == ""
 
 
 def test_fill_fraction_needs_a_positive_finite_maximum():

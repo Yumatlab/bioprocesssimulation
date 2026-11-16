@@ -71,6 +71,9 @@ SYMBOL_SIZES = {
     "motor": QSize(28, 28),  # a little larger than the pump: it carries a letter
 }
 
+#: Height of the valve part of a control valve; stem and actuator sit above.
+CONTROL_VALVE_BODY = 18
+
 #: Room around a symbol for the alarm badge and the automatic tag.
 MARGIN = 5
 #: Share of the reactor kept free above VLmax, so that the max mark is a line
@@ -145,11 +148,16 @@ def fill_fraction(volume, maximum) -> float | None:
 
 
 def level_text(volume, maximum, unit: str) -> str:
-    """ "3.20 l · 64 %". The share is the true one, not the clamped."""
+    """Volume and share, e.g. "3.2 l · 64 %". The share is the true one.
+
+    Three significant digits and at most two decimals: under a narrow
+    bottle "5.00 l · 100 %" and "0.787 l · 79 %" were cut off. The exact
+    volume is in the Variable Pool.
+    """
     if fill_fraction(volume, maximum) is None:
         return ""
     share = volume / maximum * 100
-    return f"{volume:.2f} {unit} · {share:.0f} %"
+    return f"{round(volume, 2):.3g} {unit} · {share:.0f} %"
 
 
 def _elided(widget: QWidget, text: str, width: float) -> str:
@@ -220,6 +228,18 @@ class ValveButton(QAbstractButton):
         self.setToolTip(label)
         inner = SYMBOL_SIZES[symbol]
         self.setFixedSize(QSize(inner.width() + 2 * MARGIN, inner.height() + 2 * MARGIN))
+
+    def line_point(self) -> QPointF:
+        """Where the pipe runs through the symbol, in widget pixels.
+
+        The middle of the widget for most symbols. A control valve carries its
+        stem and actuator above the valve, so its line runs through the lower
+        part — the sheet puts this point, not the widget's centre, on the pipe.
+        """
+        rect = QRectF(self.rect())
+        if self.symbol == "control_valve":
+            return QPointF(rect.center().x(), rect.bottom() - MARGIN - CONTROL_VALVE_BODY / 2)
+        return rect.center()
 
     def set_state_now(self, checked: bool) -> None:
         """Take the state without reporting it — for loading, not for clicks."""
@@ -329,7 +349,9 @@ class ValveButton(QAbstractButton):
 
     def _paint_control_valve(self, painter: QPainter, body: QRectF) -> None:
         # Lower part: the valve. Upper part: stem and diaphragm actuator.
-        valve = QRectF(body.left(), body.bottom() - 18, body.width(), 18)
+        valve = QRectF(
+            body.left(), body.bottom() - CONTROL_VALVE_BODY, body.width(), CONTROL_VALVE_BODY
+        )
         self._bow_tie(painter, valve)
         x = valve.center().x()
         dome_top = body.top()
@@ -523,6 +545,19 @@ class VesselWidget(QWidget):
         body, _, _ = self._geometry()
         return QPointF(body.center().x(), self.rect().bottom())
 
+    #: Where the gas lance comes through the lid, as a share of the vessel's
+    #: width from its left wall: clear of the min/max marks and the shaft.
+    LANCE_POSITION = 0.25
+
+    def gas_inlet(self) -> QPointF:
+        """Where the gas lance meets the top edge, in widget pixels.
+
+        The sheet ends the aeration pipe here; the vessel draws the lance on
+        from here, through the lid, down to the sparger.
+        """
+        body, _, _ = self._geometry()
+        return QPointF(body.left() + body.width() * self.LANCE_POSITION, self.rect().top())
+
     def paintEvent(self, event) -> None:  # noqa: N802 - Qt API
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -605,12 +640,25 @@ class VesselWidget(QWidget):
         painter.drawRect(QRectF(x + 1, hub - 3, blade, 6))
 
     def _paint_sparger(self, painter: QPainter, body: QRectF, dish: float) -> None:
-        """The gas ring under the stirrer, with a few bubbles above it."""
+        """The gas ring under the stirrer, fed by the lance from the lid.
+
+        The lance comes down from the top edge (where the aeration pipe ends)
+        beside the wall and turns in under the impeller to the ring.
+        """
         x = body.center().x()
         y = body.bottom() - dish * 0.45  # inside the dish, under the impeller
         width = body.width() * 0.3
+        lance = self.gas_inlet().x()
         painter.setPen(QPen(EQUIPMENT, 1.5))
-        painter.drawLine(QPointF(x - width / 2, y), QPointF(x + width / 2, y))
+        painter.drawPolyline(
+            QPolygonF(
+                [
+                    QPointF(lance, self.rect().top()),
+                    QPointF(lance, y),
+                    QPointF(x + width / 2, y),
+                ]
+            )
+        )
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(QPen(EQUIPMENT, 0.8))
         for dx, dy in ((-0.3, 6), (0.0, 10), (0.3, 6)):

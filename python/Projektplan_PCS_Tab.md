@@ -298,7 +298,7 @@ Tests:
 
 **Fertig, wenn** ein Tippfehler in `pcs.yaml` den Tab nicht leert.
 
-### Phase 3 — Tab einhängen, nur lesend (1 Sitzung)
+### Phase 3 — Tab einhängen, nur lesend (1 Sitzung) — erledigt 16.11.2026
 
 `gui/widgets/pcs_view.py` setzt Fläche und Bausteine zusammen. Einhängen in
 `control_app.py`: `self.pages["PCS"]`, Zweig in `refresh()`, Aufruf in

@@ -1183,7 +1183,7 @@ nicht durch einen Push:
 
 Plan: `python/Projektplan_PCS_Tab.md`. Phase 0 (Festlegen) am 14.11.2026,
 Phase 2 (Spezifikation, Layoutdatei) am 16.11.2026 gegen Commit `5347fe2`.
-Phase 1 (Bausteine) am 16.11.2026 nachgeholt; Phase 2 hing nicht von ihr ab.
+Phase 1 (Bausteine) am 16.11.2026 nachgeholt; Phase 2 hing nicht von ihr ab. Phase 3 (Tab, nur lesend) am 16.11.2026.
 
 ### Elementliste — jede Zeile mit ihrem Leser im Modell
 
@@ -1381,6 +1381,65 @@ Variante b.**
   `ValueError`. Warnung: gestrichelter Rahmen, Alarm: durchgezogen; beide mit
   kleinem Dreieck und Ausrufezeichen. Noch ruft es niemand (Plan 5.6).
 - Keine Mindestbreite über 120 px (Test); Texte werden gekürzt.
+
+### Stand nach Phase 3 (16.11.2026) — der Tab, nur lesend
+
+Neu: `gui/widgets/pcs_view.py` (`PcsCanvas`, `PcsView`, `read_value`,
+`FLOW_EPSILON = 1e-6`), `tests/test_pcs_view.py`; eingehängt in
+`control_app.py`; „PCS" in `HIDEABLE_TABS`; Menü **Settings → PCS layout…**
+(teilt sich `_open_layout_file` mit „Panel layout…"); Bild `09_pcs_tab.png`
+(der Rendertest zählt jetzt 10). Abnahme erfüllt: die Werte an den Leitungen
+sind die des Variable Pool (`test_the_numbers_are_the_variable_pool_numbers`,
+gleiches Format `.4g`).
+
+- **Einhängen:** `self.pages["PCS"]` als erster Eintrag, also direkt nach
+  Control Options; gebaut auch wenn ausgeblendet. `load_panels()` ruft
+  `pcs_view.load(state)`, `refresh()` ruft `pcs_view.refresh(state)` nur, wenn
+  der Tab sichtbar ist. Ein Problem mit `pcs.yaml` steht im Log.
+- **`load(state)`**: Besitzer je Element aus `ValveSpec.locked_by(p, a)`;
+  gehört es einem Regler, zeigt es „A" und den Regler im Tooltip, sonst sein
+  Flag. **`refresh(state, alarms=())`**: Flüsse, Füllstände, Rührer; ein
+  Element eines Reglers zeigt, ob seine Leitung fließt. Alle Elemente sind
+  abgeschaltet — Bedienung ist Phase 4.
+- **Platzierung:** Positionen sind Anteile der Fläche; Behälter skalieren mit
+  Unter- und Obergrenze, Pumpen und Ventile haben feste Größe. Ein Ventil
+  setzt `ValveButton.line_point()` auf die Position, nicht seine Mitte —
+  beim Regelventil sitzt die Leitung unter Stange und Antrieb. Der Reaktor hat
+  immer eine gerade Breite, und der Motor wird an seiner Wellenmitte
+  ausgerichtet (`_align_motor`): einzeln gerundet hatte die Welle einen
+  Halbpixel-Knick.
+- **Leitungen:** Die Ernteleitung beginnt an `VesselWidget.outlet()` (tiefste
+  Stelle) und fällt senkrecht bis zum ersten Knick. Gas in den Reaktor endet
+  an `VesselWidget.gas_inlet()` (Lanze im Deckel), waagerecht vom letzten
+  Knick, dann senkrecht; die Lanze führt im Kessel zum Begasungsring.
+  Die Anordnung folgt dem R&I: Vorlagen unten in einer Reihe, Leitungen
+  treppenförmig, die linke am höchsten, Pumpen in einer Spalte — keine
+  Kreuzungen.
+- **Pfeil** dort, wo die Leitung ins Ziel eintritt (`arrow_share`); bei einem
+  Punkt als Ziel (Gasverteiler) am Ende des eigenen Leitungsstücks, vor der
+  gemeinsamen Sammelleitung.
+- **Werte an Leitungen** (`value_boxes`): starten neben dem Pfeil und wandern
+  in 8-px-Schritten stromaufwärts, bis sie kein Element, keinen Namen und
+  keinen anderen Wert berühren; findet sich entlang der Leitung keine Lücke
+  (Heizleitung bei 1000 px zwischen Kessel, Ventil und „Heating water"),
+  rücken sie in 6-px-Schritten von der Leitung ab und wandern erneut. Jeder
+  feste Versatz lag irgendwo auf etwas.
+  Getestet mit allen Gasen und Feed an, drei Fenstergrößen.
+- **Namen:** Ein Element auf einer Leitung von einem benannten Behälter oder
+  einer benannten Versorgung trägt keinen eigenen Namen (`shows_label`); der
+  Rührer steht rechts neben dem Motor, darunter läuft die Welle.
+- **Einheiten:** aus `variableTab` für `v:`-Reihen; `PipeSpec.unit` für
+  `a:`-Werte — Kühl- und Heizwasser in kg/h wie `mdotCmax`/`mdotHmax`.
+- **Füllstandstext** mit drei signifikanten Stellen und höchstens zwei
+  Nachkommastellen: unter der schmalen Flasche wurde sonst abgeschnitten.
+
+Offen aus Phase 3:
+
+- **`v.AAF` heißt im Variable Pool „added AF [l]"** — vielleicht doch ein
+  Volumen, aus dem sich ein Füllstand der Antischaumvorlage ergäbe
+  (Entscheidung 4). Nicht geprüft.
+- Unter etwa 1000 px Breite rücken die Vorlagen der unteren Reihe aneinander;
+  die Fläche selbst geht bis 480 px.
 
 ---
 

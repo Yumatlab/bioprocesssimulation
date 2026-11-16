@@ -349,8 +349,9 @@ def test_the_windows_render_to_png(tmp_path, qapp):
     from biofermentation.gui.screenshots import render
 
     written = render(tmp_path)
-    # Eight windows and the building blocks of the PCS tab (PCS plan, phase 1).
-    assert len(written) == 9
+    # Eight windows, the building blocks of the PCS tab (PCS plan, phase 1)
+    # and the PCS tab itself (phase 3).
+    assert len(written) == 10
     for path in written:
         assert path.is_file() and path.stat().st_size > 2000
 
@@ -703,7 +704,7 @@ def test_load_project_offers_to_compact_the_database(qapp, db_copy):
 
 
 def test_the_size_line_says_how_much_is_unused(qapp, db_copy):
-    """"78.88 MB" alone gives nobody a reason to press anything."""
+    """ "78.88 MB" alone gives nobody a reason to press anything."""
     import sqlite3
 
     from biofermentation.gui.windows.select_project import SelectProjectWindow

@@ -65,6 +65,10 @@ def render(out_dir: Path, db_path: Path | None = None) -> list[Path]:
         control.tabs.setCurrentWidget(control.variable_pool)
         control.refresh()
         shoot(control, "06_variable_pool.png", (1290, 690))
+        control.tabs.setCurrentWidget(control.pcs_view)
+        control.load_panels()
+        control.refresh()
+        shoot(control, "09_pcs_tab.png", (1290, 690))
         control.tabs.setCurrentIndex(control.tabs.indexOf(control.variable_pool) + 1)
         shoot(control, "07_process_manager.png", (1290, 690))
 

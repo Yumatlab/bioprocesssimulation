@@ -22,7 +22,7 @@ USER_SETTINGS_NAME = "settings.yaml"
 #: The tabs of the control window that may be switched off, in the order they
 #: stand in. "Control Options" is not among them: a window without it is not a
 #: control window, and "Information" is where a project says what it is.
-HIDEABLE_TABS = ("Controllers", "Variable Pool", "Process Manager", "Log")
+HIDEABLE_TABS = ("PCS", "Controllers", "Variable Pool", "Process Manager", "Log")
 
 
 @dataclass
@@ -115,19 +115,14 @@ def load_settings(path: Path | None = None) -> tuple[Settings, str]:
         unknown = sorted(set(hidden) - set(HIDEABLE_TABS))
         if unknown:
             raise ValueError(
-                f"unknown tab(s) {', '.join(unknown)} — the choices are: "
-                f"{', '.join(HIDEABLE_TABS)}"
+                f"unknown tab(s) {', '.join(unknown)} — the choices are: {', '.join(HIDEABLE_TABS)}"
             )
         refresh = float(document.get("refresh_seconds", 2.0))
         if not 0.05 <= refresh <= 600:
-            raise ValueError(
-                f"refresh_seconds is {refresh} — it has to lie between 0.05 and 600"
-            )
+            raise ValueError(f"refresh_seconds is {refresh} — it has to lie between 0.05 and 600")
         interval = int(document.get("storage_interval", 1))
         if not 1 <= interval <= 10_000:
-            raise ValueError(
-                f"storage_interval is {interval} — it has to lie between 1 and 10000"
-            )
+            raise ValueError(f"storage_interval is {interval} — it has to lie between 1 and 10000")
         return Settings(
             hidden_tabs=set(hidden),
             student_view=bool(document.get("student_view", False)),

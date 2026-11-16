@@ -2,6 +2,7 @@
 #
 # Copy this file next to your database as pcs.yaml and change it there; the
 # application reads yours instead of this one and never writes to this file.
+# In the running application: Settings → PCS layout…
 #
 # Positions are fractions of the sheet: [x, y], x from the left edge (0) to
 # the right edge (1), y from the top (0) to the bottom (1). The sheet scales
@@ -18,10 +19,15 @@
 #
 # Elements for a second reservoir may stay in the file for an organism with
 # one; they are simply not drawn.
+#
+# The arrangement follows the R&I scheme (matlab/RI.drawio): the reservoirs
+# stand in a row at the bottom, their lines rise like steps — the leftmost
+# highest — so that no two lines cross, and the pumps stand in a column in
+# front of the reactor.
 
 elements:
-  reactor:        [0.55, 0.50]
-  stirrer:        [0.55, 0.12]
+  reactor:        [0.60, 0.50]
+  stirrer:        [0.60, 0.11]  # on the shaft, which the sheet draws to the lid
 
   # Gas, top left: four supplies into one manifold, one main valve.
   air_supply:     [0.04, 0.08]
@@ -32,42 +38,46 @@ elements:
   n2_valve:       [0.14, 0.24]
   co2_supply:     [0.04, 0.32]
   co2_valve:      [0.14, 0.32]
-  gas_manifold:   [0.24, 0.20]
-  aeration_valve: [0.36, 0.20]
+  gas_manifold:   [0.26, 0.20]
+  aeration_valve: [0.40, 0.20]
 
-  # Liquids, bottom left: one tank and one pump per line.
-  antifoam:       [0.06, 0.44]
-  antifoam_pump:  [0.24, 0.44]
-  alkali:         [0.06, 0.56]
-  alkali_pump:     [0.24, 0.56]
-  acid:           [0.06, 0.68]
-  acid_pump:       [0.24, 0.68]
-  reservoir1:     [0.06, 0.80]
-  feed1_pump:     [0.24, 0.80]
-  reservoir2:     [0.06, 0.92]
-  feed2_pump:     [0.24, 0.92]
+  # Liquids: the vessels in a row at the bottom, the pumps in a column.
+  antifoam:       [0.04, 0.88]
+  alkali:         [0.12, 0.88]
+  acid:           [0.20, 0.88]
+  reservoir1:     [0.28, 0.88]
+  reservoir2:     [0.36, 0.88]
+  antifoam_pump:  [0.42, 0.380]
+  alkali_pump:    [0.42, 0.445]
+  acid_pump:      [0.42, 0.510]
+  feed1_pump:     [0.42, 0.575]
+  feed2_pump:     [0.42, 0.640]
 
   # Right: the jacket. Below: the harvest, out of the bottom of the reactor.
   cooling_supply: [0.94, 0.40]
-  cooling_valve:  [0.80, 0.40]
+  cooling_valve:  [0.82, 0.40]
   heating_supply: [0.94, 0.55]
-  heating_valve:  [0.80, 0.55]
-  harvest_valve:  [0.76, 0.95]
-  harvest:        [0.94, 0.82]
+  heating_valve:  [0.82, 0.55]
+  harvest_valve:  [0.78, 0.95]
+  harvest:        [0.94, 0.84]
 
 pipes:
-  air_line:      [[0.24, 0.08]]
-  o2_line:       [[0.24, 0.16]]
-  n2_line:       [[0.24, 0.24]]
-  co2_line:      [[0.24, 0.32]]
-  aeration_line: [[0.50, 0.20], [0.50, 0.50]]
-  antifoam_line: [[0.42, 0.44]]
-  alkali_line:   [[0.42, 0.56]]
-  acid_line:     [[0.42, 0.68]]
-  feed1_line:    [[0.42, 0.80]]
-  feed2_line:    [[0.48, 0.92], [0.48, 0.80]]
-  cooling_line:  [[0.62, 0.40]]
-  heating_line:  [[0.62, 0.55]]
+  air_line:      [[0.26, 0.08]]
+  o2_line:       [[0.26, 0.16]]
+  n2_line:       [[0.26, 0.24]]
+  co2_line:      [[0.26, 0.32]]
+  # Up over the reactor, then down onto the gas lance in its lid (the sheet
+  # adds the last two points: level to the lance, straight down onto it).
+  aeration_line: [[0.46, 0.20], [0.46, 0.13]]
+  # Up from the vessel to its own height, then right through the pump into
+  # the reactor; the last bend lies inside the reactor, under its widget.
+  antifoam_line: [[0.04, 0.380], [0.53, 0.380]]
+  alkali_line:   [[0.12, 0.445], [0.53, 0.445]]
+  acid_line:     [[0.20, 0.510], [0.53, 0.510]]
+  feed1_line:    [[0.28, 0.575], [0.53, 0.575]]
+  feed2_line:    [[0.36, 0.640], [0.53, 0.640]]
+  cooling_line:  [[0.70, 0.40]]
+  heating_line:  [[0.70, 0.55]]
   # Starts at the reactor's outlet nozzle, not at its centre: the sheet
   # drops it straight down to the height of the first bend.
   harvest_line:  [[0.94, 0.95]]

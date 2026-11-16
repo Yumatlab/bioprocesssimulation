@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import yaml
 
 from biofermentation.core.runner import build_state, run_steps
 from biofermentation.db import load_phases
@@ -393,6 +394,13 @@ BROKEN = {
 }
 
 
+def _bundled_with_reactor_at(x: float, y: float) -> str:
+    """The bundled layout with the reactor moved — whatever the file says now."""
+    document = yaml.safe_load(BUNDLED_PCS_LAYOUT.read_text(encoding="utf-8"))
+    document["elements"][REACTOR] = [x, y]
+    return yaml.safe_dump(document)
+
+
 def _bundled_with(old: str, new: str) -> str:
     text = BUNDLED_PCS_LAYOUT.read_text(encoding="utf-8")
     assert old in text
@@ -403,7 +411,7 @@ def _bundled_with(old: str, new: str) -> str:
 def test_a_broken_pcs_layout_falls_back_and_says_why(case, tmp_path):
     text = BROKEN[case]
     if case == "outside the sheet":
-        text = _bundled_with("reactor:        [0.55, 0.50]", "reactor:        [1.55, 0.50]")
+        text = _bundled_with_reactor_at(1.55, 0.50)
     if case == "unknown element":
         text = _bundled_with("acid_pump:", "acid_pmup:")
     if case == "unknown pipe":
@@ -437,15 +445,12 @@ def test_a_missing_file_falls_back_and_says_so(tmp_path):
 
 def test_the_user_copy_replaces_the_bundled_layout(tmp_path, monkeypatch):
     user = tmp_path / "pcs.yaml"
-    user.write_text(
-        _bundled_with("reactor:        [0.55, 0.50]", "reactor:        [0.60, 0.50]"),
-        encoding="utf-8",
-    )
+    user.write_text(_bundled_with_reactor_at(0.61, 0.50), encoding="utf-8")
     monkeypatch.setattr(pcs_layout, "user_pcs_layout_path", lambda: user)
 
     layout, problem = load_pcs_layout(pcs_spec(1))
     assert problem == ""
-    assert layout.positions[REACTOR] == (0.60, 0.50)
+    assert layout.positions[REACTOR] == (0.61, 0.50)
 
 
 def test_a_broken_user_copy_falls_back_to_the_bundled_layout(tmp_path, monkeypatch):

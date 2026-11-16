@@ -43,6 +43,7 @@ from ..settings import load_settings
 from ..values import format_value, mode_table
 from ..widgets import CONTROL_PANELS, ControllerView, ControlPanel, PhaseGrid, StatusLamp
 from ..widgets.log_view import OPERATION_EVENT, PARAMETER_EVENT, LogView
+from ..widgets.pcs_view import PcsView
 from ..widgets.variable_pool import VariablePool
 
 #: Provenance and licence. The middle paragraph is the one the original's
@@ -108,9 +109,7 @@ def scaled_mark(pixmap: QPixmap, column: int, ratio: float) -> QPixmap:
     """
     ratio = max(1.0, float(ratio or 1.0))
     width = min(column, pixmap.width() / ratio)
-    drawn = pixmap.scaledToWidth(
-        round(width * ratio), Qt.TransformationMode.SmoothTransformation
-    )
+    drawn = pixmap.scaledToWidth(round(width * ratio), Qt.TransformationMode.SmoothTransformation)
     drawn.setDevicePixelRatio(ratio)
     return drawn
 
@@ -174,6 +173,9 @@ class ControlWindow(QMainWindow):
         # and not added has no parent, and Python collecting it would take the
         # log view and the phase grid down with it.
         self.pages = {
+            # Right after Control Options (PCS decision 2): the sheet and the
+            # panels are two views of the same switches.
+            "PCS": self._build_pcs(),
             "Controllers": self._build_controllers(),
             "Variable Pool": self._build_variable_pool(),
             "Process Manager": self._build_process_manager(),
@@ -204,6 +206,8 @@ class ControlWindow(QMainWindow):
             # Said here rather than in a box at startup: the tab is drawn
             # either way, and the log is where the session keeps its record.
             self.note(f"Panel layout not used — {self._layout_problem}", "Error")
+        if self.pcs_view.layout_problem:
+            self.note(f"PCS layout not used — {self.pcs_view.layout_problem}", "Error")
 
     # ------------------------------------------------------------ build --
 
@@ -301,6 +305,7 @@ class ControlWindow(QMainWindow):
         settings = bar.addMenu("Settings")
         add(settings, "Reset controller parameters", self.reset_controller_gains)
         add(settings, "Panel layout…", self.edit_panel_layout)
+        add(settings, "PCS layout…", self.edit_pcs_layout)
 
         # Held on the window: setCornerWidget does not take ownership of a
         # temporary, and the lamps were collected out from under it.
@@ -504,6 +509,11 @@ class ControlWindow(QMainWindow):
         self.exit_button.clicked.connect(lambda: self.close())
         layout.addWidget(self.exit_button)
         return column
+
+    def _build_pcs(self) -> QWidget:
+        """The plant as a flow sheet (PCS plan). Read only until phase 4."""
+        self.pcs_view = PcsView(self.setup.info.reservoirs or 1, self.setup.lookups.variable)
+        return self.pcs_view
 
     def _build_controllers(self) -> QWidget:
         """What every loop is doing — the tab the control panels lead to.
@@ -729,6 +739,9 @@ class ControlWindow(QMainWindow):
         p = self.runner.state.p
         for panel in self.panels.values():
             panel.load(p)
+        # The flow sheet shows the same switches, and who owns them depends on
+        # the modes — so it is re-read at the same moments as the panels.
+        self.pcs_view.load(self.runner.state)
 
     def load_from_state(self) -> None:
         self.load_panels()
@@ -755,6 +768,8 @@ class ControlWindow(QMainWindow):
             self.variable_pool.refresh(state)
         elif self.tabs.currentWidget() is self.controller_view:
             self.controller_view.refresh(state)
+        elif self.tabs.currentWidget() is self.pcs_view:
+            self.pcs_view.refresh(state)
 
         for table in list(self.data_tables):
             table.refresh()
@@ -1071,9 +1086,12 @@ class ControlWindow(QMainWindow):
                 if was_running:
                     self.runner.start()
                 return False
-            if delete_with_progress(
-                self, self.db_path, self.setup.info.projectID, self.setup.info.name
-            ) is None:
+            if (
+                delete_with_progress(
+                    self, self.db_path, self.setup.info.projectID, self.setup.info.name
+                )
+                is None
+            ):
                 # Cancelled means nothing was deleted. The window then stays
                 # where it is rather than closing a project that still exists.
                 if was_running:
@@ -1109,15 +1127,23 @@ class ControlWindow(QMainWindow):
         way to change it without a Python file and without a rebuild — the
         same deal the stylesheet has.
         """
+        from ..panel_layout import write_user_layout
+
+        self._open_layout_file("Panel layout", write_user_layout())
+
+    def edit_pcs_layout(self) -> None:
+        """Open the arrangement of the PCS tab — same deal as the panels."""
+        from ..pcs_layout import write_user_pcs_layout
+
+        self._open_layout_file("PCS layout", write_user_pcs_layout())
+
+    def _open_layout_file(self, title: str, path) -> None:
         from PySide6.QtCore import QUrl
         from PySide6.QtGui import QDesktopServices
 
-        from ..panel_layout import write_user_layout
-
-        path = write_user_layout()
         QMessageBox.information(
             self,
-            "Panel layout",
+            title,
             f"The arrangement of this tab is a file:\n\n{path}\n\n"
             "It opens now in your editor. Save it and reopen the project to "
             "see the new arrangement.",

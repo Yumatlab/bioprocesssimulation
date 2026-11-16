@@ -139,6 +139,9 @@ class PipeSpec:
     #: automatic mode; in manual the heater is electric and a.mdotH keeps
     #: whatever the controller last wrote.
     counts_when: Condition | None = None
+    #: The unit of the reading, where the flow is no stored series (an "a:"
+    #: value has no row in variableTab). Stored series take theirs from there.
+    unit: str | None = None
 
 
 @dataclass(frozen=True)
@@ -254,7 +257,15 @@ def pcs_spec(n_reservoirs: int) -> PcsSpec:
         PipeSpec("antifoam_line", "antifoam", REACTOR, "antifoam", None, "antifoam_pump"),
         PipeSpec("harvest_line", REACTOR, "harvest", "harvest", "v:FH", "harvest_valve"),
         PipeSpec("aeration_line", "gas_manifold", REACTOR, "gas", "v:FnG", "aeration_valve"),
-        PipeSpec("cooling_line", "cooling_supply", REACTOR, "coolant", "a:mdotC", "cooling_valve"),
+        PipeSpec(
+            "cooling_line",
+            "cooling_supply",
+            REACTOR,
+            "coolant",
+            "a:mdotC",
+            "cooling_valve",
+            unit="kg/h",  # mdotCmax is kg/h in parameterTab
+        ),
         PipeSpec(
             "heating_line",
             "heating_supply",
@@ -263,6 +274,7 @@ def pcs_spec(n_reservoirs: int) -> PcsSpec:
             "a:mdotH",
             "heating_valve",
             counts_when=Condition("p:Mode_temp", (1,)),
+            unit="kg/h",  # mdotHmax is kg/h in parameterTab
         ),
     ]
 
