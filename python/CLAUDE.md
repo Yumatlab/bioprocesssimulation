@@ -1255,6 +1255,16 @@ Entschieden am 18.11.2026 (Anwender), statt eines Kompatibilitätsschalters:
   nahm die neueste Version, weil `pyproject.toml` nur eine Untergrenze hatte.
   Seitdem `PySide6<6.12`, und wer eine neue Version zulässt, prüft den
   Exit-Code der ganzen Suite, nicht nur die Zusammenfassung.
+- **Offscreen braucht unter Windows einen Schriftordner.** Die PySide6-Pakete
+  für Windows bringen keinen mit; die Offscreen-Plattform sucht über
+  `QT_QPA_FONTDIR`, findet nichts und zeichnet jedes Zeichen als Kästchen in
+  Schrifthöhe. Gemessen auf dem Runner: ein Lesefeld 172 px breit (14 Zeichen
+  × 12 px + 4) gegen 81 px mit echter Schrift — vier Fließbild-Layouttests
+  rot, das Fließbild selbst unschuldig. `tests/conftest.py` und
+  `gui/screenshots.py` setzen `QT_QPA_FONTDIR` unter Windows auf
+  `%WINDIR%\Fonts`; `test_the_test_platform_draws_with_real_fonts` sagt es in
+  einer Zeile, falls es je wieder fehlt. Auf dem Mac nimmt Offscreen die
+  Systemschriften ohnehin, deshalb war es hier nicht nachzustellen.
 - Der lokale `main` verfolgt jetzt `origin/main` (vorher das längst gemergte
   `origin/python-port`).
 

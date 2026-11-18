@@ -10,10 +10,21 @@ CI.
 import argparse
 import os
 import shutil
+import sys
 from pathlib import Path
 
 # Has to be set before Qt is imported.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# The offscreen platform looks for fonts in QT_QPA_FONTDIR, and the PySide6
+# wheels for Windows ship no font folder. Without one Qt draws every glyph as
+# a box as wide as the font is high — a reading of 14 characters came out
+# 172 px wide on the Windows runner against 81 px with a real font, and the
+# flow-sheet layout tests failed on boxes, not on the layout. The system's
+# fonts are what a real Windows desktop draws with.
+if sys.platform == "win32":
+    os.environ.setdefault(
+        "QT_QPA_FONTDIR", os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+    )
 
 from PySide6.QtWidgets import QApplication
 
