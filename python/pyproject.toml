@@ -28,7 +28,13 @@ classifiers = [
 dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
-    "PySide6>=6.6",
+    # Below 6.12: PySide6 6.12.0 crashes the interpreter when windows whose
+    # buttons are connected to lambdas holding the window are destroyed —
+    # "Fatal Python error: bool_dealloc", a refcount error in the extension
+    # (FEHLER.md, F-32). 6.11.2 and 6.11.3 measured clean. Lift the bound once
+    # a release is checked with the same test: tests/test_gui.py alone, then
+    # the whole suite, exit code 0.
+    "PySide6>=6.6,<6.12",
     "pyqtgraph>=0.13",
     "PyYAML>=6.0",
 ]

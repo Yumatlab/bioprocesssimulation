@@ -62,6 +62,9 @@ record of this version is measured in `docs/verification_escherichia_coli.md`
   and older databases too, at start-up, with a backup copy (F-01).
 - Deleting an upcoming phase restarted the running one (F-30).
 - Flow readings that had no unit (harvest flow).
+- PySide6 limited to below 6.12: version 6.12.0 crashes the interpreter
+  when windows are destroyed (FEHLER.md, F-32). Found by the CI after all
+  tests had passed.
 
 ---
 

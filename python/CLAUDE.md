@@ -1228,8 +1228,9 @@ nicht abgestimmt, sondern folgenlos.
 
 Entschieden am 18.11.2026 (Anwender), statt eines Kompatibilitätsschalters:
 
-- **3.0.1 ist der abgeschlossene, verifizierte Stand** (Commit `324a194`,
-  annotierter Tag `v3.0.1`). Das E.-coli-Modell rechnet dort MATLABs
+- **3.0.1 ist der abgeschlossene, verifizierte Stand** (annotierter Tag
+  `v3.0.1` auf dem Branch `release-3.0`: Commit `324a194` plus die
+  Begrenzung `PySide6<6.12`, F-32 — nichts sonst). Das E.-coli-Modell rechnet dort MATLABs
   Arithmetik samt ihrer Fehler; das gemessene Protokoll steht in
   `docs/verification_escherichia_coli.md` („Record for version 3.0.1"),
   erzeugt mit `tools/verification_record.py`, und lässt sich vom Tag aus
@@ -1248,6 +1249,12 @@ Entschieden am 18.11.2026 (Anwender), statt eines Kompatibilitätsschalters:
   darf den Hook nicht übergehen. Reihenfolge: `main` pushen, CI auf allen drei
   Systemen abwarten (viele GUI-Tests sind neu und liefen nie unter Windows),
   erst dann den Tag pushen — der Tag löst Bau und Release aus.
+- **Ein grüner Testlauf ist erst grün mit Exit-Code 0.** Die CI meldete 962
+  bestandene Tests und scheiterte trotzdem: PySide6 6.12.0 brachte den
+  Interpreter beim Aufräumen zum Absturz (F-32). Lokal lief 6.11.2, die CI
+  nahm die neueste Version, weil `pyproject.toml` nur eine Untergrenze hatte.
+  Seitdem `PySide6<6.12`, und wer eine neue Version zulässt, prüft den
+  Exit-Code der ganzen Suite, nicht nur die Zusammenfassung.
 - Der lokale `main` verfolgt jetzt `origin/main` (vorher das längst gemergte
   `origin/python-port`).
 
