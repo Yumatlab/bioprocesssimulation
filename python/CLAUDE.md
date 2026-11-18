@@ -15,6 +15,7 @@ Plattformen: Windows und macOS, verteilt als einzelne ausführbare Datei.
 | `~/Documents/Biofermentation Simulation Version 2.2/Anweisungen/CLAUDE.md` | **Fachliche Referenz.** Beschreibt die MATLAB-Architektur: Datenmodell (`app.p`/`app.v`/`app.a`), Preallokations-Prinzip, Phasenautomat, Reglerlogik, DB-Regeln, bekannte Schema-Probleme. Diese Datei ist der Ist-Zustand, aus dem portiert wird — nicht der Zielzustand. |
 | `~/Documents/Biofermentation Simulation Version 2.2/Anweisungen/Projektplan_Python_Migration.md` | **Phasenplan.** Neun Phasen mit Abschnittsnummern; wird eingehalten. |
 | `~/Documents/Biofermentation Simulation Version 2.2/` | MATLAB-Quellcode als Übersetzungsvorlage (`Escherichia_coli/`, `Pichia_pastoris/`, `*.mlapp`). |
+| `FEHLER.md` | **Fehlerliste.** Jeder bekannte Fehler mit Herkunft (MATLAB, Portierung, Daten), Wirkung und Stand. Neue Funde kommen dort hinein, behobene bleiben mit ihrer Nummer stehen. |
 | `docs/verification_escherichia_coli.md` | **Verifikationsbericht.** Wogegen geprüft wurde, mit welchem Ergebnis, in welchem Fenster und warum es keine globale Toleranz geben kann. |
 
 Der MATLAB-Code wird **nicht** verändert. Er ist Lesequelle, sonst nichts.
@@ -506,6 +507,101 @@ Gegenteil. `load_panels()` hängt jetzt an `_phase_changed`; die Parameter sind
 zu diesem Zeitpunkt schon angewandt, weil `check_start` sie schreibt und der
 Runner erst danach sendet.
 
+### F-01 behoben bis in die Projekte (18.11.2026)
+
+Die invertierten Feed-Verstärkungen von Pichia-Reservoir 2 waren nur in den
+Vorgaben der mitgelieferten Vorlage korrigiert. Eine Datenbank von vorher —
+die des Anwenders — trug sie weiter in beiden Pichia-Modellen und einem
+Projekt, und jedes neue Pichia-Projekt bekam den umgekehrten Regler wieder.
+Jetzt prüft `correct_pichia_feed_gains` Vorgaben, Modelle und Projekte
+**einzeln** (die erste Fassung entschied allein an `default_modelTab` und hätte
+eine Datenbank mit falschen Modellen übersehen) und läuft beim Programmstart,
+mit Kopie `.pre-correction.db` nur dann, wenn es etwas zu ändern gibt.
+
+- **Projekte mit gespeicherter Aufzeichnung behalten ihre Werte** und stehen
+  im Bericht unter `kept`: ihr Lauf wurde damit gerechnet. Die Regel „ein
+  Projekt behält seine Werte" gilt damit weiter für alles Aufgezeichnete;
+  korrigiert wird nur, was noch nicht gerechnet hat. Gemessen: 519, 520 und
+  783 (Datenbank des Anwenders) haben keine Zeitreihen.
+- **Ein korrigiertes Projekt sagt es im Log**, beim ersten Öffnen nach dem
+  Start.
+- Vorlage-Datenbank korrigiert (519, 520). Fehlerliste: `FEHLER.md`, F-01.
+
+### Prozessvorlagen (ab 18.11.2026)
+
+Plan: `Projektplan_Prozessvorlagen.md`. Phase 0 (Gegenlesen), Phase 1
+(Datenbank), Phase 2 (Kernlogik, `control/templates.py`), Phase 3
+(Speichern), Phase 4 (Laden, Einstellung) und Phase 5 (Dokumentation,
+Abnahme) am 18.11.2026. **Abgeschlossen.**
+
+**Abnahme** (`tests/test_process_template_acceptance.py`): ein Prozess, im
+Fenster von Projekt 716 entworfen und über `save_process_template`
+gespeichert, in einem *neuen* Projekt desselben Modells über
+`load_process_template` geladen; ein zweites neues Projekt bekommt dieselben
+Phasen von Hand (`add_phase`, dann die Felder). Beide laufen 240 Takte auf dem
+eigenen Runner: alle Reihen bitgleich, Phasenzeiten und Parameter gleich, der
+Feed hat gerechnet. Gegenprobe: gehen die Parameter beim Laden verloren, ist
+er rot.
+
+**Die neuen Tabellen erben keine Altlast** (Abschnitt „Altlasten in der
+Datenbank"): `start_operatorID` zeigt auf `process_operatorTab` (Test), jeder
+Fremdschlüssel hat einen Index, die Bedingungstypen zeigen auf
+`process_conditiontypeTab`.
+
+- **Drei eigene Tabellen**, `process_templateTab` (an `modelID`, kaskadiert),
+  `process_template_phaseTab` (Reihenfolge über `position`),
+  `process_template_parameterTab`. Nicht `processTab`: dort hängen Status,
+  Zeitstempel und eine tabellenweit eindeutige `processID` dran.
+- **Das SQL steht einmal**, in `db/migrate.py` (`TEMPLATE_TABLES`).
+  `apply_migration` und der Programmstart (`ensure_template_tables`) rufen
+  dieselbe Funktion.
+- **Bewusste Ausnahme von „zwei DB-Zugriffe je Sitzung"**, im Modulkopf von
+  `db/process_templates.py` benannt: Speichern und Auflisten einer Vorlage
+  sind eigene kurze Transaktionen aus einem Dialog, die keine Zeile des
+  laufenden Projekts berühren.
+- **Eine Vorlage ist ein Plan, kein Lauf:** ohne Status, ohne `start.time`
+  und `end.time`, und ohne die Ergebnisse einer Feed-Phase (`t{n}j`,
+  `cXL{n}j`, `FR{n}j`) — in den mitgelieferten Projekten sind das die
+  einzigen Parameter ihrer Fed-Batch-Phasen.
+- **Vorlagen sind Anwenderdaten**, nicht im CSV-Satz; `load_defaults`
+  verweigert, solange es welche gibt.
+- `model_usage` zählt sie, `delete_model` nimmt sie mit und sagt wie viele
+  (Löschdialog), `duplicate_model` kopiert sie.
+- **Platzieren ist eine reine Funktion** (`place_template`): Liste rein, neue
+  Liste raus, die alte bleibt unverändert. Begonnene Phasen bleiben dieselben
+  Objekte, damit ihr Protokoll (Zeiten, von einem Feed geschriebene Werte)
+  erhalten bleibt. Danach übernimmt `hand_over` die Liste in den Automaten und
+  sucht `current` neu.
+- **„Begonnen" ist eine Funktion**, `is_started` — der Process Manager sperrt
+  damit, das Ersetzen behält damit.
+- **Abnahme gemessen:** ein Prozess für Projekt 716, als Vorlage gespeichert,
+  geladen und platziert, rechnet bitgleich wie derselbe Prozess von Hand.
+- **Speichern in der Oberfläche:** Menü „Process" und Schaltflächen „Save as
+  template…" / „Load template…" unten rechts im Process Manager, unter der
+  Scrollfläche (immer sichtbar); das „+" steht allein in der Phasenreihe. Erlaubt auch bei laufendem Prozess (ändert nichts am
+  Lauf), speichert das Projekt nicht mit, Logeintrag als Operation. Gleicher
+  Name → Rückfrage, dann Ersetzen in einer Transaktion.
+- **Laden nur bei stehendem Prozess.** Passt eine Vorlage nicht, wird sie mit
+  allen Gründen abgewiesen, nie angepasst. Ersetzen fragt zweimal. Die
+  Phasenliste wird an Ort und Stelle ersetzt (`setup.phases[:] = …`), nicht
+  neu zugewiesen — Automat und Fenster halten dasselbe Objekt.
+- **`Settings.process_templates`** (Vorgabe an) blendet Menü „Process" und
+  beide Schaltflächen aus. Eine Kursvorgabe, keine Sperre: `settings.yaml` ist
+  eine Textdatei.
+
+### Löschen neben einer aktiven Phase startete diese neu (18.11.2026)
+
+Gefunden beim Gegenlesen für die Prozessvorlagen
+(`Projektplan_Prozessvorlagen.md`, P0-1). `delete_phase` setzte nach jedem
+Löschen `runner.phases.current = None`. Ist dabei eine Phase aktiv, findet
+`check_start` keine wartende, nimmt die nach der letzten abgeschlossenen — die
+aktive — und startet sie erneut: Startzeit überschrieben, Aktionen ein zweites
+Mal angewandt. Gemessen an Projekt 519 (gespeichert mit aktivem „Fed Batch"):
+eine kommende Phase gelöscht, ein Takt, Startzeit 3,502 h → 0,0 und `FR1j`
+0,0545 → 0 l/h. Jetzt sucht `adopt_active_phase()` die aktive Phase wieder,
+dieselbe Funktion wie beim Laden. **`current` ist ein Index in die Liste und
+wird nach jeder Änderung der Liste neu bestimmt, nie geleert.**
+
 ### Ein fortgesetzter Lauf verliert seine Regler — gemessen
 
 `a` wird nicht persistiert, und `initialize()` läuft beim Fortsetzen erneut
@@ -829,7 +925,8 @@ diesem Panel — das Feld mit der Beschriftung `F_T1` liest `v.FT2`.
 
 ### Die Verknüpfung auf den Quellbaum
 
-`tools/make_launcher.py` baut ein `.app`-Bündel in `~/Applications`, das den
+`tools/make_launcher.py` baut ein `.app`-Bündel in `/Applications` (bis
+18.11.2026 `~/Applications`, siehe unten), das den
 Interpreter *dieser Arbeitskopie* startet — nicht der Verteilungsbau, sondern
 das, was man zum Entwickeln und zum Unterrichten aus einem Checkout heraus
 will. Drei Dinge daran sind teuer erkauft:
@@ -859,6 +956,19 @@ will. Drei Dinge daran sind teuer erkauft:
   Dock-Eintrag zuerst —, zeigt danach ins Leere. Dazu eine Ad-hoc-Signatur
   (ohne jede Signatur weist Gatekeeper das Bündel ab) und `lsregister -f`,
   damit Finder und Spotlight es sofort kennen.
+
+**Zwei Bündel gleichen Namens (18.11.2026).** Der Anwender startete über eine
+Finder-Verknüpfung auf `/Applications/Biofermentation Simulation.app` — ein
+Skriptbündel vom 12.09. (Version 0.1.0), also genau der oben beschriebene
+Fall: macOS 26.5 warnte, Python nutze Rosetta, und zuletzt startete es gar
+nicht mehr. Das Werkzeug hatte seither nur `~/Applications` neu gebaut; das
+Bündel, auf das die Verknüpfung zeigte, erreichte es nie. Gemessen: Prozess
+vom neuen Bündel nativ (`ps`-Flag `P_TRANSLATED` 0x20000 nicht gesetzt), vom
+alten gar keiner. Behoben mit `--into /Applications` — an Ort und Stelle
+geschrieben, Inode unverändert, die Verknüpfung blieb gültig. Das Bündel in
+`~/Applications` liegt im Papierkorb, und **die Vorgabe des Werkzeugs ist
+jetzt `/Applications`**, damit ein erneuter Lauf das Bündel trifft, das
+benutzt wird.
 
 ### Was ein Release ausliefert
 
@@ -1183,7 +1293,7 @@ nicht durch einen Push:
 
 Plan: `python/Projektplan_PCS_Tab.md`. Phase 0 (Festlegen) am 14.11.2026,
 Phase 2 (Spezifikation, Layoutdatei) am 16.11.2026 gegen Commit `5347fe2`.
-Phase 1 (Bausteine) am 16.11.2026 nachgeholt; Phase 2 hing nicht von ihr ab. Phase 3 (Tab, nur lesend) am 16.11.2026.
+Phase 1 (Bausteine) am 16.11.2026 nachgeholt; Phase 2 hing nicht von ihr ab. Phase 3 (Tab, nur lesend) am 16.11.2026. Phase 4 (Bedienung) am 16.11.2026. Phase 5 (Feinschliff) am 17.11.2026.
 
 ### Elementliste — jede Zeile mit ihrem Leser im Modell
 
@@ -1440,6 +1550,362 @@ Offen aus Phase 3:
   (Entscheidung 4). Nicht geprüft.
 - Unter etwa 1000 px Breite rücken die Vorlagen der unteren Reihe aneinander;
   die Fläche selbst geht bis 480 px.
+
+
+### Stand nach Phase 4 (16.11.2026) — Bedienung
+
+Geändert: `gui/widgets/pcs_view.py` (Signal `PcsView.parameter_changed(str,
+float)`), `control_app.py` (`_panel_changed`, `_pcs_changed`),
+`tests/test_pcs_view.py`. Abnahme: ganze Suite grün (741 bestanden, 1
+übersprungen, 1 xfail wie zuvor), darin der E.-coli-Referenzlauf.
+
+- **Bedienbar ist ein Element genau dann, wenn es dem Bediener gehört.**
+  `PcsView.load(state)` ruft `set_locked(owner)`; das schaltet frei oder
+  sperrt. Vor dem ersten `load` ist alles gesperrt.
+- **Das Fließbild schreibt nie selbst in `p`.** `ValveButton.toggled` →
+  `PcsView.parameter_changed(name, 0.0 | 1.0)` → `ControlWindow._pcs_changed`
+  → `_set_parameter` (`runner.editing()`, Logeintrag) → `load_panels()`, das
+  auch das Fließbild neu lädt (die Feedpumpen teilen sich `f_feed`).
+  `toggled` statt `clicked`: es trägt den neuen Zustand, und
+  `set_state_now` blockiert es — Laden meldet nichts.
+- **Panels melden jetzt an `_panel_changed`**, nicht mehr direkt an
+  `_set_parameter`: schreiben, dann nur `pcs_view.load(state)`. Kein
+  `load_panels()` nach einer Paneländerung (Test) — es fasste das Feld an, in
+  das gerade jemand tippt.
+- **Besitzerwechsel** laufen über dieselben zwei Wege: Moduswechsel im Panel
+  (`_panel_changed`) und Phasenwechsel (`_phase_changed` → `load_panels()`),
+  auch `a.switch_exp`/`a.switch_pulse`.
+- **Der Tab rechnet nichts** (`test_the_tab_computes_nothing`): Laden,
+  Aktualisieren und Zeichnen lassen `p` und `v` unverändert. Ein Klick auf
+  die Feedpumpe ergibt bitgleich den Lauf, in dem `f_feed` im selben Schritt
+  von Hand gesetzt wurde.
+- Entscheidung 3 bleibt: das Reservoir wird im Feed-Panel gewählt; die Pumpe
+  des nicht gewählten Reservoirs ist gesperrt.
+
+
+### Anpassungen nach dem ersten Ausprobieren (16.11.2026)
+
+Dreizehn Wünsche des Anwenders nach dem ersten Ausprobieren. Im Chat
+geschrieben, wo Qt nicht lief; am 17.11.2026 zum ersten Mal mit Qt gelaufen.
+
+1. Kessel kleiner (`REACTOR_SHARE = (0.22, 0.50)`), Begasungsleitung ohne
+   Bogen: `aeration_line: []`, die Fläche führt sie waagerecht bis über die
+   Lanze und senkrecht hinein.
+2. Reservoirzahl aus dem Organismus (`runner.organism.metadata.n_reservoirs`),
+   nicht aus dem Projekt — Pichia zeigt immer zwei.
+3. Blasen nur, wenn Gas in den Kessel fließt (`VesselWidget.set_gassing`).
+4. Blasen-Animation: drei Arten (`BUBBLE_STREAMS`), `PcsView.bubble_timer`
+   (80 ms) läuft nur bei sichtbarem Tab; bewegt wird nur, wenn der Prozess
+   läuft (`set_running`, aus `ControlWindow.refresh`) und Gas fließt.
+5. Kühlwasser in l/min über `rhoH2O`, Heizung in kg/h. **Am 17.11.2026
+   ersetzt:** beide in g/h, auf Wunsch des Anwenders (Phase 5 unten).
+6. Flusswerte springen nicht: Feld fester Breite (`READING_TEMPLATE`),
+   Ausrichtung zur Pfeilseite; `value_boxes()` liefert Dreier-Tupel
+   `(box, text, alignment)`.
+7. Aktive Leitungen werden nach den inaktiven gezeichnet.
+8. `O₂`, `N₂`, `CO₂` als Beschriftung; Einheiten über `pretty_unit`
+   („l min⁻¹"). Hoch- und Tiefstellung sind in der Systemschrift von macOS
+   darstellbar (im Bild geprüft); unter Windows nicht geprüft.
+9. Lanze bei Gasfluss und Ablaufstutzen bei Ernte in Leitungsfarbe
+   (`set_gassing`, `set_draining`).
+10. Ernteleitung: `harvest_line: []`, fällt aus dem Stutzen und läuft
+    waagerecht in die Seite des Erntegefäßes.
+11. Rührer zeigt die Drehzahl („Stirrer · 400 rpm", `stirrer_reading`).
+12. Keine Leitung im Bereich eines Symbols (`_outside_symbols`,
+    `ValveButton.symbol_rect`).
+13. Brühe färbt sich: `BrothSpec` in `pcs_specs.py` (beige mit `cXL`, voll bei
+    100 g/l; bei Pichia grün mit `cP1L`, voll bei 1 g/l — beide Werte
+    geschätzt), `broth_color` in `pcs_elements.py`.
+
+Was der erste Lauf mit Qt ergeben hat (771 bestanden, 1 übersprungen,
+1 xfail):
+
+- **Das Feld fester Breite (Punkt 6) passte nicht mehr zwischen Gasventil und
+  Sammelleitung.** 85 px Feld gegen 60 px Lücke bei einer 762 px breiten
+  Fläche (Fenster 1000 px): der Wert lag auf dem Stellantrieb des O₂-Ventils,
+  `test_no_reading_covers_an_element_a_name_or_another_reading[size1]` schlug
+  fehl. Bei 1280 px bestand der Test, aber nur, weil der Wert über den Namen
+  der Versorgung auswich — links vom Ventil, weit weg vom Pfeil. Behoben in
+  `pcs.yaml`, nicht im Code: Sammelleitung von x = 0,26 auf 0,32,
+  Begasungsventil von 0,40 auf 0,43. Jetzt steht jeder Gaswert bei allen drei
+  Größen zwischen Ventil und Pfeil. **Wer eine eigene `pcs.yaml` neben der
+  Datenbank hat, behält die alte Anordnung.**
+- **„Liegt auf nichts" ist nicht „steht richtig".** Der Überdeckungstest war
+  bei 1280 px grün, während der Wert neben dem falschen Bauteil stand.
+  `test_a_gas_reading_stands_between_its_valve_and_the_collector` hält die
+  Absicht fest; mit der alten Anordnung schlägt er bei 1000 und 1280 px fehl
+  (Gegenprobe gelaufen).
+- **Zwei Zähltests in `test_dialogs.py` kannten die Antischaum-Vorlage noch
+  nicht** (Kessel 60 → 62 Parameter, Modell 253 → 255: `VT30`, `FT3max`). Der
+  Test war falsch, nicht der Code; im Chat waren diese Tests ohne Qt nicht
+  gelaufen.
+- Die Fläche ist schmaler als das Fenster: die Laufspalte rechts nimmt
+  238 px. „1000 px" im Test heißt 762 px Fließbild.
+
+
+### Stand nach Phase 5 (17.11.2026) — Feinschliff
+
+Abnahme: ganze Suite grün (804 bestanden, 1 übersprungen, 1 xfail).
+
+- **Kühl- und Heizwasser in g/h** (Wunsch des Anwenders). `PipeSpec.factor`
+  (1000) ersetzt `PipeSpec.density`; die Umrechnung über `rhoH2O` in l/min ist
+  weg. **Gemessen, wie groß die Zahlen werden:** in zwei Stunden Automatik
+  kühlt Projekt 716 mit bis zu 68 128 g/h, 519 mit 121 618; von Hand ist es
+  `mdotCmax` = 1 500 000 g/h. `.4g` schreibt daraus „6.813e+04" —
+  `value_text` schreibt deshalb ab 10 000 die ganze Zahl mit schmalen
+  Leerzeichen als Tausendertrennung („68 128"). Alles, was auch der Variable
+  Pool zeigt, bleibt weit darunter und behält dessen Format (Test).
+  `PipeSpec.widest` gibt den beiden Mantelleitungen ein Feld für sieben
+  Stellen, damit der Wert von 12 bis 1 500 000 g/h nicht springt (Test).
+- **Messwerte am Kessel:** pH, pO₂, ϑ als Block unter „Stirrer · … rpm",
+  rechts der Welle zwischen Motor und Deckel — dem einen Streifen, den keine
+  Leitung kreuzt. `VESSEL_READINGS` in `pcs_specs.py` nennt **dieselben
+  Reihen und Nachkommastellen wie die Istwertfelder der Panels** (`pHL`,
+  `pO2`, `thetaL`, also die wahren Werte; die Messreihen stehen bei E. coli
+  still, siehe fünfte Abweichung). Zwei Tests halten das zusammen, einer gegen
+  `CONTROL_PANELS`, einer gegen den angezeigten Text der Panels. Die Kästen
+  zählen zu `label_boxes`, die Flusswerte weichen ihnen also aus; frei von
+  Bauteilen und unter dem Deckel geprüft bei 700, 1000, 1280 und 1600 px.
+- **Strichanimation:** helle, halbtransparente Striche laufen auf jeder
+  aktiven Leitung in Flussrichtung (`draw_pipe(..., travel=)`,
+  `FLOW_DASH`, 24 px/s). Ein Timer für Striche und Blasen
+  (`PcsView.animation_timer`, vorher `bubble_timer`), der nur läuft, solange
+  das Fließbild zu sehen ist — auch herausgelöst (Test) — und der nur bewegt,
+  solange der Prozess rechnet. Ein stehender Prozess mit laufenden Strichen
+  behauptete einen Fluss, den das Modell nicht rechnet.
+- **Packaging-Test** `test_the_pcs_layout_ships_with_the_bundle`: `pcs.yaml`
+  liegt im Ordner, den `build/specs.py` ins Bündel nimmt. Ohne die Datei
+  zeigte die gebaute Anwendung still die Kreisanordnung.
+- **Handbuch:** eigener Abschnitt 6 „The plant at a glance: the PCS tab",
+  PCS in der Tabelle der Tabs und der Textdateien; die folgenden Abschnitte
+  rücken um eins, ein Querverweis („see section 9" → 10) ist nachgezogen.
+  `architecture.md`: ein Absatz zum PCS-Tab, einer zu den herauslösbaren Tabs.
+- **Die Farben bleiben benannte Konstanten in `pcs_elements.py`, nicht in
+  der QSS — bewusst, gegen den Plan.** Die Bausteine zeichnen selbst; QSS
+  erreicht sie nur über eine `Q_PROPERTY` je Farbe (`qproperty-…`), also rund
+  zwanzig Eigenschaften für ein Bild, dessen Farben eine Entscheidung sind
+  (ISA-101, Entscheidung 8) und von einem Test bewacht werden (Medien unter
+  Sättigung 0,45, Alarme darüber). Eine `style.qss` neben der Datenbank könnte
+  diese Regel still brechen. Plan 2.5 lässt „bzw. als benannte Konstanten"
+  ausdrücklich zu.
+
+### Nach Phase 5: Ernte, Lanze, Rührer (17.11.2026)
+
+- **Das Erntegefäß zeigt das gesamte geerntete Volumen**, ohne Füllstand.
+  Keine neue Zeitreihe und nichts auf dem Blatt aufsummiert, sondern die
+  Volumenbilanz: `ode_volume` beider Modelle hat `FH` als einzigen Abfluss
+  aus `VL`, also ist geerntet, was aus `VL0` und den Vorlagen (`VR{n}0`,
+  `VT10`, `VT20`) kam und nicht mehr dort ist (`PcsSpec.harvest_balance`,
+  `harvested_volume`). Das bleibt richtig nach dem Wiederöffnen eines
+  ausgedünnt gespeicherten Projekts, wo Σ `FH·Δt` über die gespeicherten
+  Punkte falsch wäre. Gegen Σ `FH[i]·Δt` geprüft auf 1e-9 (E. coli und
+  Pichia); ohne den Laugenterm schlägt der Test fehl (Gegenprobe gelaufen).
+  `VAF`/`VT3` gehören nicht hinein: die Antischaum-Vorlage geht nicht in `VL`.
+  **`p.VH` ist nicht das Erntegefäß**, sondern gehört zur Heizung
+  (`a.mHmax = VH · rhoH2O`); eine Kapazität des Erntegefäßes steht in keiner
+  Tabelle, deshalb kein Füllstand.
+- **Gasstriche bis zum Ring:** die Lanze im Kessel bekommt dieselben Striche
+  (`flow_dash_pen`, gleiches Muster in Pixeln) mit `travel` minus der Länge
+  der Begasungsleitung — ein Strich, der die Leitung verlässt, tritt im selben
+  Moment in die Lanze ein (`PcsCanvas.lance_travel`).
+- **Rührer dreht sich:** vier Blätter von der Seite, je so lang, wie ihr
+  Winkel sie zeigt, die hinteren blasser (`IMPELLER_TURNS = 0.8` Umdrehungen/s
+  — ein Symbol, nicht die Drehzahl). Bei Drehung 0 ist es das bisherige Bild.
+  Steht der Rührer, die alten zwei hohlen Blätter.
+- **Blasen werden mitgenommen**, wenn gerührt und begast wird: eine seitliche
+  Schwingung, die mit der Steighöhe wächst (`BUBBLE_SWIRL`). Höhe und Größe
+  bleiben, nur x ändert sich; alles bewegt sich nur bei laufendem Prozess.
+- **Befund dabei: Werte ohne Einheit.** Das Fließbild nahm Einheiten nur aus
+  den *sichtbaren* Variablen (`lookups.variable`, `visible = 1`). `FH` ist
+  nicht sichtbar — der Erntefluss stand als nackte „1" da, bei E. coli auch
+  `FR2`. Jetzt aus `lookups.variable_units` (alle Zeilen von `variableTab`);
+  `test_every_reading_carries_its_unit`.
+
+### Doppelmantel, Gas vor dem Ventil, Heizung von Hand (17.11.2026)
+
+- **Doppelmantel rechts** (`VesselWidget.jacket_polygon`, `jacket_span`):
+  ein flaches Trapez im 10-px-Rand des Widgets, 9 px dick
+  (`JACKET_WIDTH`), innen von 16 % bis 76 % der Kesselhöhe (`JACKET_RANGE`),
+  die Außenwand an jedem Ende 7 px kürzer (`JACKET_SLANT`). Die Leitungen
+  treffen die Wand bei 24–29 % und 63–66 % (gemessen bei 700 bis 1600 px),
+  also mit über 10 px Abstand auf der geraden Außenwand. Erste Fassung
+  (6 px, vom max-Strich bis zum Boden) war dem Anwender zu dünn und zu hoch. Kühl- und Heizleitung werden unter dem Kessel gezeichnet und
+  enden damit an der Außenwand des Mantels; ihre Höhe liegt bei drei
+  Fenstergrößen im Mantel (Test). Der Mantel nimmt die aufgehellte Farbe des
+  Mediums an, das fließt, bei beiden (von Hand) die Mischung.
+- **Gas vor geschlossenem Begasungsventil** (`standing_stretches`): die
+  Gase laufen weiter in den Verteiler, die Strecke von dort bis
+  `STANDING_GAP` = 6 px vor dem Ventilsymbol wird aktiv gezeichnet, ohne Pfeil
+  und ohne Wert. Nur für Leitungen, die an einem Knoten beginnen — die
+  Ernteleitung hinter dem geschlossenen Ventil bleibt leer (Test).
+  **Befund dabei:** mit `f_aeration = 0` zeigt die Luftleitung weiter
+  7,5 l/min — `FnAIR` wird nicht neu geschrieben und von `carry_forward`
+  fortgeschrieben. Das ist das Modell, nicht das Fließbild; nicht geändert.
+- **Heizung von Hand** (`PipeSpec.instead`, `Substitute`): das Modell heizt im
+  Handbetrieb elektrisch (`PH = PHmax` bei `f_heating = 1`) und schreibt
+  kein `mdotH`. Die Heizleitung ist dann aktiv und zeigt die Leistung
+  („10 000 W", aus `p:PHmax`). Gelesen, nicht gerechnet: der Tab ändert am
+  Lauf nichts (Test). **Kühlung von Hand floss schon**, aber erst ab dem
+  nächsten gerechneten Schritt — `mdotC` setzt nur der Schritt, und die
+  Leitung zeigt den Fluss, nicht den Befehl. Bei pausiertem Prozess sieht man
+  nach dem Klick deshalb nichts; das bleibt so und steht im Handbuch.
+
+### Die Datengrenze (17.11.2026)
+
+Wunsch des Anwenders: die maximal erlaubte Datenmenge ermitteln, bei 90 %
+anhalten und warnen, nach Bestätigung bis 99 % weiter. `core/data_budget.py`
+(ohne Qt), Prüfung in `ControlWindow._check_data_limit` nach jedem Block und
+in `_may_run` beim Drücken von Run.
+
+**Eine harte Grenze gibt es nicht.** SQLite 3.45.1 endet bei
+`max_page_count` = 4 294 967 294 Seiten zu 4 KiB, rund 17,6 TB. Begrenzend
+sind die Kosten, und die wachsen linear mit den *gespeicherten* Werten.
+Gemessen an Projekt 716, Speichern und Öffnen in getrennten Prozessen:
+
+| | 8 h, 835 258 Werte | 24 h, 2 505 658 Werte | je Wert |
+|---|---|---|---|
+| Speichern | 2,2 s, +97 MB | 6,9 s, +287 MB | 2,8 µs, ~115 B |
+| Wieder öffnen | 0,8 s, Spitze 326 MB | 2,3 s, Spitze 831 MB | 0,9 µs, ~300 B |
+| Datei | 56 MB | 168 MB | 67 B |
+
+Pichia (519, 74 Werte je Schritt) kostet je Wert dasselbe. Die Reihen im
+Speicher sind klein (10 MB nach 8 h). **Am teuersten ist das Wiederöffnen**,
+weil `load_project_variables` alle `dataTab`-Zeilen holt, bevor es pivotiert.
+
+**`MAX_STORED_VALUES = 5 000 000` ist eine Wahl auf diesen Messungen**, nicht
+eine Eigenschaft von SQLite: Wiederöffnen bleibt unter etwa 1,5 GB (Spielraum
+auf einem 8-GB-Laptop), Speichern bei etwa 14 s hier, Datei etwa 335 MB. Das
+sind 48 h E. coli bei Δt = 2 s und jedem Schritt, 37 h Pichia. Der 14-h-Lauf
+des Anwenders liegt bei 29 % (1 461 600 Werte); ein Test hält ihn unter 90 %. Unter Windows ist nichts gemessen.
+Würde das Öffnen auf Streaming umgebaut, fiele die Spitze und die Grenze
+dürfte steigen.
+
+- **Gezählt wird nach der Regel von `_save_series`**: was beim Öffnen im
+  Speicher war, ganz; danach jeder Schritt mit `i % n == 0` und immer der
+  letzte. Der erste Entwurf rundete stattdessen auf und zählte bei 121
+  Schritten in Siebenerschritten 18 statt 19 — gefunden vom Test, der die Zahl
+  gegen `save_project(...)["values"]` hält. Ein zweiter Test hält sie über
+  Speichern, Wiederöffnen und erneutes Speichern gegen die Zeilen in `dataTab`.
+- **Gezählt werden nur Variablen, die auch in `v` stehen.**
+  `variable_handlingTab` ordnet E. coli 77 zu, gespeichert werden 58 — die 19
+  Pichia-Variablen ohne Bilanz (siehe Offen aus Phase 2). Dafür neu:
+  `Lookups.stored_variables`, beim Öffnen mitgelesen wie alles andere.
+- **Mit der Speicherauflösung der Einstellungen**, mit der das Fenster
+  geöffnet wurde. Eine gröbere, erst beim Speichern gewählte kennt die Prüfung
+  nicht; die Warnung kommt dann früh, nicht spät.
+- **Die 90-%-Frage kommt einmal je Fenster**, wenn sie bestätigt wurde. Wer
+  „Stay paused" wählt, wird beim nächsten Run wieder gefragt. Bei 99 % hält
+  der Lauf an und startet nicht mehr; beides steht im Log.
+- Die Dialoge sind eigene Methoden (`_ask_past_data_warning`,
+  `_tell_data_limit_reached`), damit die Tests sie ersetzen — ein modaler
+  Dialog im Test ist ein hängender Lauf.
+
+### Liquid-Weight-Regler überarbeitet (16.11.2026)
+
+**Bewusste Abweichung von MATLAB, vom Autor gewünscht** — die sechste neben
+den vier in der Begasung und `sensor_lag`. In `_liquid_weight` beider Modelle:
+im Automatikbetrieb (`Mode_harvest = 1`) verlässt nur dann Flüssigkeit den
+Kessel, wenn das Gewicht `VL[prev] * rhoL` über dem Sollwert `LWw` liegt. An
+oder unter dem Sollwert ist `FH[i] = 0` und der I-Anteil `cI_LW[i]` beginnt
+wieder bei null. Im Original hielt der I-Anteil die Erntepumpe auch unter dem
+Sollwert am Laufen, bis er abgebaut war. Handbetrieb (`FHrelw` bei
+`f_harvest = 1`) und der Referenzlauf (`Mode_harvest = 0`) sind unberührt.
+Tests: `tests/test_liquid_weight.py` (ohne Qt lauffähig); Gegenprobe ohne
+die Sperre schlägt fehl.
+
+Zu wissen: in den Vorlageprojekten ist `LWw = 14 kg` bei `VLmax = 11 l` und
+`rhoL = 1 kg/l` — mit diesen Werten lässt der Regler nie etwas ab.
+
+
+### Antischaum-Vorlage (16.11.2026) — Erweiterung des Modells
+
+Das Original kennt kein Antischaum-Volumen: `AAF` ist trotz der Beschriftung
+„added antifoam [l]" eine Wirkgröße, die abklingt und den kLa mindert; die
+Dosierung hat keine Pumpenrate, `VAF` ist dimensionslos. Vom Autor gewünscht
+und nach Säure/Lauge (T1, T2) benannt:
+
+| Name | Art | Bedeutung | Vorgabe |
+|---|---|---|---|
+| `VT30` | Parameter, Kategorie Instrumentation | Volumen der Vorlage bei t = 0 [l] | 0,5 (geschätzt) |
+| `FT3max` | Parameter, Kategorie Instrumentation | Rate der Antischaumpumpe [l/h] | 0,1 (geschätzt) |
+| `VT3` | Reihe | Restvolumen [l] | Start `VT30` |
+| `FT3` | Reihe | Fluss der Pumpe [l/h] | Start 0 |
+
+- **Modell:** `organisms/shared.antifoam_reservoir(state, prev, i)`, von beiden
+  Modellen direkt nach `_antifoam` gerufen. Die Pumpe läuft unter genau der
+  Bedingung der Dosierung (`f_antifoam == 1` und `a.ToI != 0`) und stoppt bei
+  leerer Vorlage. **Reine Anzeige:** die Wirkung `AAF` sieht die Vorlage nicht,
+  das Volumen geht nicht in `VL` ein — jede andere Reihe bleibt bitgleich
+  (Test). Die Eigenheit „bei Beimpfung zur Zeit 0 dosiert nichts" gilt damit
+  auch für die Pumpe.
+- **Datenbank:** `db/additions.add_antifoam_reservoir(db, dry_run=True)` nach
+  dem Muster von `repair.add_flags`: eine Transaktion, wiederholbar, zuerst
+  Probelauf. Schreibt `parameterTab`, `default_bioreactorTab` (je Kessel),
+  `model_parameterTab` (je Modell), `project_parameterTab` (je vollständigem
+  Projekt), `variableTab`, `variable_handlingTab` (je Organismus). Auf die
+  Vorlage angewendet (danach `VACUUM`, sonst bleibt eine freie Seite und
+  `test_the_size_of_a_database…` schlägt fehl) und die Default-CSVs mit
+  `export_defaults` neu erzeugt — rein additiv, 18 Zeilen.
+- **Eine Datenbank von vorher läuft weiter:** die Modelle lesen beide Parameter
+  mit Vorgabe 0 (`p.get`), also keine Pumpe und kein Füllstand. Wer den
+  Füllstand will, ruft die Funktion einmal auf seiner Datenbank auf.
+- **Fließbild:** `TankSpec("antifoam", …, "v:VT3", "p:VT30")`, Pumpe und
+  Leitung melden `v:FT3`.
+- Zählende Tests um zwei erhöht (`test_db`, `test_repair`, `test_transfer`).
+- **Offen:** ob `VAF ** (TON / Ttast)` in der Dosierung schon eine sich
+  leerende Vorlage beschreibt (0,975 je 0,3 s) — nicht geklärt; die neue
+  Bilanz steht unabhängig daneben.
+
+### Herauslösbare Tabs (17.11.2026)
+
+Neu: `gui/widgets/detachable_tabs.py` (`DetachableTabs`, `DetachedWindow`),
+`tests/test_detachable_tabs.py` (13 Tests). `ControlWindow.tabs` ist jetzt ein
+`DetachableTabs`.
+
+- **Auslösen:** Kontextmenü auf dem Reiter („Detach" / „Bring back") oder
+  Doppelklick auf den Reiter (heraus, und wieder herein). Keine Drag-Geste.
+  Gilt für jeden eingehängten Tab, auch Control Options und Information.
+- **Die Seite wird umgehängt, nicht kopiert.** Der Zustand jeder Seite liegt
+  in ihren Widgets; es gibt sie einmal. `detach(title)` ersetzt die Seite am
+  selben Index durch einen Platzhalter (ein Satz, Schaltfläche „Bring back")
+  und setzt sie in ein `DetachedWindow`; `attach(title)` tauscht zurück.
+  Reiter, Index und Titel bleiben stehen.
+- **Fenster schließen = zurückholen.** `DetachedWindow.closeEvent` meldet
+  `closing`, das `attach` ruft. `attach` nimmt den Eintrag zuerst aus
+  `_detached` und schließt dann das Fenster — der zweite Aufruf über das
+  Signal findet nichts mehr und tut nichts.
+- **Aktualisiert wird, was der Anwender sieht:** `ControlWindow.refresh()`
+  fragt `tabs.visible_pages()` — der vordere Tab und jede herausgelöste
+  Seite. Ein Tab, der hinten liegt und nicht herausgelöst ist, wird weiter
+  nicht gezeichnet (Test). `detached_changed` ruft `refresh()`, damit eine
+  Seite beim Herauslösen sofort den aktuellen Stand zeigt.
+- **Hauptfenster schließen:** `closeEvent` ruft nach der Schließen-Frage
+  `tabs.attach_all()` — erst zurück, dann zu. Wird die Frage abgebrochen,
+  bleiben die Fenster offen.
+- **Ausgeblendete Tabs** stehen nicht im Tab-Widget; `detach` findet den
+  Titel nicht und liefert `False`.
+- **Fenstertitel** „<Tabname> — <Projektname>"; das Layout des Fensters hat
+  keine Ränder, also ist seine Mindestgröße die der Seite (Test). Geöffnet
+  wird in der Größe, die die Seite im Tab hatte.
+- **`tabs.reveal(page)`** statt `setCurrentWidget` für „Information zeigen":
+  eine herausgelöste Seite ist kein Kind des Tab-Widgets mehr, ihr Fenster
+  wird nach vorn geholt.
+- Der Zustand „herausgelöst" wird nicht gespeichert.
+- **Der Reiter sagt, dass es geht** (`DETACH_HINT` als Tooltip der
+  Tableiste): weder Doppelklick noch Kontextmenü sind zu sehen. Das
+  herausgelöste Fenster schließt mit Strg+W / Cmd+W
+  (`QKeySequence.StandardKey.Close`).
+- **Das herausgelöste Fenster hat kein Elternfenster.** Unter macOS zeigt es
+  deshalb die Menüleiste des Hauptfensters nicht, solange es vorn ist; die
+  Kürzel des Hauptfensters (Plot, Datentabelle) wirken dort nicht. Aus der
+  Qt-Dokumentation gefolgert, nicht am Bildschirm geprüft; ob ein Kindfenster
+  mit Elternteil besser wäre, ist offen.
+- Schreibwege unverändert: ein Ventilklick im herausgelösten Fließbild läuft
+  über `parameter_changed` → `_pcs_changed` → `runner.editing()` (Test).
+
+Nicht geprüft: das Kontextmenü selbst (ein `QMenu.exec` im Test hängt; seine
+beiden Einträge rufen `detach`/`attach`, die getestet sind) und das Verhalten
+auf einem zweiten Bildschirm.
 
 ---
 
@@ -1800,12 +2266,41 @@ Kopieren der `.db` ohne WAL sind sie verloren.
   Plotfläche 109,5…1318,5 px, und der Bereich [−0,1, 0,5] sagt genau diese
   fünf Positionen voraus — auf ein halbes Pixel.
 
-  **Warum die Achse bei −0,1 beginnt, ist keine Abweichung.**
+  **Warum die Achse bei −0,1 begann, war keine Abweichung.**
   `auto_limits` folgt `calculateYLimits` wörtlich: ein negativer Messwert
   zieht die Untergrenze auf `-ceil(|min|/scale)*scale` mit der Dekade der
   Obergrenze. Ein einziger Schritt knapp unter null kostet damit eine ganze
-  Dekade Achse. Das ist die Quelle, nicht die Portierung — wer es ändern
-  will, ändert es als bewusste Abweichung und misst sie.
+  Dekade Achse. Das ist die Quelle, nicht die Portierung.
+
+  **Seit 17.11.2026 eine bewusste Abweichung, nur in der Anzeige:
+  `aligned_limits`** (in `db/plots.py`, `auto_limits` bleibt unverändert und
+  getestet). Zweiter Bildschirmfoto-Befund des Anwenders: die Teilstriche von
+  µ lagen 40 px versetzt zu allen anderen Achsen. **Ursache:**
+  `setTickSpacing` legt die Striche auf Vielfache des Schritts, nicht ab der
+  Untergrenze — bei [−0,1; 0,5] und fünf Teilungen auf 0 / 0,12 / … / 0,48,
+  und auf −0,1 keiner. Jetzt wird der Schritt aus runden Werten gewählt
+  (`ROUND_STEPS`: 1; 1,2; 1,25; 1,5; 2; 2,5; 3; 4; 5; 6; 8 × 10ⁿ), so klein
+  wie möglich, dass ganze Teilungen unter null den tiefsten Wert und die
+  übrigen die Obergrenze von `calculateYLimits` erreichen; alle Teilungen
+  werden benutzt. µ wird [−0,125; 0,5]. Die Obergrenze kann dabei steigen
+  ([−30; 95] → [−30; 120]), nie fallen; ohne negativen Wert ändert sich
+  nichts. Ein Test baut einen echten Plot mit N_St und µ und verlangt die
+  Striche beider Achsen auf denselben Höhen; mit der alten Rechnung schlägt
+  er fehl (Gegenprobe gelaufen). Die Tests stehen in
+  `tests/test_axis_alignment.py`, nicht in `test_plots.py` — dort liegen
+  laufende Änderungen des Anwenders. In `plot_view.py` geändert: der Import
+  und die eine Zeile in `update_data`; von Hand gesetzte Grenzen bleiben, wie
+  sie sind.
+- **Die Zeitachse endet bei `tend`** (seit 18.11.2026, Wunsch des Anwenders).
+  Vorher zog `update_data` sie nach, sobald die Prozesszeit `tend`
+  überschritt, und das Max-Feld bedeutete ab dann nichts mehr. Jetzt gilt
+  `tend` als Grenze; nur mit „Extend t max with the run"
+  (`MultiAxisPlot.set_follow_time`, `FigureWindow.follow_box`) reicht die
+  Achse bis zur Prozesszeit. Solange der Haken sitzt, ist das Max-Feld
+  gesperrt, und `template.tend` wird **nicht** verändert — Abhaken führt
+  genau auf den eingestellten Wert zurück. Der Schalter gehört zum Fenster,
+  nicht zur Vorlage: keine neue Spalte in `plot_templateTab`. Tests in
+  `tests/test_time_axis.py`; mit dem alten Verhalten schlagen drei fehl.
 - **Kein Gitter im Plot** und kein `(×0.001)` über den Achsen
   (`enableAutoSIPrefix(False)`).
 - **Kurvenendlabels mit `ignoreBounds=True`**, sonst zieht das Label hinter
@@ -1896,7 +2391,7 @@ Kopieren der `.db` ohne WAL sind sie verloren.
   erfüllbar sein. Deshalb: scharfes Fenster vor dem ersten Umschalten, danach
   nichts. Die Toleranzen in `test_organisms.py` sind gemessen, nicht geraten.
 
-### Phase 8: fünf Dokumente, je eines pro Frage
+### Phase 8: Dokumente, je eines pro Frage (seit 3.0.1 sechs)
 
 `docs/` beantwortet fünf Fragen und keine zweimal. Ein Wegweiser
 (`docs/README.md`) sagt, welche welche ist.
@@ -1915,7 +2410,8 @@ Arbeitsdatei dieses Projekts und keine Abgabe. `docs/README.md` und
 | `installation.md` | Wie installiere und verteile ich das? |
 | `architecture.md` | Wie ist das gebaut? |
 | `development.md` | Wie entwickle ich es weiter? |
-| `verification_escherichia_coli.md` | Stimmen die Zahlen? |
+| `verification_escherichia_coli.md` | Stimmen die Zahlen? (mit gemessenem Protokoll je abgeschlossener Version) |
+| `changes_from_matlab.md` | Was ist anders als in MATLAB, und warum? |
 
 - **Diese Datei bleibt das Warum.** `architecture.md` ist die Landkarte und
   verweist hierher, statt die Begründungen zu wiederholen — zwei Texte über

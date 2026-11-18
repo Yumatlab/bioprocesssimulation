@@ -9,6 +9,7 @@ from .parameters import (
     PhaseParameterDialog,
 )
 from .phase_editor import ConditionEditor, PhaseEditor
+from .process_templates import LoadTemplateDialog, SaveTemplateDialog
 
 __all__ = [
     "BioreactorManager",
@@ -16,8 +17,10 @@ __all__ = [
     "ClosingDialog",
     "ConditionEditor",
     "ControllerParametersDialog",
+    "LoadTemplateDialog",
     "OrganismManager",
     "ParameterDialog",
     "PhaseEditor",
     "PhaseParameterDialog",
+    "SaveTemplateDialog",
 ]

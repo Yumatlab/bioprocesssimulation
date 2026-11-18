@@ -247,6 +247,22 @@ def test_the_panel_layout_ships_with_the_bundle(specs):
     assert "biofermentation/resources/layouts" in destinations
 
 
+def test_the_pcs_layout_ships_with_the_bundle(specs):
+    """The flow sheet's arrangement is a file too; without it, a circle.
+
+    load_pcs_layout never throws: a frozen build without pcs.yaml would show
+    the plain arrangement round the reactor and say why only in the log.
+    The file has to sit in the folder the bundle takes along.
+    """
+    from biofermentation.gui.pcs_layout import BUNDLED_PCS_LAYOUT
+    from biofermentation.resources import LAYOUTS_DIR
+
+    assert BUNDLED_PCS_LAYOUT.is_file()
+    assert BUNDLED_PCS_LAYOUT.parent == LAYOUTS_DIR
+    bundled = {Path(source).resolve(): destination for source, destination in specs.data_files()}
+    assert bundled.get(LAYOUTS_DIR.resolve()) == "biofermentation/resources/layouts"
+
+
 # ------------------------------------------------------------- the specs --
 
 

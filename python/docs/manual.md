@@ -91,14 +91,24 @@ Anyone who starts the run and sees nothing happen has usually forgotten this.
 | Tab | What for |
 |---|---|
 | **Control Options** | the five control panels — the workplace |
+| **PCS** | the plant as a flow sheet: what flows where, and the valves to switch |
 | **Controllers** | what each controller is computing right now |
 | **Variable Pool** | every state variable as a number |
 | **Process Manager** | the phases of the process |
 | **Log** | the record of the session |
 | **Information** | project data and where the application comes from |
 
-Four of them can be switched off under **Settings…** on the starting screen;
+Five of them can be switched off under **Settings…** on the starting screen;
 Control Options and Information always stay.
+
+**A tab can be taken out into a window of its own** — for a second screen, or
+to keep the flow sheet beside the panels. Right-click its tab and choose
+**Detach**, or double-click the tab. The page moves into its own window and is
+kept up to date there, whichever tab is in front in the main window; its tab
+stays where it was and shows a **Bring back** button. Pressing that button,
+closing the window or double-clicking the tab again puts the page back in its
+place. Closing the control window brings every page back first. Which tabs
+were detached is not remembered between sessions.
 
 ---
 
@@ -223,7 +233,7 @@ the wrong unit: it keeps the integral from ever going negative, so a stirrer
 that has once been driven up cannot come down again. With the switch off that
 is reproduced exactly; with it on, the integral is free and pO2 ends at 78 %
 instead of 109 % on the shipped Pichia project. Neither reaches the 20 %
-setpoint — see section 9.
+setpoint — see section 10.
 
 ---
 
@@ -280,9 +290,112 @@ waiting for the condition. It is only active after the running phase.
 
 Editing phases is only possible while the process is **paused**.
 
+### Process templates
+
+A process that took an afternoon to get right can be stored and used again.
+
+**Saving.** **Process → Save process as template…** — or **Save as
+template…** at the bottom right of the Process Manager — asks for a name, a description and an author and
+shows the phases that will be stored. The template belongs to the **model** of
+the project (organism and bioreactor): every project of that model can load it,
+projects of other models do not see it. A template of the same name is
+replaced only after you confirm it. Saving works while the process runs; it
+changes nothing in the run and does not save the project.
+
+What is stored is the **plan**: type, name, reservoir, start and end condition
+and the parameters of each phase — no status and no times. A timer keeps its
+duration. A feed phase that has run also carries what it computed at its start
+(`t1j`, `cXL1j`, `FR1j`); those are results of that run and are not stored.
+**A feed phase without settings of its own** — none of its five or two
+parameters entered in the phase — takes them from the project it runs in. The
+save dialog says so for every such phase.
+
+**Loading.** **Process → Load process template…** — or **Load template…**
+beside it —
+lists the templates of the model with their description and a preview of the
+phases; there you can also rename or delete one. Loading is possible only
+while the process is **paused**. A template that does not fit the project — a
+reservoir the organism does not have, a parameter the model does not know — is
+refused, and the message names every reason.
+
+If the project has phases that have not started, you are asked:
+
+- **Append** — the template follows all existing phases.
+- **Replace** — the phases that have not started are removed and the template
+  follows the last one that has. You are asked a second time, with the names of
+  the phases that go.
+
+**Running and completed phases always stay**, in either case. If the running
+phase ends with "Next phase condition", replacing changes the phase after it —
+and with it when the running one ends; the question says so. The loaded phases
+appear as upcoming and can be edited like any other phase; they are saved with
+the project.
+
+Templates can be switched off for a course — see "Process templates" under
+section 9.
+
 ---
 
-## 6. Understanding the controller: the Controllers tab
+## 6. The plant at a glance: the PCS tab
+
+The PCS tab (*process control system*) draws the bioreactor as a flow sheet:
+the reactor in the middle, the gases top left, acid, alkali, antifoam and the
+substrate reservoirs below, cooling and heating water on the right and the
+harvest vessel at the bottom. The symbols follow the plant's R&I diagram.
+
+**What the lines say.** A line that carries something is thick, coloured by
+its medium, has an arrow where it enters its target and its flow written next
+to it — in the same unit and with the same digits as the Variable Pool.
+Cooling and heating water are shown in g/h; a large value is written whole
+("68 128 g h⁻¹"). While the process runs, light dashes move along every live
+line; while it pauses, nothing moves. An idle line is thin and grey. Colour is
+never the only sign: thickness, arrow and number say the same thing.
+
+**What the elements say.** A filled symbol runs or is open, a hollow one
+stands or is shut. A pale symbol with a small **A** belongs to a controller
+right now — the acid pump in automatic pH control, for example. It cannot be
+clicked, it follows what actually flows, and its tooltip names the controller.
+Every other element belongs to you: **a click switches it at once**, exactly
+as the matching switch in Control Options does, and both always show the same
+position. Every click is written to the log as a parameter change.
+
+**Beside the reactor** stand the stirrer speed, pH, pO₂ and temperature — the
+same values the panels show as actual values. The reactor and the reservoirs
+show their filling level; the broth turns beige as the cells grow (and green
+with the product for *Pichia pastoris* — a choice for the eye, not a
+measurement). While the process runs, the impeller turns, the gas dashes
+carry on down the lance to the sparger ring, and bubbles rise from the ring;
+with the stirrer turning they are carried round a little on their way up.
+
+**The harvest vessel shows everything harvested so far**, in litres. It has
+no level, because its size is in no table. The number is not added up step
+by step but follows from the volume balance — what went into the reactor
+from the start and the reservoirs, less what is still there — so it stays
+exact after a project has been saved with a coarser resolution and reopened.
+
+**Three things to know:**
+
+- Cooling and heating water run into the **double jacket** on the right of
+  the reactor; the jacket takes the colour of what flows through it.
+- In manual temperature control the heater is electric: no heating water
+  flows, and the heating line shows the electrical power instead
+  ("10 000 W") while the heating is switched on. Cooling water by hand shows
+  its flow from the next computed step on — a paused process computes none.
+- With the aeration valve shut, the gases still reach the manifold; the line
+  from there is drawn full of gas up to just before the valve, without an
+  arrow, because nothing passes it.
+- After reopening a project, cooling and heating show no flow until the first
+  step has been computed — they are not stored.
+- In pO2 modes *gasmix* and *aeration* the main aeration valve is locked: the
+  pO2 controller owns the gas.
+
+The arrangement is a text file like the panel layout: **Settings → PCS
+layout…** creates `pcs.yaml` next to the database and opens it. Positions are
+fractions of the sheet, so it scales with the window.
+
+---
+
+## 7. Understanding the controller: the Controllers tab
 
 The application computes the P, I and D terms of every controller in every
 step — and in the MATLAB version it showed none of that. Anyone who saw pO2
@@ -299,13 +412,26 @@ sign.
 
 ---
 
-## 7. Evaluating
+## 8. Evaluating
 
 ### Plot
 
 **Open Plot** (Ctrl+G) opens a plot window that follows the run. Several windows
 at once are possible. Under **Plots → Open plot from template** are stored
 combinations of axes and curves.
+
+**The time axis ends at Max** (Variable Limits → Time Axis), also when the run
+goes on past it. Tick **Extend t max with the run** to let the axis grow with
+the process time instead. While it is ticked, Max is locked and keeps its
+value; untick it, and the axis ends at Max again. The box belongs to the plot
+window and is not stored in the plot template.
+
+All y-axes have the same number of divisions, so their ticks stand at the
+same heights and a value can be read across from one scale to the next. When
+an automatically scaled curve dips below zero — µ just after inoculation, for
+example — its axis is extended downwards by whole divisions, with zero on a
+tick: µ then runs from −0.125 to 0.5 in steps of 0.125 rather than from −0.1
+to 0.5 with its ticks out of line with the others.
 
 ### Data table
 
@@ -320,7 +446,7 @@ back in.
 
 ---
 
-## 8. Saving, closing, setting up
+## 9. Saving, closing, setting up
 
 ### Saving
 
@@ -360,10 +486,11 @@ lets two installations run side by side without sharing a database.
 |---|---|
 | `style.qss` | colours, spacing, fonts |
 | `control_options.yaml` | arrangement of the control panels and the kind of mode selector |
-| `settings.yaml` | which tabs appear, student view, refresh, stored resolution |
+| `pcs.yaml` | arrangement of the flow sheet in the PCS tab |
+| `settings.yaml` | which tabs appear, student view, process templates, refresh, stored resolution |
 
 **Settings → Panel layout…** in the control window creates `control_options.yaml`
-and opens it. A faulty file never throws the tab away: the application takes the
+and opens it, **Settings → PCS layout…** does the same for `pcs.yaml`. A faulty file never throws the tab away: the application takes the
 fallback arrangement and writes the reason into the log.
 
 ### Library
@@ -450,6 +577,27 @@ in between were not lost, they were deliberately not written. The resumed run
 computes at the full Δt again. If you need a run for an evaluation, leave the
 value at 1.
 
+### The data limit
+
+A project can hold at most **5 million stored values** (time points times
+stored variables). That is 48 hours of *E. coli* at Δt = 2 s with every step
+stored, 37 hours of *Pichia*, and ten times as long with one step in ten.
+
+The number is not a limit of the database — SQLite would take terabytes. It is
+what reopening costs: the application needs about 300 bytes of memory per
+value while it reads a project back, so a project at the limit needs about
+1.5 GB, and saving it takes about a quarter of a minute (both measured on the
+development machine; a slower computer takes longer).
+
+- **At 90 %** the run pauses and asks. Save the project. You may then continue,
+  and the question does not come again in this window; if you stay paused,
+  **Run** asks once more.
+- **At 99 %** the run stops and cannot be started again. Save the project.
+
+The count uses the stored resolution from **Settings…**, the one the window
+was opened with. A coarser resolution chosen only when saving is not known
+beforehand, so the warning comes early rather than late.
+
 ### When the file stays large after deleting
 
 Deleting a project does not make the database file smaller. SQLite marks the
@@ -475,9 +623,17 @@ Measured on a file bloated to 82.7 MB: 0.6 MB afterwards, 0.06 s.
 the speed factor disappears entirely. A run everybody started with the same step
 width is comparable. When it is active, the window title says so.
 
+### Process templates on or off
+
+**Settings… → Process templates** decides whether the Process Manager offers
+saving and loading templates. Unticked, the **Process** menu and both buttons
+are gone, so students design their process from scratch instead of loading a
+finished one. Templates already stored stay in the database. Like the student
+view this is a course setting, not a lock: `settings.yaml` is a text file.
+
 ---
 
-## 9. What has been checked, and what has not
+## 10. What has been checked, and what has not
 
 Honesty about the limits is part of a simulation tool.
 
@@ -538,7 +694,7 @@ opened, the application writes into the log which quantities are affected.
 
 ---
 
-## 10. When something does not work
+## 11. When something does not work
 
 | Observation | Likely cause |
 |---|---|

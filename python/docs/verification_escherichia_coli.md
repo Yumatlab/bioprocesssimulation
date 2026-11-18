@@ -228,6 +228,86 @@ The tolerances in `test_organisms.py` are derived from the tables above and have
 at least a factor of two in reserve. They are measured, not guessed — anyone who
 loosens them later should add the reason here.
 
+## Record for version 3.0.1
+
+**The verified state before any MATLAB error is fixed.** From version 3.1.0 on,
+errors inherited from MATLAB are corrected (`FEHLER.md`, and each correction in
+`changes_from_matlab.md`). A corrected error makes the comparison differ *on
+purpose* where it acts. This record keeps the proof that the translation itself
+was right before that: version 3.0.1 is tagged `v3.0.1` in the repository, and
+the numbers below can be measured again at any time from that tag.
+
+Measured on 18.11.2026 with `tools/verification_record.py`, which runs exactly
+what `test_ecoli_matches_matlab_reference` runs — the exported MATLAB run
+MyProject_11, inoculation and the reconstructed fed-batch phase at the same
+steps. Largest deviation over the whole comparison window (steps 0 to 903) and
+over the first twelve steps. The tables further up give the values *at step
+402*; these are the maxima over the window, so a few are larger.
+
+#### State variables and balances
+
+| Quantity | rel. (0–903) | abs. (0–903) | rel. (0–12) |
+|---|---:|---:|---:|
+| `cXL` | 4.9e-07 | 1.5e-06 | 4.8e-09 |
+| `cS1L` | 2.8e-07 | 2.7e-06 | 2.8e-09 |
+| `cS3L` | 4.1e-04 | 1.0e-06 | 2.2e-06 |
+| `pHL` | 2.1e-06 | 1.4e-05 | 1.3e-10 |
+| `thetaL` | 1.1e-06 | 3.5e-05 | 2.7e-07 |
+| `VL` | 1.0e-10 | 1.0e-09 | 4.6e-15 |
+
+#### Measured quantities (first-order lags)
+
+| Quantity | rel. (0–903) | abs. (0–903) | rel. (0–12) |
+|---|---:|---:|---:|
+| `pHLm` | 8.7e-12 | 6.5e-11 | 5.9e-16 |
+| `thetaLm` | 2.0e-12 | 6.5e-11 | 1.4e-14 |
+| `pO2m` | 3.1e-11 | 3.1e-09 | 7.2e-12 |
+| `cS1Lm` | 9.5e-14 | 9.5e-13 | 5.3e-16 |
+
+These agree so closely because both programs keep the measurements at their
+starting values — the error F-02 of `FEHLER.md`, reproduced on purpose until
+3.1.0.
+
+#### The fast oxygen loop
+
+| Quantity | rel. (0–903) | abs. (0–903) | rel. (0–12) |
+|---|---:|---:|---:|
+| `pO2` | 6.4e-04 | 2.1e-02 | 2.1e-04 |
+| `cOL` | 8.9e-04 | 3.6e-06 | 1.9e-07 |
+| `OUR` | 8.7e-05 | 8.0e-05 | 1.7e-07 |
+| `OTR` | 2.0e-03 | 1.2e-03 | 2.6e-06 |
+| `kLa` | 2.1e-03 | 2.2e-01 | 1.1e-14 |
+| `NSt` | 1.4e-03 | 7.1e-01 | 0.0e+00 |
+| `xOG` | 7.5e-05 | 1.5e-05 | 3.4e-09 |
+| `RQ` | 3.9e-02 | 1.4e-04 | 0.0e+00 |
+| `CTR` | 1.8e-02 | 3.9e-04 | 4.5e-07 |
+
+#### Identical, or practically so
+
+| Quantity | rel. (0–903) | abs. (0–903) | rel. (0–12) |
+|---|---:|---:|---:|
+| `pG` | 0 | 0 | 0 |
+| `FnG` | 0 | 0 | 0 |
+| `FT1` | 0 | 0 | 0 |
+| `FT2` | 0 | 0 | 0 |
+| `QO2max` | 1.0e-10 | 6.5e-09 | 1.8e-15 |
+| `FR1` | 9.4e-08 | 3.8e-09 | 0 |
+
+**Result:** all three reference tests pass (`pytest tests/test_organisms.py -k
+reference`). The balances agree to 2.1·10⁻⁶ or better over the whole window,
+the measurements to 10⁻¹¹, gas and pump flows exactly. That is the translation
+being the same program; the remaining differences are solver noise and the
+discontinuous controllers explained above.
+
+**To check it again later:**
+
+```bash
+git checkout v3.0.1
+cd python
+python tools/verification_record.py
+pytest tests/test_organisms.py -k reference
+```
+
 ## Pichia pastoris
 
 Not verified, and that stays so for the time being.

@@ -444,11 +444,14 @@ class ModelManager(QDialog):
             return False
         current = next(row for row in self.models() if row["modelID"] == self._current)
         if not confirmed:
+            templates = model_usage(self.db_path, self._current)["templates"]
+            going = f"{current['parameters']} parameter values"
+            if templates:
+                going += f" and its {templates} process template(s)"
             answer = QMessageBox.warning(
                 self,
                 "Delete model",
-                f"Delete the model {current['name']!r} and its "
-                f"{current['parameters']} parameter values?\n\n"
+                f"Delete the model {current['name']!r}, its {going}?\n\n"
                 "The organism and the bioreactor stay. This cannot be undone.",
                 QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes,
                 QMessageBox.StandardButton.Cancel,

@@ -322,3 +322,5 @@ parameterID,categoryID,name,tex,unit,tex_unit,type,internal_order,external_order
 322,8,f_awtemp,aw_{\vartheta},,,switch,21,821
 323,8,f_awLW,aw_{LW},,,switch,22,822
 324,8,f_awfeed,aw_{feed},,,switch,23,823
+325,18,VT30,V_{T30},l,l,editfield,17,1817
+326,18,FT3max,F_{T3max},l/h,lh^{-1},editfield,18,1818

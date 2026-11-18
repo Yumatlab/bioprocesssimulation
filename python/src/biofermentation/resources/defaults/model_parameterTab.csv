@@ -818,3 +818,9 @@ model_parameterID,modelID,parameterID,value,description
 23342,1,324,0.0,Anti-windup for the feed controller: holds the integral while the feed pump is at its limit
 23343,2,324,0.0,Anti-windup for the feed controller: holds the integral while the feed pump is at its limit
 23344,5,324,0.0,Anti-windup for the feed controller: holds the integral while the feed pump is at its limit
+23345,1,325,0.5,Antifoam reservoir volume at t = 0 h
+23346,2,325,0.5,Antifoam reservoir volume at t = 0 h
+23347,5,325,0.5,Antifoam reservoir volume at t = 0 h
+23348,1,326,0.1,Pump rate of the antifoam pump
+23349,2,326,0.1,Pump rate of the antifoam pump
+23350,5,326,0.1,Pump rate of the antifoam pump

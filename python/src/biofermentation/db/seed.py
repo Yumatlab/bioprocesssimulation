@@ -228,9 +228,10 @@ def load_defaults(
 ) -> dict[str, int]:
     """Replace the reference tables from the CSV set. Returns rows per table.
 
-    Refuses to run while projects exist, unless force is set: the reference
-    tables are the parents of the project tables, so clearing them cascades
-    into project data and would delete it.
+    Refuses to run while projects or process templates exist, unless force is
+    set: the reference tables are the parents of both, so clearing them
+    cascades into user data and would delete it. Templates are user data like
+    projects and are not part of the CSV set either.
     """
     source_dir = Path(source_dir)
     conn = sqlite3.connect(Path(db_path), isolation_level=None)
@@ -241,6 +242,20 @@ def load_defaults(
             raise RuntimeError(
                 f"{projects} projects in the database; loading defaults would cascade "
                 "into them. Pass force=True if that is intended."
+            )
+        has_templates = conn.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'"
+            " AND name = 'process_templateTab'"
+        ).fetchone()[0]
+        templates = (
+            conn.execute("SELECT COUNT(*) FROM process_templateTab").fetchone()[0]
+            if has_templates
+            else 0
+        )
+        if templates and not force:
+            raise RuntimeError(
+                f"{templates} process templates in the database; loading defaults would "
+                "cascade into them. Pass force=True if that is intended."
             )
 
         counts = {}

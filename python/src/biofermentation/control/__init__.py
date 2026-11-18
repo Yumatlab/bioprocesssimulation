@@ -9,6 +9,7 @@ from .phases import (
     PhaseStatus,
     PhaseType,
     StartCondition,
+    is_started,
 )
 
 __all__ = [
@@ -20,6 +21,7 @@ __all__ = [
     "PhaseStatus",
     "PhaseType",
     "StartCondition",
+    "is_started",
     "sliding_median",
     "theil_sen_slope",
 ]

@@ -18,8 +18,9 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from ..control import PhaseAutomaton
 from ..core.runner import DEFAULT_DT, load_project_state
 from ..core.simulation_runner import SimulationRunner
-from ..db import ensure_columns, ensure_indexes, load_phases
-from ..db.repair import add_flags
+from ..db import ensure_columns, ensure_indexes, ensure_template_tables, load_phases
+from ..db.connection import backup_database
+from ..db.repair import PICHIA_FEED_GAINS, add_flags, correct_pichia_feed_gains
 from ..organisms import discover_organisms
 from ..resources import app_icon_path, default_database
 from .settings import load_settings
@@ -75,6 +76,43 @@ def _ensure_switch_parameters(db_path) -> list[str]:
         return []
 
 
+def _correct_known_errors(db_path) -> dict:
+    """Correct inherited errors in an older database (FEHLER.md).
+
+    Today one: the inverted feed gains of Pichia's reservoir 2, copied from
+    the pO2 feed controller in the MATLAB database. The shipped template is
+    corrected; a user's database is a copy taken before that, and every new
+    Pichia project made from it got the inverted controller again. Defaults,
+    models and projects without a recording are set to the measured values;
+    a project with stored series keeps its own (see correct_pichia_feed_gains).
+
+    A copy is written first, but only when there is something to change —
+    this replaces values in existing projects. Like the other start-up
+    additions it must never stop the application from opening.
+    """
+    try:
+        found = correct_pichia_feed_gains(db_path)
+        if not found["changed"]:
+            return found
+        backup_database(db_path, ".pre-correction.db")
+        return correct_pichia_feed_gains(db_path, dry_run=False)
+    except Exception:
+        return {"changed": {}, "projects": [], "kept": [], "rows": 0}
+
+
+def corrected_gains_note() -> str:
+    """The log line for a project whose feed gains were corrected at start."""
+    pairs = ", ".join(
+        f"{name} {shipped:g} → {measured:g}"
+        for name, (shipped, measured) in PICHIA_FEED_GAINS.items()
+    )
+    return (
+        f"Feed gains of reservoir 2 corrected at start: {pairs}. The old values were a "
+        "copy of the pO2 feed controller with the wrong sign for a substrate loop "
+        "(FEHLER.md, F-01)."
+    )
+
+
 class SimulationApp(QApplication):
     """Owns the windows and the running simulation."""
 
@@ -96,9 +134,15 @@ class SimulationApp(QApplication):
         self.db_path = Path(db_path) if db_path else default_database()
         self._new_indexes = _ensure_cascade_indexes(self.db_path)
         self._new_switches = _ensure_switch_parameters(self.db_path)
+        #: What the start-up correction changed; a corrected project says so
+        #: in its log when it is opened.
+        self._corrections = _correct_known_errors(self.db_path)
         # A user's database is a copy of the template taken when they first
         # ran the program; it can be older than the schema this code expects.
         ensure_columns(self.db_path)
+        # The process template tables (Projektplan_Prozessvorlagen.md). An
+        # older database simply lacks them; nothing else changes.
+        ensure_template_tables(self.db_path)
         self.starting_screen = StartingScreen()
         self.select_window: SelectProjectWindow | None = None
         self.create_window: CreateProjectWindow | None = None
@@ -296,6 +340,10 @@ class SimulationApp(QApplication):
         )
 
         self.control_window = ControlWindow(setup, self.runner, self.db_path)
+        if project_id in self._corrections.get("projects", []):
+            self.control_window.note(corrected_gains_note())
+            # Once per project: the next opening has nothing new to say.
+            self._corrections["projects"].remove(project_id)
         self.control_window.closed.connect(self._control_closed)
         # The Project menu asks; only this class knows what opens.
         self.control_window.requested_new_project.connect(self.show_create_project)

@@ -474,3 +474,20 @@ def test_writing_the_user_copy_leaves_an_existing_file_alone(tmp_path, monkeypat
     user.write_text("mine\n", encoding="utf-8")
     write_user_pcs_layout()
     assert user.read_text(encoding="utf-8") == "mine\n"
+
+
+def test_the_vessel_readings_are_the_panel_readings():
+    """Beside the reactor stands what the panels show, with their decimals."""
+    pytest.importorskip("PySide6")
+    from biofermentation.gui.pcs_specs import VESSEL_READINGS
+    from biofermentation.gui.widgets.panel_specs import CONTROL_PANELS
+
+    actuals = {
+        f"v:{spec_field.actual}": spec_field.decimals
+        for panel in CONTROL_PANELS
+        for spec_field in panel.fields
+        if spec_field.actual
+    }
+    for reading in VESSEL_READINGS:
+        assert reading.source in actuals, reading.source
+        assert reading.decimals == actuals[reading.source], reading.source

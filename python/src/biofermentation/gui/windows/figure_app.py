@@ -157,6 +157,15 @@ class FigureWindow(QMainWindow):
         self.tend_box.valueChanged.connect(self._time_range_changed)
         time_grid.addWidget(self.tstart_box, 1, 1)
         time_grid.addWidget(self.tend_box, 1, 2)
+        # Max is the upper limit of the time axis. Ticked, the axis may grow
+        # past it with the run; Max then stands still and cannot be edited,
+        # and unticking puts the axis back at exactly that value.
+        self.follow_box = QCheckBox("Extend t max with the run")
+        self.follow_box.setToolTip(
+            "Let the time axis grow past Max when the process time passes it"
+        )
+        self.follow_box.toggled.connect(self.set_follow_time)
+        time_grid.addWidget(self.follow_box, 2, 0, 1, 3)
         layout.addWidget(time_box)
 
         self.axis_box = QGroupBox("Variable Axis")
@@ -359,7 +368,17 @@ class FigureWindow(QMainWindow):
     def _time_range_changed(self) -> None:
         self.template.tstart = self.tstart_box.value()
         self.template.tend = self.tend_box.value()
-        self.plot.set_x_range(self.template.tstart, self.template.tend)
+        self.plot.apply_x_range()
+
+    def set_follow_time(self, follow: bool) -> None:
+        """Tick or untick "Extend t max with the run"."""
+        self.tend_box.setEnabled(not follow)
+        self.tend_box.setToolTip(
+            "Locked while the time axis follows the run — untick the box below to edit"
+            if follow
+            else ""
+        )
+        self.plot.set_follow_time(follow)
 
     def set_plot_only(self, on: bool) -> None:
         """Hide both side panels so the plot has the window (point 15)."""

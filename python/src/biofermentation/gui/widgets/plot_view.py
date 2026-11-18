@@ -38,7 +38,7 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QPen
 from PySide6.QtWidgets import QWidget
 
-from ...db.plots import PlotTemplate, PlotVariable, auto_limits
+from ...db.plots import PlotTemplate, PlotVariable, aligned_limits
 from .tex import tex_to_html
 
 pg.setConfigOption("background", "w")
@@ -134,7 +134,56 @@ class EndLabelledAxis(pg.AxisItem):
         return axis_spec, tick_specs, added
 
 
-class OutwardAxis(pg.AxisItem):
+class HonestTicksAxis(pg.AxisItem):
+    """An axis whose numbers name the height they sit at.
+
+    pyqtgraph decides how many decimals a tick label gets from the spacing:
+    `places = ceil(-log10(spacing))`. That is right while the spacing is a
+    round number and wrong as soon as it is not — and here it often is not,
+    because every axis is forced to the template's number of divisions across
+    whatever range the data asks for.
+
+    Measured on a real plot: µ ran from -0.1 to 0.5, five divisions put the
+    ticks at 0, 0.12, 0.24, 0.36 and 0.48, and pyqtgraph labelled them 0,
+    0.1, 0.2, 0.4 and 0.5. Reading a value of 0.10 against the tick marked
+    "0.1" then showed it sitting *below* the line — the curve was right and
+    the label was not. The gap at "0.3" was the same arithmetic: 0.36 rounds
+    to 0.4.
+
+    So the decimals are counted from what the numbers need: the fewest at
+    which no label is off its own tick by more than a hundredth of the step.
+    Whole steps stay whole — a time axis reads 0 … 5, not 0.0 … 5.0 — a step
+    of 0.12 is written 0.12, and a step that cannot be written at all (a time
+    axis divided into thirds) is rounded far enough to be unambiguous.
+    """
+
+    #: No axis label needs more than this, and the loop has to end somewhere.
+    MAX_PLACES = 6
+    #: How far a label may sit from its own tick, as a share of the step.
+    #: A hundredth is past what anybody can read off a scale, and it is what
+    #: separates "0.12" from "0.1" on a step of 0.12.
+    TOLERANCE = 0.01
+
+    @classmethod
+    def places_for(cls, values, spacing: float) -> int:
+        """The fewest decimals that still name every tick correctly."""
+        step = abs(float(spacing))
+        numbers = [abs(float(v)) for v in values if math.isfinite(v)]
+        if not numbers or not math.isfinite(step) or step == 0:
+            return 0
+        tolerance = step * cls.TOLERANCE
+        for places in range(cls.MAX_PLACES):
+            if all(abs(round(v, places) - v) <= tolerance for v in numbers):
+                return places
+        return cls.MAX_PLACES
+
+    def tickStrings(self, values, scale, spacing):  # noqa: N802 - pyqtgraph API
+        scaled = [value * scale for value in values]
+        places = self.places_for(scaled, spacing * scale)
+        return [f"{value:.{places}f}" for value in scaled]
+
+
+class OutwardAxis(HonestTicksAxis):
     """An axis whose ticks lie strictly outside the plot area.
 
     pyqtgraph already draws a positive tickLength away from the plot, but it
@@ -201,6 +250,12 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         self._markers: list[pg.InfiniteLine] = []
         self._show_markers = True
         self._variables: list[PlotVariable] = []
+        #: Whether the time axis grows with the run past the template's tend.
+        #: Off by default: tend is the upper limit the operator set, and a
+        #: window that widened by itself made that field mean nothing.
+        self.follow_time = False
+        #: The last process time drawn, for the axis to follow when allowed.
+        self._t_last: float | None = None
 
     # ------------------------------------------------------------ build --
 
@@ -271,7 +326,7 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         for position, variable in enumerate(variables):
             self._add_variable(position, count - 1 - position, variable)
 
-        self.set_x_range(template.tstart, template.tend)
+        self.apply_x_range()
         self._resize_views()
 
     def _add_variable(self, position: int, column: int, variable: PlotVariable) -> None:
@@ -421,16 +476,18 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
             self._curves[position].setData(x, y)
 
             if variable.auto_limits:
-                lower, upper = auto_limits(y, variable.ymin, variable.ymax)
+                divisions = int(self.template.axisytick) if self.template else 5
+                lower, upper = aligned_limits(y, variable.ymin, variable.ymax, divisions)
                 if (lower, upper) != (variable.ymin, variable.ymax):
                     variable.ymin, variable.ymax = lower, upper
                     self._apply_range(position, lower, upper)
 
             self._place_label(position, x, y)
 
-        if self.template is not None and t[-1] > self.template.tend:
-            # The window follows the run rather than cutting it off.
-            self.set_x_range(self.template.tstart, float(t[-1]))
+        self._t_last = float(t[-1])
+        if self.follow_time and self._t_last > self.template.tend:
+            # Allowed to follow the run: the window grows with it.
+            self.apply_x_range()
 
     def _place_label(self, position: int, x: np.ndarray, y: np.ndarray) -> None:
         """Draw the flag of one curve: stub, then name at the end of it.
@@ -522,6 +579,29 @@ class MultiAxisPlot(pg.GraphicsLayoutWidget):
         self._show_markers = bool(visible)
         for marker in self._markers:
             marker.setVisible(self._show_markers)
+
+    def set_follow_time(self, follow: bool) -> None:
+        """Let the time axis grow past tend with the run, or hold it at tend.
+
+        The template's tend is not touched either way: switched off again,
+        the axis goes back to exactly the limit the operator set.
+        """
+        self.follow_time = bool(follow)
+        self.apply_x_range()
+
+    def time_end(self) -> float:
+        """Where the time axis ends: tend, or the run if it may follow and is past it."""
+        if self.template is None:
+            return 0.0
+        end = float(self.template.tend)
+        if self.follow_time and self._t_last is not None and self._t_last > end:
+            end = self._t_last
+        return end
+
+    def apply_x_range(self) -> None:
+        """The time range the template and the follow switch call for."""
+        if self.template is not None:
+            self.set_x_range(self.template.tstart, self.time_end())
 
     def set_x_range(self, start: float, end: float) -> None:
         """Set the time range and give it axisxtick divisions.

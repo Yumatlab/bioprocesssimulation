@@ -319,7 +319,7 @@ Tests:
 **Fertig, wenn** ein Lauf von Projekt 716 im PCS-Tab dieselben Zahlen zeigt wie
 der Variable Pool.
 
-### Phase 4 — Bedienung (1 Sitzung)
+### Phase 4 — Bedienung (1 Sitzung) — erledigt 16.11.2026
 
 - `parameter_changed` an `_set_parameter` anschließen, danach `load_panels()`;
   Paneländerungen rufen `pcs_view.load(state)` (Abschnitt 2.4).
@@ -339,7 +339,11 @@ Tests:
 **Fertig, wenn** der E.-coli-Referenzlauf nach der Änderung bitgleich ist. Der
 Tab darf nichts rechnen.
 
-### Phase 5 — Feinschliff und Dokumentation (1 Sitzung)
+### Phase 5 — Feinschliff und Dokumentation (1 Sitzung) — erledigt 17.11.2026
+
+Farben bleiben benannte Konstanten statt QSS; Begründung in `CLAUDE.md`,
+„Stand nach Phase 5".
+
 
 - Messwerte am Kessel (pH, pO2, Temperatur, Drehzahl), Strichanimation,
   Farben in die QSS.

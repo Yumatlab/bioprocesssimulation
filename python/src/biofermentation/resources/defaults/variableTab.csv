@@ -77,3 +77,5 @@ variableID,name,shorttex,longtex,unit,tex_unit,description
 80,QS1in,Q_{S1in},Q_{S1in},g/(lh),g(lh)^{-1},\N
 81,QS2in,Q_{S2in},Q_{S2in},g/(lh),g(lh)^{-1},\N
 82,QS3in,Q_{S3in},Q_{S3in},g/(lh),g(lh)^{-1},\N
+83,VT3,V_{T3},V_{T3},l,l,Antifoam reservoir volume
+84,FT3,F_{T3},F_{T3},l/h,lh^{-1},Pump rate antifoam

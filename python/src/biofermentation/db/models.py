@@ -51,6 +51,24 @@ class Phase:
 
 
 @dataclass
+class ProcessTemplate:
+    """A process saved under a name, for the model it was designed on.
+
+    `phases` are ordinary Phase objects in their saved order, with processID
+    and projectID 0, no status and no start or end time: a template is a plan,
+    and a plan has not run. Loading it into a project gives them their ids.
+    """
+
+    templateID: int
+    modelID: int
+    name: str
+    description: str | None = None
+    author: str | None = None
+    created_on: str | None = None
+    phases: list[Phase] = field(default_factory=list)
+
+
+@dataclass
 class ProjectInfo:
     """projectTab joined with the organism, bioreactor and model it names."""
 
@@ -95,6 +113,9 @@ class Lookups:
     process_operator: list[dict]
     start_conditiontype: list[dict]
     end_conditiontype: list[dict]
+    #: Every variable a save writes for this organism — variable_handlingTab,
+    #: visible or not. The data limit counts with it (core/data_budget.py).
+    stored_variables: list[str] = field(default_factory=list)
 
 
 @dataclass

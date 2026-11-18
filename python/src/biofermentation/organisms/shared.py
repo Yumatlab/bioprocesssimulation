@@ -235,6 +235,10 @@ def init_common_variables(state: SimulationState) -> None:
 
     start("hF", 0.0)
     start("AAF", 0.0)
+    # The antifoam reservoir (16.11.2026). A database from before it has
+    # neither parameter: no volume, no pump.
+    start("VT3", p.get("VT30", 0.0))
+    start("FT3", 0.0)
 
     start("pHL", p.pH0)
     start("pH", p.pH0)
@@ -514,3 +518,19 @@ CONTROL_LOOPS = (
         gains=("KP_feedR{n}", "KI_feedR{n}", "KD_feedR{n}"),
     ),
 )
+
+
+def antifoam_reservoir(state: SimulationState, prev: int, i: int) -> None:
+    """The antifoam pump and what is left in its reservoir.
+
+    An addition to the original model (16.11.2026), which has no volume for
+    antifoam: `AAF` is an activity. The pump runs at FT3max under the very
+    condition the dosing activity uses — flag set and inoculated, `ToI != 0`
+    included — and stops when the reservoir is empty. It is a display and
+    nothing else: the activity does not look at the reservoir, and the volume
+    does not enter VL, so every other series is what it was without it.
+    """
+    p, v, a = state.p, state.v, state.a
+    dosing = p.f_antifoam == 1 and a.ToI != 0 and v.VT3[prev] > 0
+    v.FT3[i] = p.get("FT3max", 0.0) if dosing else 0.0
+    v.VT3[i] = max(v.VT3[prev] - v.FT3[prev] * state.dt, 0.0)

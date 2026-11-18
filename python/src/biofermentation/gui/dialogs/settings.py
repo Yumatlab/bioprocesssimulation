@@ -85,6 +85,24 @@ class SettingsDialog(QDialog):
         )
         layout.addWidget(view)
 
+        # Right under the student view (decision E5): two switches, two
+        # questions — locking the run controls says nothing about whether a
+        # course may reuse a finished process.
+        templates = QGroupBox("Process templates")
+        templates_layout = QVBoxLayout(templates)
+        self.templates_box = QCheckBox("Offer saving and loading process templates")
+        self.templates_box.setChecked(settings.process_templates)
+        templates_layout.addWidget(self.templates_box)
+        templates_layout.addWidget(
+            _note(
+                "Unticked, the Process Manager has neither entry: students design "
+                "their process from scratch instead of loading a finished one. "
+                "Templates already stored stay in the database. This is a course "
+                "setting, not a lock — the settings file is a text file."
+            )
+        )
+        layout.addWidget(templates)
+
         pace = QGroupBox("Refresh")
         pace_layout = QVBoxLayout(pace)
         self.couple_box = QCheckBox("Tie the refresh rate to Δt")
@@ -219,6 +237,7 @@ class SettingsDialog(QDialog):
             refresh_seconds=self.refresh_box.value(),
             storage_interval=self.storage_box.value(),
             ask_storage_on_save=self.ask_box.isChecked(),
+            process_templates=self.templates_box.isChecked(),
         )
 
     def accept(self) -> None:

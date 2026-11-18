@@ -1535,3 +1535,45 @@ def test_both_marks_stand_in_the_column_of_the_application_mark(window):
     assert len(labels) == 2
     for label in labels:
         assert label.sizeHint().width() <= window.MARK_COLUMN
+
+
+
+# ------------------------------------- deleting next to an active phase --
+
+
+def test_deleting_an_upcoming_phase_leaves_the_active_one_running(qapp, tmp_path):
+    """Project 519 is saved with its Fed Batch active and three phases to come.
+
+    Deleting one of those used to clear the automaton's marker, and the next
+    tick restarted the Fed Batch: start time moved, FR1j recomputed to 0.
+    """
+    import shutil
+
+    from biofermentation.control import PhaseAutomaton, PhaseStatus
+    from biofermentation.core.runner import load_project_state
+    from biofermentation.core.simulation_runner import SimulationRunner
+    from biofermentation.db import load_phases
+    from biofermentation.gui.windows import ControlWindow
+    from biofermentation.organisms import discover_organisms
+
+    db = tmp_path / "SimulationAppDB.db"
+    shutil.copy(TEMPLATE_DB, db)
+    discover_organisms()
+    setup = load_phases(db, 519)
+    state, organism = load_project_state(db, 519)
+    runner = SimulationRunner(organism, state, phases=PhaseAutomaton.from_setup(setup))
+    window = ControlWindow(setup, runner, db)
+
+    active = runner.phases.current
+    phase = setup.phases[active]
+    assert phase.statusID == PhaseStatus.ACTIVE
+    started, feed = phase.start.time, phase.parameters["FR1j"]
+
+    window.delete_phase(len(setup.phases) - 1)
+    assert runner.phases.current == active
+    runner._on_tick()
+
+    assert phase.statusID == PhaseStatus.ACTIVE
+    assert phase.start.time == started
+    assert phase.parameters["FR1j"] == feed
+    window.close()

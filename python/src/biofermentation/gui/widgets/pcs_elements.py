@@ -43,6 +43,26 @@ EQUIPMENT = QColor(0x4A, 0x4A, 0x4A)
 EQUIPMENT_LOCKED = MUTED
 WHITE = QColor(0xFF, 0xFF, 0xFF)
 LIQUID = QColor(0xC3, 0xCF, 0xDA)
+#: A dense culture, and a broth full of a green product (GFP).
+BROTH_DENSE = QColor(0xD9, 0xC6, 0x9C)
+BROTH_PRODUCT = QColor(0xA9, 0xD4, 0x7C)
+
+#: How fast the impeller is drawn turning, in turns per second. A symbol,
+#: not the speed: 400 rpm drawn truly would be a blur.
+IMPELLER_TURNS = 0.8
+
+#: How far a turning stirrer swirls the bubbles sideways, as a share of the
+#: width of the gas ring.
+BUBBLE_SWIRL = 0.45
+
+#: The bubbles above the sparger: three kinds, so that the gas does not march
+#: in step. Per kind: where across the ring it rises (share of its width),
+#: how fast (rises per second), its radius, how far it sways, how many.
+BUBBLE_STREAMS = (
+    (-0.32, 0.55, 1.6, 1.5, 4),  # small and quick, nearly straight
+    (0.02, 0.35, 2.4, 4.0, 3),  # medium, swaying
+    (0.34, 0.22, 3.2, 2.5, 2),  # large and slow
+)
 
 #: The colour of a live pipe, by what it carries — muted, so that no medium
 #: can be mistaken for an alarm (a test keeps the saturation low). One per
@@ -160,6 +180,17 @@ def level_text(volume, maximum, unit: str) -> str:
     return f"{round(volume, 2):.3g} {unit} · {share:.0f} %"
 
 
+def volume_text(volume: float) -> str:
+    """A volume as the level text writes it: three digits, two decimals at most.
+
+    Without an exponent: 1234.5 l is "1235", not "1.23e+03".
+    """
+    text = f"{round(volume, 2):.3g}"
+    if "e" in text:
+        text = f"{volume:.0f}"
+    return text
+
+
 def _elided(widget: QWidget, text: str, width: float) -> str:
     return widget.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, int(width))
 
@@ -182,16 +213,41 @@ def _paint_surface_mark(painter: QPainter, x: float, y: float) -> None:
     painter.drawPolygon(mark)
 
 
-def _fill(painter: QPainter, vessel: QPainterPath, area: QRectF, level: float) -> float:
+def broth_color(biomass: float, product: float) -> QColor:
+    """The colour of the broth: beige with the cells, green with the product.
+
+    Both arguments are shares between 0 and 1. Clear medium is LIQUID; a
+    dense culture is BROTH_DENSE; a coloured product (GFP) shifts either
+    towards BROTH_PRODUCT. All three are muted — saturated colour stays with
+    the alarms.
+    """
+    biomass = min(max(biomass, 0.0), 1.0)
+    product = min(max(product, 0.0), 1.0)
+
+    def mix(first: QColor, second: QColor, share: float) -> QColor:
+        return QColor(
+            round(first.red() + (second.red() - first.red()) * share),
+            round(first.green() + (second.green() - first.green()) * share),
+            round(first.blue() + (second.blue() - first.blue()) * share),
+        )
+
+    return mix(mix(LIQUID, BROTH_DENSE, biomass), BROTH_PRODUCT, product * 0.7)
+
+
+def _fill(
+    painter: QPainter, vessel: QPainterPath, area: QRectF, level: float, color: QColor | None = None
+) -> float:
     """Liquid from the bottom of `area` up to `level`, inside the vessel.
 
     Returns the height of the surface in pixels, for the level mark.
     """
+    if color is None:
+        color = LIQUID
     surface = area.bottom() - area.height() * level
     liquid = QRectF(area.left(), surface, area.width(), area.bottom() - surface)
     painter.save()
     painter.setClipPath(vessel)
-    painter.fillRect(liquid, LIQUID)
+    painter.fillRect(liquid, color)
     painter.restore()
     return surface
 
@@ -240,6 +296,19 @@ class ValveButton(QAbstractButton):
         if self.symbol == "control_valve":
             return QPointF(rect.center().x(), rect.bottom() - MARGIN - CONTROL_VALVE_BODY / 2)
         return rect.center()
+
+    def symbol_rect(self) -> QRectF:
+        """The part of the widget the symbol itself covers, in widget pixels.
+
+        The sheet leaves the pipe out here: a thick live line showed through
+        the waist of a valve and behind a hollow pump.
+        """
+        body = QRectF(self.rect()).adjusted(MARGIN, MARGIN, -MARGIN, -MARGIN)
+        if self.symbol == "control_valve":
+            return QRectF(
+                body.left(), body.bottom() - CONTROL_VALVE_BODY, body.width(), CONTROL_VALVE_BODY
+            )
+        return body
 
     def set_state_now(self, checked: bool) -> None:
         """Take the state without reporting it — for loading, not for clicks."""
@@ -411,6 +480,20 @@ class TankGauge(QWidget):
             self.setToolTip(f"{self.label}: {volume:.3f} of {maximum:.3f} {self.unit}")
         self.update()
 
+    def set_collected(self, volume) -> None:
+        """A vessel that collects without a capacity: the volume, no level.
+
+        The harvest vessel. Its size is in no table, so a level would be a
+        guess; what has gone into it is known exactly.
+        """
+        self._level = None
+        self._text = "" if volume is None else f"{volume_text(volume)} {self.unit}"
+        tip = self.label
+        if volume is not None:
+            tip = f"{self.label}: {volume:.3f} {self.unit} collected in total"
+        self.setToolTip(tip)
+        self.update()
+
     def level(self) -> float | None:
         return self._level
 
@@ -491,6 +574,18 @@ class VesselWidget(QWidget):
         self._minimum = None
         self._text = ""
         self._stirring = False
+        self._gassing = False
+        self._draining = False
+        #: Where the dashes of the gas flow stand on the lance (draw_pipe's
+        #: `travel`), None for none.
+        self._flow_travel: float | None = None
+        #: How far the impeller has turned, in turns.
+        self._turn = 0.0
+        #: The media flowing through the jacket right now ("coolant",
+        #: "heating"); empty: the jacket stands.
+        self._jacket: tuple[str, ...] = ()
+        self._broth = LIQUID
+        self._bubble_time = 0.0
         self._alarm = None
         self.setMinimumSize(QSize(90, 130))
         self.setToolTip(label)
@@ -519,6 +614,143 @@ class VesselWidget(QWidget):
 
     def stirring(self) -> bool:
         return self._stirring
+
+    def set_gassing(self, flowing: bool) -> None:
+        """Gas flows in: the lance is drawn live and bubbles rise."""
+        self._gassing = bool(flowing)
+        self.update()
+
+    def gassing(self) -> bool:
+        return self._gassing
+
+    def set_draining(self, flowing: bool) -> None:
+        """Harvest flows out: the outlet nozzle is drawn live."""
+        self._draining = bool(flowing)
+        self.update()
+
+    def draining(self) -> bool:
+        return self._draining
+
+    def set_broth(self, biomass: float, product: float = 0.0) -> None:
+        """Colour the liquid by cell density and product, both as shares 0 to 1."""
+        self._broth = broth_color(biomass, product)
+        self.update()
+
+    def broth(self) -> QColor:
+        return self._broth
+
+    def advance_bubbles(self, seconds: float) -> None:
+        """Move the bubbles on. Called by the sheet's timer while gas flows."""
+        self._bubble_time += seconds
+        self.update()
+
+    def advance_stirrer(self, seconds: float) -> None:
+        """Turn the impeller on. Called by the sheet's timer while it stirs."""
+        self._turn += IMPELLER_TURNS * seconds
+        self.update()
+
+    def turn(self) -> float:
+        return self._turn
+
+    def set_jacket(self, media) -> None:
+        """What flows through the double jacket: coolant, heating, both or nothing."""
+        self._jacket = tuple(media)
+        self.update()
+
+    def jacket(self) -> tuple[str, ...]:
+        return self._jacket
+
+    #: Width of the double jacket on the right wall, in pixels. It lies in the
+    #: margin of the widget (10 px), so the cooling and heating pipes, painted
+    #: beneath the vessel, end on its outer wall.
+    JACKET_WIDTH = 9
+    #: Where the jacket runs along the wall, as shares of the vessel's height
+    #: from its top: clear of the lid and of the dish. The cooling and heating
+    #: pipes of the shipped layout meet the wall at 0.24 to 0.29 and 0.63 to
+    #: 0.66 (measured at 700 to 1600 px).
+    JACKET_RANGE = (0.16, 0.76)
+    #: How much shorter the outer wall is than the inner one at each end, in
+    #: pixels: the slanted ends make the jacket a flat trapezoid.
+    JACKET_SLANT = 7.0
+
+    def jacket_polygon(self) -> QPolygonF:
+        """The jacket in widget pixels: long side on the vessel wall, short outside."""
+        body, _, _ = self._geometry()
+        top = body.top() + body.height() * self.JACKET_RANGE[0]
+        bottom = body.top() + body.height() * self.JACKET_RANGE[1]
+        inner, outer = body.right(), body.right() + self.JACKET_WIDTH
+        return QPolygonF(
+            [
+                QPointF(inner, top),
+                QPointF(outer, top + self.JACKET_SLANT),
+                QPointF(outer, bottom - self.JACKET_SLANT),
+                QPointF(inner, bottom),
+            ]
+        )
+
+    def jacket_span(self) -> QRectF:
+        """The straight outer wall of the jacket, where the pipes come in."""
+        corners = self.jacket_polygon()
+        top, bottom = corners[1].y(), corners[2].y()
+        return QRectF(corners[0].x(), top, self.JACKET_WIDTH, bottom - top)
+
+    def _paint_jacket(self, painter: QPainter) -> None:
+        """The double jacket on the right: a second wall, filled while it flows.
+
+        Coolant and heating water are drawn lighter than their pipes, as the
+        liquid in the reactor is lighter than the lines; both at once (by hand)
+        share the colour half and half. The inner side is the vessel wall,
+        drawn with the vessel; here only the slanted ends and the outer wall.
+        """
+        corners = self.jacket_polygon()
+        colors = [MEDIUM_COLORS[medium].lighter(150) for medium in self._jacket]
+        fill = WHITE
+        if len(colors) == 1:
+            fill = colors[0]
+        elif colors:
+            first, second = colors[0], colors[1]
+            fill = QColor(
+                (first.red() + second.red()) // 2,
+                (first.green() + second.green()) // 2,
+                (first.blue() + second.blue()) // 2,
+            )
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(fill)
+        painter.drawPolygon(corners)
+        pen = QPen(EQUIPMENT, 2.0)
+        pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPolyline(QPolygonF([corners[0], corners[1], corners[2], corners[3]]))
+
+    def set_flow_travel(self, travel: float | None) -> None:
+        """Carry the dashes of the aeration pipe on along the lance to the ring.
+
+        `travel` is the pipe's own, less its length: a dash leaving the end of
+        the pipe enters the lance at the same moment.
+        """
+        self._flow_travel = travel
+        self.update()
+
+    def bubbles(self, ring_x: float, ring_y: float, ring_width: float, surface: float):
+        """Centre and radius of every bubble between the ring and the surface."""
+        rise = ring_y - 4 - surface
+        if rise <= 8:
+            return []
+        found = []
+        for across, speed, radius, sway, count in BUBBLE_STREAMS:
+            for number in range(count):
+                share = (self._bubble_time * speed + number / count) % 1.0
+                wobble = math.sin(2 * math.pi * (2 * share + 0.37 * number))
+                x = ring_x + across * ring_width + sway * wobble
+                if self._stirring:
+                    # A turning stirrer carries them round with it: a slow
+                    # sideways swing that grows as they rise from the ring.
+                    swing = math.sin(2 * math.pi * (1.5 * share + self._turn + 0.3 * number))
+                    x += BUBBLE_SWIRL * ring_width * share * swing
+                y = ring_y - 4 - share * rise
+                found.append((x, y, radius * (0.8 + 0.4 * share)))
+        return found
 
     def set_alarm(self, level) -> None:
         self._alarm = check_alarm_level(level)
@@ -580,23 +812,29 @@ class VesselWidget(QWidget):
 
         # 0 to 100 % of VLmax, from the lowest point of the dish upwards.
         working = body.adjusted(0, body.height() * HEADSPACE, 0, 0)
+        surface = None
         if self._level is not None:
-            surface = _fill(painter, vessel, working, self._level)
+            surface = _fill(painter, vessel, working, self._level, self._broth)
             painter.setPen(QPen(EQUIPMENT, 2.0))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawPath(vessel)
             _paint_surface_mark(painter, body.right() - 12, surface)
 
+        self._paint_jacket(painter)
         self._paint_mark(painter, working, 1.0, "max")
         if self._minimum is not None:
             self._paint_mark(painter, working, self._minimum, "min")
         self._paint_stirrer(painter, rect, body, dish)
-        self._paint_sparger(painter, body, dish)
+        self._paint_sparger(painter, body, dish, surface)
 
         # The nozzle, from the lowest point of the dish: equipment, so drawn
-        # with the vessel; the pipe that carries on from its end is the sheet's.
+        # with the vessel; the pipe that carries on from its end is the
+        # sheet's. While harvest flows it is drawn as that pipe is.
         x = body.center().x()
-        painter.setPen(QPen(EQUIPMENT, 2.0))
+        nozzle = QPen(EQUIPMENT, 2.0)
+        if self._draining:
+            nozzle = QPen(MEDIUM_COLORS["harvest"], PIPE_LIVE_WIDTH)
+        painter.setPen(nozzle)
         painter.drawLine(QPointF(x, body.bottom()), QPointF(x, rect.bottom()))
 
         # Name left of the nozzle, numbers right of it.
@@ -635,34 +873,61 @@ class VesselWidget(QWidget):
 
         blade = body.width() * 0.16
         painter.setPen(QPen(EQUIPMENT, 1.4))
-        painter.setBrush(EQUIPMENT if self._stirring else WHITE)
-        painter.drawRect(QRectF(x - blade - 1, hub - 3, blade, 6))
-        painter.drawRect(QRectF(x + 1, hub - 3, blade, 6))
+        if not self._stirring:
+            painter.setBrush(WHITE)
+            painter.drawRect(QRectF(x - blade - 1, hub - 3, blade, 6))
+            painter.drawRect(QRectF(x + 1, hub - 3, blade, 6))
+            return
+        # Four blades seen from the side while they turn: each is as long as
+        # its angle shows it, the ones behind the shaft are drawn first and
+        # paler. At turn 0 this is the standing picture, two full blades.
+        blades = []
+        for number in range(4):
+            angle = 2 * math.pi * (self._turn + number / 4)
+            blades.append((math.sin(angle), blade * math.cos(angle)))
+        for depth, reach in sorted(blades):
+            if abs(reach) < 0.5:
+                continue
+            painter.setBrush(EQUIPMENT if depth >= 0 else MUTED)
+            left = x + 1 if reach > 0 else x - 1 + reach
+            painter.drawRect(QRectF(left, hub - 3, abs(reach), 6))
 
-    def _paint_sparger(self, painter: QPainter, body: QRectF, dish: float) -> None:
+    def _paint_sparger(self, painter: QPainter, body: QRectF, dish: float, surface) -> None:
         """The gas ring under the stirrer, fed by the lance from the lid.
 
         The lance comes down from the top edge (where the aeration pipe ends)
-        beside the wall and turns in under the impeller to the ring.
+        beside the wall and turns in under the impeller to the ring. While
+        gas flows the lance carries the pipe's colour down to the ring, and
+        bubbles rise from the ring to the surface; without gas there are none.
         """
         x = body.center().x()
         y = body.bottom() - dish * 0.45  # inside the dish, under the impeller
         width = body.width() * 0.3
         lance = self.gas_inlet().x()
-        painter.setPen(QPen(EQUIPMENT, 1.5))
-        painter.drawPolyline(
-            QPolygonF(
-                [
-                    QPointF(lance, self.rect().top()),
-                    QPointF(lance, y),
-                    QPointF(x + width / 2, y),
-                ]
-            )
-        )
+        pen = QPen(EQUIPMENT, 1.5)
+        if self._gassing:
+            pen = QPen(MEDIUM_COLORS["gas"], PIPE_LIVE_WIDTH - 1)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
+        lance_line = QPolygonF(
+            [
+                QPointF(lance, self.rect().top()),
+                QPointF(lance, y),
+                QPointF(x + width / 2, y),
+            ]
+        )
+        painter.drawPolyline(lance_line)
+        if self._gassing and self._flow_travel is not None:
+            # The aeration pipe's dashes, carried on down to the ring.
+            painter.setPen(flow_dash_pen(pen.widthF(), self._flow_travel))
+            painter.drawPolyline(lance_line)
+        if not self._gassing or surface is None:
+            return
         painter.setPen(QPen(EQUIPMENT, 0.8))
-        for dx, dy in ((-0.3, 6), (0.0, 10), (0.3, 6)):
-            painter.drawEllipse(QPointF(x + dx * width, y - dy), 2.0, 2.0)
+        painter.setBrush(WHITE)
+        for bubble_x, bubble_y, radius in self.bubbles(x, y, width, surface):
+            painter.drawEllipse(QPointF(bubble_x, bubble_y), radius, radius)
 
 
 # ------------------------------------------------------------- pipes --
@@ -705,8 +970,44 @@ def arrow_anchor(points, share: float = 0.5) -> tuple[tuple[float, float], float
     return (b[0], b[1]), math.atan2(b[1] - a[1], b[0] - a[0])
 
 
-def draw_pipe(painter: QPainter, points, medium: str, live: bool, share: float = 0.5) -> None:
-    """A pipe through `points` (pixels), drawn live or idle."""
+#: The moving dashes on a live pipe: dash and gap in pixels, and how far they
+#: travel per second. Light enough to read as movement, not as a second line.
+FLOW_DASH = (4.0, 8.0)
+FLOW_DASH_SPEED = 24.0
+FLOW_DASH_COLOR = QColor(0xFF, 0xFF, 0xFF, 110)
+
+
+def flow_dash_pen(width: float, travel: float) -> QPen:
+    """The light dashes on a live line `width` wide, moved on by `travel` px.
+
+    The pattern is the same in pixels on every line, so dashes leaving one
+    line and entering the next (the aeration pipe and the lance) line up.
+    """
+    dashes = QPen(FLOW_DASH_COLOR, max(width - 2.0, 1.0))
+    dashes.setCapStyle(Qt.PenCapStyle.FlatCap)
+    # A dash pattern is in units of the pen width; the offset moves it
+    # backwards along the line, so a growing offset runs downstream.
+    unit = dashes.widthF()
+    dashes.setDashPattern([FLOW_DASH[0] / unit, FLOW_DASH[1] / unit])
+    dashes.setDashOffset(-(travel % sum(FLOW_DASH)) / unit)
+    return dashes
+
+
+def draw_pipe(
+    painter: QPainter,
+    points,
+    medium: str,
+    live: bool,
+    share: float = 0.5,
+    travel: float | None = None,
+    head: bool = True,
+) -> None:
+    """A pipe through `points` (pixels), drawn live or idle.
+
+    `travel` (pixels) moves light dashes along a live pipe in the direction
+    of flow; None draws none. The sheet advances it only while the process
+    runs, so a paused process shows standing lines.
+    """
     color, width, arrow = pipe_style(medium, live)
     if len(points) < 2:
         return
@@ -720,7 +1021,11 @@ def draw_pipe(painter: QPainter, points, medium: str, live: bool, share: float =
     painter.setBrush(Qt.BrushStyle.NoBrush)
     painter.drawPolyline(QPolygonF([QPointF(x, y) for x, y in points]))
 
-    anchor = arrow_anchor(points, share) if arrow else None
+    if live and travel is not None:
+        painter.setPen(flow_dash_pen(width, travel))
+        painter.drawPolyline(QPolygonF([QPointF(x, y) for x, y in points]))
+
+    anchor = arrow_anchor(points, share) if arrow and head else None
     if anchor is not None:
         (x, y), angle = anchor
         dx = math.cos(angle) * ARROW_SIZE

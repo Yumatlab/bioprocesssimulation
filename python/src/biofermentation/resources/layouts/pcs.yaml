@@ -26,8 +26,8 @@
 # front of the reactor.
 
 elements:
-  reactor:        [0.60, 0.50]
-  stirrer:        [0.60, 0.11]  # on the shaft, which the sheet draws to the lid
+  reactor:        [0.60, 0.56]
+  stirrer:        [0.60, 0.13]  # on the shaft, which the sheet draws to the lid
 
   # Gas, top left: four supplies into one manifold, one main valve.
   air_supply:     [0.04, 0.08]
@@ -38,46 +38,48 @@ elements:
   n2_valve:       [0.14, 0.24]
   co2_supply:     [0.04, 0.32]
   co2_valve:      [0.14, 0.32]
-  gas_manifold:   [0.26, 0.20]
-  aeration_valve: [0.40, 0.20]
+  gas_manifold:   [0.32, 0.20]
+  aeration_valve: [0.43, 0.20]
 
   # Liquids: the vessels in a row at the bottom, the pumps in a column.
-  antifoam:       [0.04, 0.88]
-  alkali:         [0.12, 0.88]
-  acid:           [0.20, 0.88]
-  reservoir1:     [0.28, 0.88]
-  reservoir2:     [0.36, 0.88]
-  antifoam_pump:  [0.42, 0.380]
-  alkali_pump:    [0.42, 0.445]
-  acid_pump:      [0.42, 0.510]
-  feed1_pump:     [0.42, 0.575]
-  feed2_pump:     [0.42, 0.640]
+  antifoam:       [0.04, 0.89]
+  alkali:         [0.12, 0.89]
+  acid:           [0.20, 0.89]
+  reservoir1:     [0.28, 0.89]
+  reservoir2:     [0.36, 0.89]
+  antifoam_pump:  [0.42, 0.420]
+  alkali_pump:    [0.42, 0.485]
+  acid_pump:      [0.42, 0.550]
+  feed1_pump:     [0.42, 0.615]
+  feed2_pump:     [0.42, 0.680]
 
   # Right: the jacket. Below: the harvest, out of the bottom of the reactor.
-  cooling_supply: [0.94, 0.40]
-  cooling_valve:  [0.82, 0.40]
-  heating_supply: [0.94, 0.55]
-  heating_valve:  [0.82, 0.55]
-  harvest_valve:  [0.78, 0.95]
-  harvest:        [0.94, 0.84]
+  cooling_supply: [0.94, 0.46]
+  cooling_valve:  [0.82, 0.46]
+  heating_supply: [0.94, 0.61]
+  heating_valve:  [0.82, 0.61]
+  harvest_valve:  [0.78, 0.89]
+  harvest:        [0.94, 0.89]
 
 pipes:
-  air_line:      [[0.26, 0.08]]
-  o2_line:       [[0.26, 0.16]]
-  n2_line:       [[0.26, 0.24]]
-  co2_line:      [[0.26, 0.32]]
-  # Up over the reactor, then down onto the gas lance in its lid (the sheet
-  # adds the last two points: level to the lance, straight down onto it).
-  aeration_line: [[0.46, 0.20], [0.46, 0.13]]
+  air_line:      [[0.32, 0.08]]
+  o2_line:       [[0.32, 0.16]]
+  n2_line:       [[0.32, 0.24]]
+  co2_line:      [[0.32, 0.32]]
+  # No bends: the sheet runs it level from the manifold to above the gas
+  # lance in the reactor's lid and straight down onto it. The reactor is
+  # kept low enough for that.
+  aeration_line: []
   # Up from the vessel to its own height, then right through the pump into
   # the reactor; the last bend lies inside the reactor, under its widget.
-  antifoam_line: [[0.04, 0.380], [0.53, 0.380]]
-  alkali_line:   [[0.12, 0.445], [0.53, 0.445]]
-  acid_line:     [[0.20, 0.510], [0.53, 0.510]]
-  feed1_line:    [[0.28, 0.575], [0.53, 0.575]]
-  feed2_line:    [[0.36, 0.640], [0.53, 0.640]]
-  cooling_line:  [[0.70, 0.40]]
-  heating_line:  [[0.70, 0.55]]
+  antifoam_line: [[0.04, 0.420], [0.55, 0.420]]
+  alkali_line:   [[0.12, 0.485], [0.55, 0.485]]
+  acid_line:     [[0.20, 0.550], [0.55, 0.550]]
+  feed1_line:    [[0.28, 0.615], [0.55, 0.615]]
+  feed2_line:    [[0.36, 0.680], [0.55, 0.680]]
+  cooling_line:  [[0.66, 0.46]]
+  heating_line:  [[0.66, 0.61]]
   # Starts at the reactor's outlet nozzle, not at its centre: the sheet
-  # drops it straight down to the height of the first bend.
-  harvest_line:  [[0.94, 0.95]]
+  # drops it straight down to the height of the harvest vessel and runs it
+  # level into the vessel's side — no bend near the arrow.
+  harvest_line:  []

@@ -476,7 +476,9 @@ def test_the_control_window_has_its_menu_bar(window):
     """The menu bar of the original was missing entirely."""
     bar = window.menuBar()
     menus = [action.text() for action in bar.actions()]
-    assert menus == ["Project", "Export", "Plots", "Settings"]
+    # "Process" is the one menu the original did not have: process templates
+    # (Projektplan_Prozessvorlagen.md, phase 3).
+    assert menus == ["Project", "Process", "Export", "Plots", "Settings"]
 
     entries = {
         menu.text(): [action.text() for action in menu.menu().actions() if action.text()]
@@ -1112,7 +1114,8 @@ def reactors(db, qapp):
 def test_the_dialog_shows_a_vessel_with_all_its_parameters(reactors):
     assert reactors.list.count() == 2
     assert reactors._current == "BIOSTAT ED"
-    assert len(reactors._boxes) == 60
+    # 60 until the antifoam reservoir brought VT30 and FT3max with it.
+    assert len(reactors._boxes) == 62
     assert reactors.name_edit.text() == "BIOSTAT ED"
     assert reactors.manufacturer_edit.text() == "B. Braun Stedim"
 
@@ -1406,8 +1409,9 @@ def test_the_dialog_lists_every_model_with_its_pair(models, db):
     assert models.organism_label.text()
     assert models.bioreactor_label.text()
     # The parameter set of a model is the union of the organism's and the
-    # vessel's; 253 is what this template's Escherichia model carries.
-    assert len(models._boxes) == 253
+    # vessel's; 255 is what this template's Escherichia model carries (253
+    # before the antifoam reservoir added VT30 and FT3max).
+    assert len(models._boxes) == 255
 
 
 def test_a_new_model_is_an_organism_in_a_vessel(models, db):

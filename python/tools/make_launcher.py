@@ -5,7 +5,7 @@ of everything. This one is a four-file wrapper that starts the interpreter of
 this working copy, so it always runs whatever is in the source tree right now.
 For developing and for teaching off a checkout, that is the one you want.
 
-    python tools/make_launcher.py            # ~/Applications (macOS)
+    python tools/make_launcher.py            # /Applications (macOS)
     python tools/make_launcher.py --into ~/Desktop
 
 On Windows it writes a .cmd file instead: a shortcut (.lnk) needs pywin32,
@@ -291,14 +291,19 @@ def main() -> int:
         "--into",
         type=Path,
         default=None,
-        help="where to put it (default: ~/Applications on macOS, the Desktop otherwise)",
+        help="where to put it (default: /Applications on macOS, the Desktop otherwise)",
     )
     arguments = parser.parse_args()
 
     if arguments.into is not None:
         target = arguments.into.expanduser()
     elif sys.platform == "darwin":
-        target = Path.home() / "Applications"
+        # /Applications, where a Finder shortcut or a Dock entry is made from.
+        # Until 18.11.2026 this was ~/Applications, and two bundles of the same
+        # name sat side by side: the one the shortcut pointed at was an old
+        # script bundle that macOS 26 takes for an Intel app (see
+        # _build_launcher), and rebuilding the other one never reached it.
+        target = Path("/Applications")
     else:
         target = Path.home() / "Desktop"
     target.mkdir(parents=True, exist_ok=True)

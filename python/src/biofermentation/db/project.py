@@ -141,6 +141,20 @@ def load_phases(db_path: Path | str, project_id: int) -> ProjectSetup:
             end_conditiontype=_rows(
                 conn, "SELECT * FROM process_conditiontypeTab WHERE start_end = 2"
             ),
+            stored_variables=[
+                row["name"]
+                for row in _rows(
+                    conn,
+                    """
+                    SELECT v.name
+                      FROM variableTab v
+                      JOIN variable_handlingTab h ON h.variableID = v.variableID
+                     WHERE h.organismID = ?
+                     ORDER BY v.variableID
+                    """,
+                    (info.organismID,),
+                )
+            ],
         )
 
         p_meta = _rows(
@@ -912,12 +926,25 @@ def model_parameters(db_path: Path | str, model_id: int) -> list[dict]:
     return rows
 
 
+def _has_table(conn: sqlite3.Connection, name: str) -> bool:
+    """Whether a table exists — for the ones an older database may lack."""
+    return (
+        conn.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)
+        ).fetchone()[0]
+        > 0
+    )
+
+
 def model_usage(db_path: Path | str, model_id: int) -> dict[str, int]:
-    """How many projects were created from this model.
+    """How many projects were created from this model, and its process templates.
 
     `projectTab.modelID` is the one reference in this schema **without** an
     ON DELETE action, so SQLite refuses the deletion by itself. Asked here
     anyway, to say so in a sentence rather than as a constraint error.
+
+    Templates do not hold a model up — they cascade with it (decision E7) —
+    but the question before deleting has to say how many go.
     """
     with get_connection(db_path, readonly=True) as conn:
         if (
@@ -927,10 +954,16 @@ def model_usage(db_path: Path | str, model_id: int) -> dict[str, int]:
             == 0
         ):
             raise LookupError(f"no model with modelID {model_id}")
+        templates = 0
+        if _has_table(conn, "process_templateTab"):
+            templates = conn.execute(
+                "SELECT COUNT(*) FROM process_templateTab WHERE modelID = ?", (model_id,)
+            ).fetchone()[0]
         return {
             "projects": conn.execute(
                 "SELECT COUNT(*) FROM projectTab WHERE modelID = ?", (model_id,)
-            ).fetchone()[0]
+            ).fetchone()[0],
+            "templates": templates,
         }
 
 
@@ -1018,7 +1051,7 @@ def duplicate_model(db_path: Path | str, model_id: int, name: str) -> int:
     Not the same as building a second model on the same pair: this one carries
     the values as they are *now*, edited ones included. That is the point —
     a variant of a model is made from the model, not from the defaults it once
-    came from.
+    came from. Its process templates come along for the same reason (E8).
     """
     name = name.strip()
     if not name:
@@ -1042,6 +1075,10 @@ def duplicate_model(db_path: Path | str, model_id: int, name: str) -> int:
             "SELECT ?, parameterID, value, description FROM model_parameterTab WHERE modelID = ?",
             (new_id, model_id),
         )
+        if _has_table(conn, "process_templateTab"):
+            from .process_templates import copy_process_templates
+
+            copy_process_templates(conn, model_id, new_id)
     return new_id
 
 
@@ -1050,7 +1087,8 @@ def delete_model(db_path: Path | str, model_id: int) -> dict[str, int]:
 
     Refused while a project was created from it. The parameter rows go with
     the model row — `model_parameterTab.modelID` cascades, and cascading is
-    SQLite's job here as everywhere else.
+    SQLite's job here as everywhere else. So do its process templates (E7);
+    how many is returned, so that it can be said.
     """
     usage = model_usage(db_path, model_id)
     if usage["projects"]:
@@ -1063,7 +1101,7 @@ def delete_model(db_path: Path | str, model_id: int) -> dict[str, int]:
             "SELECT COUNT(*) FROM model_parameterTab WHERE modelID = ?", (model_id,)
         ).fetchone()[0]
         conn.execute("DELETE FROM modelTab WHERE modelID = ?", (model_id,))
-    return {"parameters": parameters}
+    return {"parameters": parameters, "templates": usage["templates"]}
 
 
 def unique_project_name(db_path: Path | str, name: str) -> str:

@@ -422,6 +422,10 @@ CREATE INDEX IF NOT EXISTS logTab_projectID           ON logTab (projectID);
 CREATE INDEX IF NOT EXISTS process_parameterTab_processID
     ON process_parameterTab (processID);
 
+-- 9. The process template tables are not here. apply_migration creates them
+-- from db/migrate.py (TEMPLATE_TABLES), the same statements the application
+-- start runs on an older database — one copy, so the two cannot drift.
+
 COMMIT;
 
 PRAGMA legacy_alter_table = OFF;

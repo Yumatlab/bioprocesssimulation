@@ -29,12 +29,12 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from ...control import PhaseStatus
+from ...core import data_budget
 from ...core.simulation_runner import SimulationRunner
 from ...db import load_project_log, save_project_with_backup
 from ...db.models import ProjectSetup
@@ -42,6 +42,7 @@ from ...resources import app_icon_path
 from ..settings import load_settings
 from ..values import format_value, mode_table
 from ..widgets import CONTROL_PANELS, ControllerView, ControlPanel, PhaseGrid, StatusLamp
+from ..widgets.detachable_tabs import DetachableTabs
 from ..widgets.log_view import OPERATION_EVENT, PARAMETER_EVENT, LogView
 from ..widgets.pcs_view import PcsView
 from ..widgets.variable_pool import VariablePool
@@ -143,6 +144,11 @@ class ControlWindow(QMainWindow):
         # Set once the closing question has been answered, so the answer is
         # not asked for twice on the way out.
         self._leave_confirmed = False
+        # The data limit (core/data_budget.py). What was in memory when the
+        # project opened is stored already and counts whole; the warning at
+        # 90 % is asked once and, once accepted, not again in this window.
+        self._steps_at_open = runner.state.idx + 1
+        self._data_warning_accepted = False
 
         info = setup.info
         # The student view is named in the title because it is the one setting
@@ -160,7 +166,8 @@ class ControlWindow(QMainWindow):
 
         self._build_menus()
 
-        self.tabs = QTabWidget()
+        # Any tab can be taken out into a window of its own (detachable_tabs).
+        self.tabs = DetachableTabs(info.name)
         outer.addWidget(self.tabs, 1)
         outer.addWidget(self._build_run_column())
 
@@ -190,6 +197,7 @@ class ControlWindow(QMainWindow):
         # Connected only now: adding a tab fires currentChanged, and refresh
         # reads widgets the later tabs have not built yet.
         self.tabs.currentChanged.connect(lambda _: self.refresh())
+        self.tabs.detached_changed.connect(self.refresh)
 
         runner.block_completed.connect(self.refresh)
         runner.phase_started.connect(self._phase_changed)
@@ -243,21 +251,28 @@ class ControlWindow(QMainWindow):
             page.setObjectName("tabPage")
             page.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
             if isinstance(page, QScrollArea):
-                page.setFrameShape(QScrollArea.Shape.NoFrame)
-                # The viewport is a widget of its own and paints its palette
-                # over the page — that is why the Process Manager stayed
-                # grey. Neither a style sheet rule nor a transparent viewport
-                # reaches it reliably, so it is pointed at the palette role
-                # that is white: Base, the ground of an editable surface.
-                # Renaming it is not an option, Qt looks the viewport up by
-                # its own object name internally.
-                page.setBackgroundRole(QPalette.ColorRole.Base)
-                page.viewport().setBackgroundRole(QPalette.ColorRole.Base)
-                page.viewport().setAutoFillBackground(True)
-                inner = page.widget()
-                if inner is not None:
-                    inner.setObjectName("tabPage")
-                    inner.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+                self._style_scroll_area(page)
+        # The Process Manager is a scroll area with a bar below it, so its
+        # scroll area is one level down.
+        self._style_scroll_area(self.process_area)
+
+    def _style_scroll_area(self, page: QScrollArea) -> None:
+        """Give a tab's scroll area the look of the plain pages."""
+        page.setFrameShape(QScrollArea.Shape.NoFrame)
+        # The viewport is a widget of its own and paints its palette
+        # over the page — that is why the Process Manager stayed
+        # grey. Neither a style sheet rule nor a transparent viewport
+        # reaches it reliably, so it is pointed at the palette role
+        # that is white: Base, the ground of an editable surface.
+        # Renaming it is not an option, Qt looks the viewport up by
+        # its own object name internally.
+        page.setBackgroundRole(QPalette.ColorRole.Base)
+        page.viewport().setBackgroundRole(QPalette.ColorRole.Base)
+        page.viewport().setAutoFillBackground(True)
+        inner = page.widget()
+        if inner is not None:
+            inner.setObjectName("tabPage")
+            inner.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
     def _build_menus(self) -> None:
         """The menu bar of the original: Project, Export, Settings.
@@ -292,6 +307,23 @@ class ControlWindow(QMainWindow):
         add(project, "Save", lambda: self.save(), "Ctrl+S")
         add(project, "Save and exit", self.save_and_exit)
         add(project, "Exit", self.close, "Ctrl+W")
+
+        # Only templates live in this menu, so it goes with them when the
+        # settings switch them off (decision E4).
+        if self.settings.process_templates:
+            process = bar.addMenu("Process")
+            add(
+                process,
+                "Save process as template…",
+                self.save_process_template,
+                tip="Store the phases under a name for later projects of this model",
+            )
+            add(
+                process,
+                "Load process template…",
+                self.load_process_template,
+                tip="Add a stored process of this model to the phases",
+            )
 
         export = bar.addMenu("Export")
         add(export, "Open data table", lambda: self.open_data_table(), "Ctrl+T")
@@ -393,7 +425,7 @@ class ControlWindow(QMainWindow):
                 mode_selector=layout_file.selector_for(title),
             )
             panel.setObjectName("controlPanel")
-            panel.parameter_changed.connect(self._set_parameter)
+            panel.parameter_changed.connect(self._panel_changed)
             panel.parameters_requested.connect(self.open_controller_parameters)
             self.panels[title] = panel
             # No alignment: every panel fills its cell, and the stretch above
@@ -512,7 +544,17 @@ class ControlWindow(QMainWindow):
 
     def _build_pcs(self) -> QWidget:
         """The plant as a flow sheet (PCS plan). Read only until phase 4."""
-        self.pcs_view = PcsView(self.setup.info.reservoirs or 1, self.setup.lookups.variable)
+        # The organism's reservoirs, not the project's: a Pichia project
+        # saved with one reservoir still computes FR2 and VR2.
+        organism = self.runner.organism.metadata
+        # Units from every row of variableTab, not only the visible ones: the
+        # harvest flow FH is not shown in the Variable Pool, and its reading
+        # on the sheet stood there as a bare number.
+        units = [
+            {"name": name, "unit": unit} for name, unit in self.setup.lookups.variable_units.items()
+        ]
+        self.pcs_view = PcsView(organism.n_reservoirs, units, organism=organism.name)
+        self.pcs_view.parameter_changed.connect(self._pcs_changed)
         return self.pcs_view
 
     def _build_controllers(self) -> QWidget:
@@ -542,8 +584,23 @@ class ControlWindow(QMainWindow):
         self.phase_grid.delete_requested.connect(self.delete_phase)
         self.phase_grid.edit_requested.connect(self.edit_phase)
         self.phase_grid.add_requested.connect(self.add_phase)
+        self.phase_grid.save_template_requested.connect(self.save_process_template)
+        self.phase_grid.load_template_requested.connect(self.load_process_template)
+        self.phase_grid.set_templates_offered(self.settings.process_templates)
         area.setWidget(self.phase_grid)
-        return area
+        # Held for _style_tab_pages: the page is no longer the scroll area
+        # itself, and the viewport needs its background all the same.
+        self.process_area = area
+
+        # The phase row scrolls; the bar with Save and Load sits below it at
+        # the bottom right and stays in view.
+        page = QWidget()
+        column = QVBoxLayout(page)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(0)
+        column.addWidget(area, 1)
+        column.addWidget(self.phase_grid.template_bar)
+        return page
 
     def _build_log(self) -> QWidget:
         self.log_view = LogView()
@@ -751,10 +808,13 @@ class ControlWindow(QMainWindow):
     def refresh(self, *_) -> None:
         """Everything the running simulation changes. One place, one moment."""
         self._drain_phase_log()
+        # First, so that what is drawn below already shows a paused run.
+        self._check_data_limit()
         state = self.runner.state
         index = state.idx
         self.time_label.setText(f"{float(state.v.t[index]):.3f}")
         self.lamps["Process Running"].set_on(self.runner.running)
+        self.pcs_view.set_running(self.runner.running)
         self.phase_grid.set_editable(not self.runner.running)
         self.lamps["Inoculated"].set_on(bool(state.a.get("inoc_occ", 0)))
         self.run_button.setText("Pause" if self.runner.running else "Run")
@@ -763,13 +823,12 @@ class ControlWindow(QMainWindow):
         for panel in self.panels.values():
             panel.update_actuals(state.v, index)
 
-        # Only the visible tab is redrawn, as the original's timerFcn does.
-        if self.tabs.currentWidget() is self.variable_pool:
-            self.variable_pool.refresh(state)
-        elif self.tabs.currentWidget() is self.controller_view:
-            self.controller_view.refresh(state)
-        elif self.tabs.currentWidget() is self.pcs_view:
-            self.pcs_view.refresh(state)
+        # Redrawn is what the operator sees: the front tab, as the original's
+        # timerFcn does, and every tab that is out in a window of its own.
+        visible = self.tabs.visible_pages()
+        for view in (self.variable_pool, self.controller_view, self.pcs_view):
+            if view in visible:
+                view.refresh(state)
 
         for table in list(self.data_tables):
             table.refresh()
@@ -808,6 +867,25 @@ class ControlWindow(QMainWindow):
                 PARAMETER_EVENT,
             )
 
+    def _panel_changed(self, name: str, value: float) -> None:
+        """A panel wrote: the flow sheet follows.
+
+        Only the sheet is loaded again, not the panels. Re-reading a panel
+        after its own change would touch the field somebody is typing into —
+        the very thing refresh() avoids.
+        """
+        self._set_parameter(name, value)
+        self.pcs_view.load(self.runner.state)
+
+    def _pcs_changed(self, name: str, value: float) -> None:
+        """An element on the flow sheet was clicked: the panels follow.
+
+        load_panels() also loads the sheet again, which is wanted: the feed
+        pumps share f_feed, and a mode decides who owns what.
+        """
+        self._set_parameter(name, value)
+        self.load_panels()
+
     def _set_dt(self, seconds: int) -> None:
         with self.runner.editing() as state:
             state.p["deltatsec"] = float(seconds)
@@ -826,10 +904,108 @@ class ControlWindow(QMainWindow):
             self.runner.pause()
             self.note("Process paused", OPERATION_EVENT)
         else:
+            if not self._may_run():
+                return
             self.runner.start()
             self.note("Process started", OPERATION_EVENT)
         self.refresh()
         self.refresh_phases()
+
+    # ------------------------------------------------------- data limit --
+
+    def stored_values(self) -> int:
+        """The values this project will hold once the run is saved.
+
+        Counted with the stored resolution this window was opened with; the
+        closing dialog may still choose another.
+        """
+        state = self.runner.state
+        series = sum(1 for name in self.setup.lookups.stored_variables if name in state.v)
+        return data_budget.stored_values(
+            self._steps_at_open, state.idx + 1, self.settings.storage_interval, series
+        )
+
+    def data_share(self) -> float:
+        return data_budget.share_of_limit(self.stored_values(), data_budget.MAX_STORED_VALUES)
+
+    def _check_data_limit(self) -> None:
+        """After every block: pause at 90 % and ask, stop at 99 %."""
+        if not self.runner.running:
+            return
+        share = self.data_share()
+        if share >= data_budget.STOP_SHARE:
+            self.runner.pause()
+            self._data_limit_reached(share)
+        elif share >= data_budget.WARN_SHARE and not self._data_warning_accepted:
+            self.runner.pause()
+            if self._data_warning(share):
+                self.runner.start()
+
+    def _may_run(self) -> bool:
+        """Run pressed: refused at 99 %, asked at 90 % unless asked before."""
+        share = self.data_share()
+        if share >= data_budget.STOP_SHARE:
+            self._data_limit_reached(share)
+            return False
+        if share >= data_budget.WARN_SHARE and not self._data_warning_accepted:
+            return self._data_warning(share)
+        return True
+
+    def _data_warning(self, share: float) -> bool:
+        values = self.stored_values()
+        self.note(
+            f"Process paused at {share:.0%} of the data limit"
+            f" ({values:,} of {data_budget.MAX_STORED_VALUES:,} values)"
+        )
+        self._data_warning_accepted = self._ask_past_data_warning(values, share)
+        if self._data_warning_accepted:
+            limit = f"{data_budget.STOP_SHARE:.0%}"
+            self.note(f"Data limit warning confirmed, running on up to {limit}")
+        return self._data_warning_accepted
+
+    def _data_limit_reached(self, share: float) -> None:
+        values = self.stored_values()
+        self.note(
+            f"Process stopped at {share:.0%} of the data limit"
+            f" ({values:,} of {data_budget.MAX_STORED_VALUES:,} values)",
+            "Error",
+        )
+        self._tell_data_limit_reached(values, share)
+
+    def _ask_past_data_warning(self, values: int, share: float) -> bool:
+        """The question at 90 %. True: carry on up to 99 %."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("Data limit")
+        box.setText(f"<b>This run has reached {share:.0%} of the data a project can hold.</b>")
+        box.setInformativeText(
+            f"Once saved, the project will hold about {values / 1e6:.2f} million values; "
+            f"the limit is {data_budget.MAX_STORED_VALUES / 1e6:.0f} million. Beyond it, "
+            "reopening the project needs more memory than a laptop can be counted on to "
+            "give (about 1.5 GB at the limit).<br><br>"
+            "<b>Save the project now.</b> You can let the run carry on up to "
+            f"{data_budget.STOP_SHARE:.0%}; there it stops for good."
+        )
+        go_on = box.addButton(
+            f"Continue to {data_budget.STOP_SHARE:.0%}", QMessageBox.ButtonRole.AcceptRole
+        )
+        stay = box.addButton("Stay paused", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(stay)
+        box.exec()
+        return box.clickedButton() is go_on
+
+    def _tell_data_limit_reached(self, values: int, share: float) -> None:
+        """The message at 99 %: the run does not start again."""
+        QMessageBox.warning(
+            self,
+            "Data limit",
+            f"<b>The run has reached {share:.0%} of the data a project can hold and is "
+            "stopped.</b><p>Once saved, the project will hold about "
+            f"{values / 1e6:.2f} million values of "
+            f"{data_budget.MAX_STORED_VALUES / 1e6:.0f} million. Save it now.</p>"
+            "<p>A coarser stored resolution (Settings → Stored resolution) lets the next "
+            "project run longer on the same number of values.</p>",
+        )
 
     def _update_inoculate_button(self) -> None:
         """Toggle before the run, one shot during it, dead afterwards.
@@ -1028,13 +1204,256 @@ class ControlWindow(QMainWindow):
         self.refresh_phases()
 
     def delete_phase(self, index: int) -> None:
+        """Remove a phase that has not started.
+
+        The automaton's `current` is an index into the list, so it is found
+        again rather than cleared. Clearing it — what this did until
+        18.11.2026 — left an active phase without its marker, and the next
+        tick took it for the next one to start: deleting an upcoming phase of
+        project 519 restarted its running Fed Batch, moved its start time
+        and recomputed FR1j to 0. The same search that resumes a saved
+        project finds it here.
+        """
         with self.runner.editing():
             phase = self.setup.phases.pop(index)
             if self.runner.phases is not None:
                 self.runner.phases.phases = self.setup.phases
-                self.runner.phases.current = None
+                self.runner.phases.adopt_active_phase()
         self.note(f"Phase {phase.name!r} deleted")
         self.refresh_phases()
+
+    # -------------------------------------------------- process templates --
+
+    def save_process_template(self) -> int | None:
+        """Store the phases as a template of this project's model.
+
+        Projektplan_Prozessvorlagen.md, phase 3. The phases are copied under
+        the guard, so a tick cannot change them halfway through; the run is
+        not paused — saving a plan changes nothing in it. Writing is one
+        transaction of its own (db/process_templates.py says why that is
+        allowed mid-session); the project itself is not saved.
+
+        Returns the templateID, or None when nothing was stored.
+        """
+        import copy
+
+        with self.runner.editing():
+            phases = copy.deepcopy(self.setup.phases)
+        if not phases:
+            QMessageBox.information(
+                self, "Save process as template", "There are no phases to save yet."
+            )
+            return None
+        details = self._ask_template_details(phases)
+        if details is None:
+            return None
+        return self._store_template(phases, **details)
+
+    def _ask_template_details(self, phases) -> dict | None:
+        """The dialog: name, description, author. None if cancelled."""
+        from ..dialogs.process_templates import SaveTemplateDialog
+
+        dialog = SaveTemplateDialog(
+            phases,
+            {row["process_typeID"]: row["type"] for row in self.setup.lookups.process_type},
+            model_name=self.setup.info.model_name or "",
+            author=self.setup.info.author or "",
+            parent=self,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialog.values()
+
+    def _confirm_overwrite(self, name: str) -> bool:
+        """A template of this name exists for this model: replace it? (E3)"""
+        answer = QMessageBox.question(
+            self,
+            "Save process as template",
+            f"This model already has a process template named {name!r}.\n\n"
+            "Replace it with these phases?",
+            QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes,
+            QMessageBox.StandardButton.Cancel,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    def _store_template(self, phases, *, name: str, description: str = "", author: str = ""):
+        from ...db import TemplateExistsError, save_process_template
+
+        model_id = self.setup.info.modelID
+        try:
+            try:
+                template_id = save_process_template(
+                    self.db_path, model_id, name, description, phases, author=author or None
+                )
+                replaced = False
+            except TemplateExistsError:
+                if not self._confirm_overwrite(name):
+                    return None
+                template_id = save_process_template(
+                    self.db_path,
+                    model_id,
+                    name,
+                    description,
+                    phases,
+                    author=author or None,
+                    replace=True,
+                )
+                replaced = True
+        except (LookupError, ValueError) as error:
+            # An unknown parameter name, an empty name: said, not swallowed.
+            QMessageBox.warning(self, "Save process as template", str(error))
+            return None
+        self.note(
+            f"Process {'replaced' if replaced else 'saved'} as template {name!r}"
+            f" ({len(phases)} phases)",
+            OPERATION_EVENT,
+        )
+        return template_id
+
+    def load_process_template(self) -> int | None:
+        """Place a stored process of this model into the phases.
+
+        Projektplan_Prozessvorlagen.md, phase 4. Only on a standing process
+        (E6). A template that does not fit is refused with its reasons, not
+        adapted. With phases that have not started, the operator chooses
+        between appending and replacing them; started phases are never
+        touched. The new list goes to the automaton through hand_over, which
+        finds the active phase again (P0-1).
+
+        Returns the templateID that was loaded, or None.
+        """
+        from ...control.templates import (
+            APPEND,
+            REPLACE,
+            check_template_for,
+            end_moves_with_replacement,
+            hand_over,
+            phases_from_template,
+            place_template,
+            removable,
+        )
+        from ...db import list_process_templates, load_process_template
+
+        title = "Load process template"
+        if self.runner.running:
+            QMessageBox.information(self, title, "Pause the process to load a template.")
+            return None
+        if not list_process_templates(self.db_path, self.setup.info.modelID):
+            QMessageBox.information(
+                self,
+                title,
+                "This model has no process templates yet.\n\n"
+                "Design a process and store it with Process → Save process as template…",
+            )
+            return None
+        template_id = self._choose_template()
+        if template_id is None:
+            return None
+        template = load_process_template(self.db_path, template_id)
+
+        problems = check_template_for(
+            template, self.setup, self.runner.organism.metadata.n_reservoirs
+        )
+        if problems:
+            QMessageBox.warning(
+                self,
+                title,
+                f"The template {template.name!r} does not fit this project and was not "
+                "loaded:\n\n" + "\n".join(f"• {problem}" for problem in problems),
+            )
+            return None
+
+        going = removable(self.setup.phases)
+        mode = APPEND
+        if going:
+            moving = end_moves_with_replacement(self.setup.phases, REPLACE)
+            mode = self._ask_placement(template, going, moving)
+            if mode is None:
+                return None
+            if mode == REPLACE and not self._confirm_replace(going):
+                return None
+
+        with self.runner.editing():
+            new = phases_from_template(
+                template, self.setup.next_process_id, self.setup.info.projectID
+            )
+            placed = place_template(self.setup.phases, new, mode)
+            # In place: every holder of the list sees the new plan.
+            self.setup.phases[:] = placed.phases
+            self.setup.next_process_id += len(new)
+            hand_over(self.runner.phases, self.setup.phases)
+
+        if placed.removed:
+            names = ", ".join(repr(phase.name) for phase in placed.removed)
+            how = f"replacing {len(placed.removed)} phase(s): {names}"
+        else:
+            how = "appended"
+        self.note(
+            f"Process template {template.name!r} loaded: {len(new)} phases, {how}",
+            OPERATION_EVENT,
+        )
+        self.refresh_phases()
+        return template_id
+
+    def _choose_template(self) -> int | None:
+        """The list of this model's templates. None if cancelled."""
+        from ..dialogs.process_templates import LoadTemplateDialog
+
+        dialog = LoadTemplateDialog(
+            self.db_path,
+            self.setup.info.modelID,
+            {row["process_typeID"]: row["type"] for row in self.setup.lookups.process_type},
+            model_name=self.setup.info.model_name or "",
+            parent=self,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialog.selected_template_id()
+
+    def _ask_placement(self, template, going, moving) -> str | None:
+        """Append behind every phase, or replace those not started? None: cancel."""
+        from ...control.templates import APPEND, REPLACE
+
+        names = ", ".join(repr(phase.name) for phase in going)
+        text = (
+            f"Load {template.name!r} ({len(template.phases)} phases).\n\n"
+            f"Append: the template follows all phases.\n"
+            f"Replace: {names} {'is' if len(going) == 1 else 'are'} removed and the "
+            "template follows the last phase that has started.\n\n"
+            "Phases that are running or completed stay in either case."
+        )
+        if moving is not None:
+            text += (
+                f"\n\nNote: {moving.name!r} is running and ends when the next phase may "
+                "start. Replacing changes that next phase, and with it when "
+                f"{moving.name!r} ends."
+            )
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle("Load process template")
+        box.setText(text)
+        append = box.addButton("Append", QMessageBox.ButtonRole.AcceptRole)
+        replace = box.addButton("Replace", QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(append)
+        box.exec()
+        if box.clickedButton() is append:
+            return APPEND
+        if box.clickedButton() is replace:
+            return REPLACE
+        return None
+
+    def _confirm_replace(self, going) -> bool:
+        """The second question before phases are removed: they are gone after."""
+        names = "\n".join(f"• {phase.name}" for phase in going)
+        answer = QMessageBox.warning(
+            self,
+            "Load process template",
+            f"These phases will be removed:\n\n{names}\n\nThis cannot be undone.",
+            QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Yes,
+            QMessageBox.StandardButton.Cancel,
+        )
+        return answer == QMessageBox.StandardButton.Yes
 
     def start_new_project(self) -> None:
         """Back to the launcher, which is the only place that creates one."""
@@ -1118,7 +1537,7 @@ class ControlWindow(QMainWindow):
         return answer == QMessageBox.StandardButton.Yes
 
     def show_information(self) -> None:
-        self.tabs.setCurrentWidget(self.information_tab)
+        self.tabs.reveal(self.information_tab)
 
     def edit_panel_layout(self) -> None:
         """Open the layout file, creating it from the bundled one if need be.
@@ -1322,6 +1741,8 @@ class ControlWindow(QMainWindow):
             return
         for window in list(self.figure_windows) + list(self.data_tables):
             window.close()
+        # Back first, then close: a detached page belongs to this window.
+        self.tabs.attach_all()
         self.runner.pause()
         self.closed.emit()
         super().closeEvent(event)

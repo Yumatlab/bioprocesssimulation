@@ -114,6 +114,104 @@ def ensure_indexes(db_path: Path | str) -> list[str]:
     return [name for name, _ in missing]
 
 
+#: The tables of the process templates (Projektplan_Prozessvorlagen.md, phase 1),
+#: as name -> statement. A template belongs to a model, a template phase to a
+#: template, a template parameter to a template phase; each cascades with its
+#: parent. No status and no time columns: a template is a plan, not a run.
+#:
+#: Unlike processTab, start_operatorID points at process_operatorTab — the
+#: fault noted under "Offen aus Phase 1" is not copied into new tables.
+#:
+#: Kept here and only here. apply_migration and the application start both
+#: call ensure_template_tables, so the statements exist once and cannot drift.
+TEMPLATE_TABLES = {
+    "process_templateTab": """
+        CREATE TABLE IF NOT EXISTS process_templateTab (
+            templateID   INTEGER PRIMARY KEY AUTOINCREMENT,
+            modelID      INTEGER NOT NULL
+                         REFERENCES modelTab (modelID) ON DELETE CASCADE ON UPDATE CASCADE,
+            name         TEXT    NOT NULL,
+            description  TEXT,
+            author       TEXT,
+            created_on   TEXT,
+            UNIQUE (modelID, name)
+        )""",
+    "process_template_phaseTab": """
+        CREATE TABLE IF NOT EXISTS process_template_phaseTab (
+            template_phaseID INTEGER PRIMARY KEY AUTOINCREMENT,
+            templateID       INTEGER NOT NULL
+                             REFERENCES process_templateTab (templateID)
+                             ON DELETE CASCADE ON UPDATE CASCADE,
+            position         INTEGER NOT NULL,
+            process_typeID   INTEGER NOT NULL REFERENCES process_typeTab (process_typeID),
+            name             TEXT,
+            reservoirID      INTEGER,
+            start_typeID     INTEGER REFERENCES process_conditiontypeTab (process_conditiontypeID),
+            start_variableID INTEGER REFERENCES variableTab (variableID),
+            start_operatorID INTEGER REFERENCES process_operatorTab (process_operatorID),
+            start_value      REAL,
+            end_typeID       INTEGER REFERENCES process_conditiontypeTab (process_conditiontypeID),
+            end_variableID   INTEGER REFERENCES variableTab (variableID),
+            end_operatorID   INTEGER REFERENCES process_operatorTab (process_operatorID),
+            end_value        REAL,
+            UNIQUE (templateID, position)
+        )""",
+    "process_template_parameterTab": """
+        CREATE TABLE IF NOT EXISTS process_template_parameterTab (
+            template_parameterID INTEGER PRIMARY KEY AUTOINCREMENT,
+            template_phaseID     INTEGER NOT NULL
+                                 REFERENCES process_template_phaseTab (template_phaseID)
+                                 ON DELETE CASCADE ON UPDATE CASCADE,
+            parameterID          INTEGER NOT NULL
+                                 REFERENCES parameterTab (parameterID)
+                                 ON DELETE CASCADE ON UPDATE CASCADE,
+            value                REAL NOT NULL,
+            UNIQUE (template_phaseID, parameterID)
+        )""",
+}
+
+#: One index per foreign key a deletion cascades along (Altlast 8).
+TEMPLATE_INDEXES = (
+    ("process_templateTab_modelID", "process_templateTab (modelID)"),
+    ("process_template_phaseTab_templateID", "process_template_phaseTab (templateID)"),
+    ("process_template_parameterTab_phaseID", "process_template_parameterTab (template_phaseID)"),
+)
+
+
+def _create_template_tables(conn: sqlite3.Connection) -> list[str]:
+    """Create what is missing of TEMPLATE_TABLES and their indexes."""
+    present = {
+        row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+    }
+    created = []
+    for name, statement in TEMPLATE_TABLES.items():
+        if name not in present:
+            conn.execute(statement)
+            created.append(name)
+    for name, spec in TEMPLATE_INDEXES:
+        conn.execute(f"CREATE INDEX IF NOT EXISTS {name} ON {spec}")
+    return created
+
+
+def ensure_template_tables(db_path: Path | str) -> list[str]:
+    """Give a database the process template tables if it predates them.
+
+    Called at application start, like ensure_indexes: a user's database is a
+    copy of the template from their first start. One read when nothing is
+    missing; otherwise three CREATE TABLE in one transaction, once. Returns
+    the tables that were created.
+    """
+    with get_connection(db_path, readonly=True) as conn:
+        present = {
+            row["name"]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+    if all(name in present for name in TEMPLATE_TABLES):
+        return []
+    with get_connection(db_path) as conn:
+        return _create_template_tables(conn)
+
+
 def apply_migration(db_path: Path | str, *, backup: bool = True) -> Path | None:
     """Run migrate_schema.sql against db_path.
 
@@ -136,6 +234,7 @@ def apply_migration(db_path: Path | str, *, backup: bool = True) -> Path | None:
     try:
         conn.executescript(script)
         _add_missing_columns(conn)
+        _create_template_tables(conn)
         violations = conn.execute("PRAGMA foreign_key_check").fetchall()
     finally:
         conn.close()

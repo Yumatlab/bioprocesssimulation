@@ -29,6 +29,7 @@ from ..registry import register
 from ..shared import (
     CONTROL_LOOPS,
     anti_windup,
+    antifoam_reservoir,
     clamp,
     henry_co2,
     henry_o2,
@@ -124,6 +125,7 @@ class PichiaPastoris(OrganismModel):
             v.xOGin[i] = 0.0
 
         AAFin = self._antifoam(state, prev)
+        antifoam_reservoir(state, prev, i)
         self._ph_control(state, prev, i)
         PH = self._temperature_control(state, prev, i)
 
@@ -558,6 +560,17 @@ class PichiaPastoris(OrganismModel):
 
             yLW = clamp((cP_LW + a.cI_LW[i] + cD_LW) * 100, 0.0, 100.0)
             v.FH[i] = yLW / 100 * p.FHmax
+
+            # Deliberate deviation from MATLAB (16.11.2026, asked for by the
+            # author): the controller only lets liquid out while the weight is
+            # above its setpoint. In the original the integral part kept the
+            # harvest pump running below the setpoint until it had unwound.
+            # At or below the setpoint nothing leaves and the integral starts
+            # again from zero. Manual mode and the reference run
+            # (Mode_harvest = 0) are untouched.
+            if v.VL[prev] * p.rhoL <= p.LWw:
+                v.FH[i] = 0.0
+                a.cI_LW[i] = 0.0
         else:
             v.FH[i] = p.FHrelw / 100 * p.FHmax if p.f_harvest == 1 else 0.0
 

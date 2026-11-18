@@ -119,3 +119,7 @@ default_bioreactorID,bioreactorID,parameterID,value,description
 118,2,305,15.0,Temperature cooling-water inlet
 119,2,306,134.0,Temperature of steam at inlet (saturated steam)
 120,2,307,25.0,Environmental temperature in reactor
+121,1,325,0.5,Antifoam reservoir volume at t = 0 h
+122,2,325,0.5,Antifoam reservoir volume at t = 0 h
+123,1,326,0.1,Pump rate of the antifoam pump
+124,2,326,0.1,Pump rate of the antifoam pump

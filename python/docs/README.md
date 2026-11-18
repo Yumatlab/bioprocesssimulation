@@ -1,6 +1,6 @@
 # Documentation
 
-Five documents, one per question.
+Six documents, one per question.
 
 | You want to… | Read |
 |---|---|
@@ -9,8 +9,11 @@ Five documents, one per question.
 | know how it is **built** | [`architecture.md`](architecture.md) |
 | **develop it further** | [`development.md`](development.md) |
 | know whether the **numbers hold up** | [`verification_escherichia_coli.md`](verification_escherichia_coli.md) |
+| know what is **different from MATLAB**, and why | [`changes_from_matlab.md`](changes_from_matlab.md) |
 
-And, one level up: [`../CLAUDE.md`](../CLAUDE.md) — *why* the application is
+And, one level up: [`../CHANGELOG.md`](../CHANGELOG.md) — what each version
+brought; [`../FEHLER.md`](../FEHLER.md) — the known errors and their state (in
+German, a working list); [`../CLAUDE.md`](../CLAUDE.md) — *why* the application is
 built the way it is. Every rule with its reason and every measurement with its
 number. It is the file an AI assistant reads first, and the one new findings
 belong in. It is the only file here still written in German.

@@ -71,7 +71,9 @@ inconsistency of the database. Both explain themselves if you run `pytest -rsx`.
 python -m biofermentation.gui.app
 ```
 
-Or, on macOS, create a shortcut in `~/Applications`:
+Or, on macOS, create a launcher in `/Applications` (run it again after
+moving the project; it updates the bundle in place, so a Finder or Dock
+shortcut to it keeps working):
 
 ```bash
 python tools/make_launcher.py

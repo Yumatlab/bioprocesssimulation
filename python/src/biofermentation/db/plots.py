@@ -450,6 +450,51 @@ def auto_limits(values, ymin: float, ymax: float) -> tuple[float, float]:
     return lower, upper
 
 
+#: The steps an axis with a negative part may take: these times a power of ten.
+ROUND_STEPS = (1.0, 1.2, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0)
+
+
+def aligned_limits(values, ymin: float, ymax: float, divisions: int) -> tuple[float, float]:
+    """The automatic limits, moved so that zero falls on a division.
+
+    **A deliberate deviation from calculateYLimits (17.11.2026), display only.**
+    Every y-axis gets the same number of divisions so that the scales can be
+    read across, and pyqtgraph puts the ticks on multiples of the step — not
+    from the lower limit up. A negative minimum gave µ the range
+    [-0.1, 0.5]: step 0.12, ticks at 0, 0.12, … 0.48 and none at -0.1, so the
+    whole scale sat 40 px off the others.
+
+    Here the step is the smallest round one (ROUND_STEPS) for which a whole
+    number of divisions below zero reaches the lowest value and the rest
+    reach at least the upper limit calculateYLimits gives. All divisions are
+    used: the upper limit is the lower one plus `divisions` steps, so it may
+    come out above that of calculateYLimits, never below. µ becomes
+    [-0.125, 0.5]. Without a negative value nothing changes.
+    """
+    import numpy as np
+
+    lower, upper = auto_limits(values, ymin, ymax)
+    if not (lower < 0 < upper) or divisions < 2:
+        return lower, upper
+    finite = np.asarray(values, dtype=float)
+    finite = finite[np.isfinite(finite)]
+    needed = -float(finite.min())
+
+    def steps_for(length: float, step: float) -> int:
+        # Whole steps to cover a length; the tolerance keeps 0.5 / 0.125 at 4.
+        return math.ceil(length / step - 1e-9)
+
+    exponent = math.floor(math.log10((upper + needed) / divisions)) - 1
+    for _ in range(6):
+        for mantissa in ROUND_STEPS:
+            step = mantissa * 10**exponent
+            below = max(1, steps_for(needed, step))
+            if below + steps_for(upper, step) <= divisions:
+                return round(-below * step, 12), round((divisions - below) * step, 12)
+        exponent += 1
+    return lower, upper
+
+
 def _round_to_nearest(value: float) -> float:
     if value <= 0.0001:
         return 0.0001

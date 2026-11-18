@@ -340,8 +340,14 @@ def add_flags(
                 "INSERT INTO parameterTab (parameterID, categoryID, name, tex, unit,"
                 " tex_unit, type, internal_order, external_order)"
                 " VALUES (?, ?, ?, ?, '', '', 'switch', ?, ?)",
-                (next_id, category_id, entry["name"], entry["tex"], entry["order"],
-                 800 + entry["order"]),
+                (
+                    next_id,
+                    category_id,
+                    entry["name"],
+                    entry["tex"],
+                    entry["order"],
+                    800 + entry["order"],
+                ),
             )
             report["rows"] += 1
             for organism_id in organisms:
@@ -392,18 +398,40 @@ PICHIA_FEED_GAINS = {
 }
 
 
-def correct_pichia_feed_gains(db_path: Path | str, *, dry_run: bool = True) -> dict:
+def correct_pichia_feed_gains(
+    db_path: Path | str, *, dry_run: bool = True, projects: bool = True
+) -> dict:
     """Turn the inverted feed gains of reservoir 2 into measured ones.
 
-    Only the organism defaults and the models are touched — `default_modelTab`
-    and `model_parameterTab`. **A project that already exists keeps its own
-    values**, which is the same rule every other change to a default follows
-    and the reason a stored run stays reproducible.
+    Three places hold them, and each is checked on its own: the organism
+    defaults (`default_modelTab`), every Pichia model (`model_parameterTab`)
+    and — since 18.11.2026, at the user's request — every Pichia project
+    (`project_parameterTab`). Checking only the defaults, as this did first,
+    left a database whose models still carried the wrong numbers untouched:
+    a user's database is a copy taken before the correction, and every new
+    Pichia project made from it got the inverted controller again.
 
-    Only a value that still stands at the shipped number is replaced. Anybody
-    who has tuned their own is left alone, and a second run changes nothing.
+    Only a value that still stands at the shipped number is replaced.
+    Anybody who has tuned their own is left alone, and a second run changes
+    nothing.
+
+    **A project with stored time series keeps its values** and is listed in
+    `kept`: its recorded run was computed with them, and parameters that no
+    longer match the recording would make it unexplainable. Only projects
+    without stored steps — nothing recorded yet — are corrected.
+
+    Returns `changed` (name -> (shipped, measured)), `rows` written, `tables`
+    (rows per table that stand at the shipped value), `projects` corrected
+    and `kept`.
     """
-    report = {"changed": {}, "rows": 0, "applied": not dry_run}
+    report = {
+        "changed": {},
+        "rows": 0,
+        "tables": {},
+        "projects": [],
+        "kept": [],
+        "applied": not dry_run,
+    }
     with get_connection(db_path, readonly=True) as conn:
         organism = conn.execute(
             "SELECT organismID FROM organismTab WHERE name LIKE 'Pichia%'"
@@ -425,32 +453,82 @@ def correct_pichia_feed_gains(db_path: Path | str, *, dry_run: bool = True) -> d
                 tuple(PICHIA_FEED_GAINS),
             )
         }
+        pichia_projects = []
+        if projects:
+            for row in conn.execute(
+                "SELECT p.projectID, p.name,"
+                " (SELECT COUNT(*) FROM timeTab t WHERE t.projectID = p.projectID) AS steps"
+                " FROM projectTab p WHERE p.organismID = ? ORDER BY p.projectID",
+                (organism_id,),
+            ):
+                pichia_projects.append((row["projectID"], row["name"], row["steps"]))
+        open_projects = [pid for pid, _, steps in pichia_projects if steps == 0]
+        recorded = {pid: name for pid, name, steps in pichia_projects if steps > 0}
+
+        def standing(table: str, column: str, owners: list[int], parameter: int, value: float):
+            if not owners:
+                return []
+            marks = ", ".join("?" * len(owners))
+            return [
+                row[0]
+                for row in conn.execute(
+                    f"SELECT {column} FROM {table} WHERE parameterID = ? AND value = ?"
+                    f" AND {column} IN ({marks})",
+                    (parameter, value, *owners),
+                )
+            ]
+
         for name, (shipped, measured) in PICHIA_FEED_GAINS.items():
             if name not in ids:
                 continue
-            stands = conn.execute(
-                "SELECT COUNT(*) FROM default_modelTab WHERE organismID = ? "
-                "AND parameterID = ? AND value = ?",
-                (organism_id, ids[name], shipped),
-            ).fetchone()[0]
-            if stands:
+            parameter = ids[name]
+            found = {
+                "default_modelTab": standing(
+                    "default_modelTab", "organismID", [organism_id], parameter, shipped
+                ),
+                "model_parameterTab": standing(
+                    "model_parameterTab", "modelID", models, parameter, shipped
+                ),
+                "project_parameterTab": standing(
+                    "project_parameterTab", "projectID", open_projects, parameter, shipped
+                ),
+            }
+            for project_id in standing(
+                "project_parameterTab", "projectID", list(recorded), parameter, shipped
+            ):
+                entry = (project_id, recorded[project_id])
+                if entry not in report["kept"]:
+                    report["kept"].append(entry)
+            if any(found.values()):
                 report["changed"][name] = (shipped, measured)
+                for table, owners in found.items():
+                    report["tables"][table] = report["tables"].get(table, 0) + len(owners)
+                for project_id in found["project_parameterTab"]:
+                    if project_id not in report["projects"]:
+                        report["projects"].append(project_id)
 
     if dry_run or not report["changed"]:
         return report
 
     with get_connection(db_path) as conn:
         for name, (shipped, measured) in report["changed"].items():
+            parameter = ids[name]
             report["rows"] += conn.execute(
                 "UPDATE default_modelTab SET value = ? WHERE organismID = ? "
                 "AND parameterID = ? AND value = ?",
-                (measured, organism_id, ids[name], shipped),
+                (measured, organism_id, parameter, shipped),
             ).rowcount
             for model_id in models:
                 report["rows"] += conn.execute(
                     "UPDATE model_parameterTab SET value = ? WHERE modelID = ? "
                     "AND parameterID = ? AND value = ?",
-                    (measured, model_id, ids[name], shipped),
+                    (measured, model_id, parameter, shipped),
+                ).rowcount
+            for project_id in report["projects"]:
+                report["rows"] += conn.execute(
+                    "UPDATE project_parameterTab SET value = ? WHERE projectID = ? "
+                    "AND parameterID = ? AND value = ?",
+                    (measured, project_id, parameter, shipped),
                 ).rowcount
     return report
 

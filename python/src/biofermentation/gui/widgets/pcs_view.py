@@ -21,22 +21,34 @@ Command and feedback are kept apart. An element the operator owns shows its
 flag; one a controller owns shows whether its line flows. A pipe shows only
 the flow, never the flag.
 
-Read only in phase 3: every element is disabled. Operating them is phase 4.
+Operating (phase 4): a click on an element the operator owns reports
+`parameter_changed(name, value)` and nothing else. The view never writes into
+p itself — the window does, through its one guarded, logged write path, and
+then loads the panels and this view again. An element a controller owns is
+disabled and cannot report.
 """
 
 import math
 from itertools import pairwise
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt
-from PySide6.QtGui import QPainter, QPen
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from ..pcs_layout import load_pcs_layout
-from ..pcs_specs import REACTOR, pcs_spec
+from ..pcs_specs import (
+    REACTOR,
+    VESSEL_READINGS,
+    broth_spec,
+    harvested_volume,
+    pcs_spec,
+    pretty_unit,
+)
 from .indicators import MUTED, TEXT
 from .pcs_elements import (
     ARROW_SIZE,
     EQUIPMENT,
+    FLOW_DASH_SPEED,
     TankGauge,
     ValveButton,
     VesselWidget,
@@ -50,14 +62,46 @@ FLOW_EPSILON = 1e-6
 
 #: Sizes of the vessels as shares of the canvas, with floors and ceilings in
 #: pixels. Pumps and valves have a fixed size of their own.
-REACTOR_SHARE = (0.24, 0.62)
-REACTOR_LIMITS = ((90, 240), (130, 380))
+REACTOR_SHARE = (0.22, 0.50)
+REACTOR_LIMITS = ((90, 220), (130, 330))
+
+#: Bubbles and the dashes on live pipes move this often, and only while the
+#: sheet is visible and the process runs (bubbles: and gas flows).
+BUBBLE_INTERVAL_MS = 80
+
+#: Every reading reserves the room of this many characters before its unit,
+#: so that it does not move when a digit comes or goes.
+READING_TEMPLATE = "0.0000"
+
+#: What runs through the reactor's double jacket rather than into the broth.
+JACKET_MEDIA = ("coolant", "heating")
+
+#: Groups the thousands of a large reading: "68 128", not "6.813e+04".
+THIN_SPACE = "\u2009"
 TANK_SHARE = (0.075, 0.17)
 TANK_LIMITS = ((48, 90), (70, 120))
 
 
 def _clamp(value: float, low: float, high: float) -> float:
     return min(max(value, low), high)
+
+
+def _until(points, area: QRectF, step: float = 1.0) -> list[tuple[float, float]]:
+    """The polyline from its start up to the last point before it enters `area`."""
+    kept = [points[0]]
+    for begin, end in pairwise(points):
+        count = max(1, int(math.dist(begin, end) / step))
+        last = begin
+        for number in range(1, count + 1):
+            share = number / count
+            point = (begin[0] + (end[0] - begin[0]) * share, begin[1] + (end[1] - begin[1]) * share)
+            if area.contains(QPointF(*point)):
+                if last != kept[-1]:
+                    kept.append(last)
+                return kept
+            last = point
+        kept.append(end)
+    return kept
 
 
 def read_value(source: str | None, state) -> float | None:
@@ -109,12 +153,21 @@ class PcsCanvas(QWidget):
             self.widgets[tank.element] = widget
         for valve in spec.valves:
             button = ValveButton(valve.label, valve.symbol, parent=self)
-            button.setEnabled(False)  # read only until phase 4
+            button.setEnabled(False)  # nobody owns it before the first load
             self.widgets[valve.element] = button
 
         #: Per pipe: the reading at the current index, and whether it flows.
         self.flows: dict[str, float | None] = {pipe.element: None for pipe in spec.pipes}
         self.live: dict[str, bool] = {pipe.element: False for pipe in spec.pipes}
+        #: The stirrer speed with its unit, written next to the motor's name.
+        self.stirrer_reading = ""
+        #: pH, pO2 and temperature as text, written beside the reactor.
+        self.vessel_readings: list[str] = []
+        #: How far the dashes on live pipes have travelled, in pixels.
+        self.flow_travel = 0.0
+        #: The unit each pipe's reading is in right now, where it is not the
+        #: pipe's own (a Substitute in force).
+        self.reading_units: dict[str, str] = {}
 
     # ----------------------------------------------------------- layout --
 
@@ -207,13 +260,29 @@ class PcsCanvas(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         self._paint_shaft(painter)
-        for pipe in self.spec.pipes:
-            points = self.route(pipe)
-            share = self.arrow_share(pipe, points)
-            draw_pipe(painter, points, pipe.medium, self.live[pipe.element], share)
+
+        # No pipe inside a symbol: a thick live line showed through the waist
+        # of a valve and behind a hollow pump.
+        painter.save()
+        painter.setClipPath(self._outside_symbols())
+        # Idle pipes first, so that a live one is never hidden where two
+        # share a stretch (the gases behind their manifold).
+        for wanted in (False, True):
+            for pipe in self.spec.pipes:
+                if self.live[pipe.element] != wanted:
+                    continue
+                points = self.route(pipe)
+                share = self.arrow_share(pipe, points)
+                draw_pipe(painter, points, pipe.medium, wanted, share, self.flow_travel)
+        for pipe, points, travel in self.standing_stretches():
+            draw_pipe(painter, points, pipe.medium, True, travel=travel, head=False)
+        painter.restore()
+
         painter.setPen(TEXT)
-        for box, text in self.value_boxes().values():
-            painter.drawText(box, Qt.AlignmentFlag.AlignCenter, text)
+        for box, text, alignment in self.value_boxes().values():
+            painter.drawText(box, alignment | Qt.AlignmentFlag.AlignVCenter, text)
+        for box, text in self.vessel_reading_boxes():
+            painter.drawText(box, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, text)
 
         for node in self.spec.nodes:
             self._paint_node(painter, node)
@@ -252,7 +321,16 @@ class PcsCanvas(QWidget):
         # the reactor), which the 4 px steps can step over: just before the end.
         return max(total - 2 * ARROW_SIZE - 4, 0.0) / total
 
-    def value_boxes(self) -> dict[str, tuple[QRectF, str]]:
+    def _outside_symbols(self) -> QPainterPath:
+        """The canvas with a hole where each pump, valve or motor is drawn."""
+        path = QPainterPath()
+        path.addRect(QRectF(self.rect()))
+        for widget in self.widgets.values():
+            if isinstance(widget, ValveButton):
+                path.addRect(widget.symbol_rect().translated(widget.x(), widget.y()))
+        return path
+
+    def value_boxes(self) -> dict[str, tuple[QRectF, str, Qt.AlignmentFlag]]:
         """Where each live pipe's reading goes, and what it says.
 
         Placed one after the other, each clear of every element, every name
@@ -260,7 +338,7 @@ class PcsCanvas(QWidget):
         """
         obstacles = [QRectF(widget.geometry()) for widget in self.widgets.values()]
         obstacles += self.label_boxes()
-        boxes: dict[str, tuple[QRectF, str]] = {}
+        boxes: dict[str, tuple[QRectF, str, Qt.AlignmentFlag]] = {}
         for pipe in self.spec.pipes:
             if not self.live[pipe.element]:
                 continue
@@ -271,7 +349,7 @@ class PcsCanvas(QWidget):
             obstacles.append(placed[0])
         return boxes
 
-    def _value_box(self, pipe, obstacles) -> tuple[QRectF, str] | None:
+    def _value_box(self, pipe, obstacles) -> tuple[QRectF, str, Qt.AlignmentFlag] | None:
         """The reading of one live pipe, as the Variable Pool writes it.
 
         It starts beside the arrow, on its upstream side — above a level
@@ -280,6 +358,10 @@ class PcsCanvas(QWidget):
         has no such gap, it steps away from the line and walks again. A fixed offset
         always sat on something somewhere: a valve, the pump above, the
         reading of the next gas, the name of a supply.
+
+        The box is as wide as the widest reading can get and the text is
+        aligned to the side of the arrow, so a digit more or less does not
+        move the reading.
         """
         points = self.route(pipe)
         anchor = arrow_anchor(points, self.arrow_share(pipe, points))
@@ -287,16 +369,22 @@ class PcsCanvas(QWidget):
             return None
         (x, y), angle = anchor
         name = (pipe.flow or "").partition(":")[2]
-        unit = pipe.unit or self.units.get(name, "")
+        unit = pretty_unit(
+            self.reading_units.get(pipe.element) or pipe.unit or self.units.get(name, "")
+        )
         text = f"{self.value_text(pipe.element)} {unit}".strip()
-        width = self.fontMetrics().horizontalAdvance(text) + 4
-        height = self.fontMetrics().height()
+        metrics = self.fontMetrics()
+        widest = f"{pipe.widest or READING_TEMPLATE} {unit}".strip()
+        width = max(metrics.horizontalAdvance(text), metrics.horizontalAdvance(widest)) + 4
+        height = metrics.height()
 
         upright = abs(math.cos(angle)) < 0.5
         # Upstream of the arrow: left of it when the flow goes right.
         left = x + ARROW_SIZE + 6
+        alignment = Qt.AlignmentFlag.AlignLeft
         if math.cos(angle) >= 0 or upright:
             left = x - ARROW_SIZE - 6 - width
+            alignment = Qt.AlignmentFlag.AlignRight
         top = y - height - 4
         if upright:
             top = y - height / 2
@@ -316,8 +404,60 @@ class PcsCanvas(QWidget):
                 if not canvas.contains(box):
                     break
                 if not any(box.intersects(other) for other in obstacles):
-                    return box, text
-        return start, text
+                    return box, text, alignment
+        return start, text, alignment
+
+    #: Where gas standing in front of a closed valve stops, in pixels before
+    #: the valve's symbol.
+    STANDING_GAP = 6.0
+
+    def standing_stretches(self) -> list[tuple]:
+        """Gas that reaches a closed valve: the stretch up to just before it.
+
+        With the aeration valve shut the gases still run into the manifold,
+        and the line on from there to the valve is full of gas too. Drawn live
+        up to STANDING_GAP before the valve — without arrow and reading, the
+        valve stops it. Only lines that start at a junction (the manifold),
+        not at a vessel: the harvest line behind its shut valve stays idle.
+
+        Returns (pipe, points, travel) with the dashes carried on from the
+        line that feeds it.
+        """
+        junctions = {node.element for node in self.spec.nodes}
+        stretches = []
+        for pipe in self.spec.pipes:
+            if self.live[pipe.element] or pipe.valve is None or pipe.source not in junctions:
+                continue
+            feeders = [
+                other
+                for other in self.spec.pipes
+                if other.target == pipe.source and self.live[other.element]
+            ]
+            valve = self.widgets.get(pipe.valve)
+            if not feeders or not isinstance(valve, ValveButton):
+                continue
+            symbol = valve.symbol_rect().translated(valve.x(), valve.y())
+            stop = symbol.adjusted(
+                -self.STANDING_GAP, -self.STANDING_GAP, self.STANDING_GAP, self.STANDING_GAP
+            )
+            points = _until(self.route(pipe), stop)
+            if len(points) < 2:
+                continue
+            fed = sum(math.dist(a, b) for a, b in pairwise(self.route(feeders[0])))
+            stretches.append((pipe, points, self.flow_travel - fed))
+        return stretches
+
+    def lance_travel(self) -> float:
+        """The dashes' travel as the lance sees it: less the aeration pipe.
+
+        The lance in the reactor carries on where the aeration pipe ends, so
+        its pattern starts the pipe's length further on.
+        """
+        for pipe in self.spec.pipes:
+            if pipe.target == REACTOR and pipe.medium == "gas":
+                length = sum(math.dist(a, b) for a, b in pairwise(self.route(pipe)))
+                return self.flow_travel - length
+        return self.flow_travel
 
     def _paint_shaft(self, painter: QPainter) -> None:
         """The stirrer's motor drives the reactor's shaft: draw the link."""
@@ -332,11 +472,23 @@ class PcsCanvas(QWidget):
         )
 
     def value_text(self, pipe: str) -> str:
-        """The reading of a pipe as text — in the Variable Pool's format."""
+        """The reading of a pipe as text — in the Variable Pool's format.
+
+        Four significant digits, as the Variable Pool writes them, as long as
+        that needs no exponent. Cooling water in g/h reaches 68 128 in two
+        hours of project 716 and 1 500 000 by hand; ".4g" makes that
+        "6.813e+04", which nobody reads at a glance on a flow sheet. A reading
+        of 10 000 or more is therefore written whole, its thousands grouped.
+        Only the jacket pipes get there: every series the Variable Pool also
+        shows stays far below.
+        """
         value = self.flows[pipe]
         if value is None:
             return "—"
-        return f"{value:.4g}"
+        text = f"{value:.4g}"
+        if "e" in text and abs(value) >= 1:
+            text = f"{value:,.0f}".replace(",", THIN_SPACE)
+        return text
 
     def _paint_node(self, painter: QPainter, node) -> None:
         """A supply is an open circle with its name; a junction is a dot."""
@@ -365,6 +517,27 @@ class PcsCanvas(QWidget):
         boxes += [
             self._valve_label_box(valve) for valve in self.spec.valves if self.shows_label(valve)
         ]
+        boxes += [box for box, _ in self.vessel_reading_boxes()]
+        return boxes
+
+    def vessel_reading_boxes(self) -> list[tuple[QRectF, str]]:
+        """pH, pO2 and temperature: one line each, under the stirrer's name.
+
+        Right of the shaft, between the motor and the lid — the one stretch
+        of the sheet no pipe crosses. Left-aligned with the stirrer's name, so
+        the four values about the broth read as one block.
+        """
+        motor = self.widgets.get("stirrer")
+        if motor is None or not self.vessel_readings:
+            return []
+        name = self._valve_label_box(self.spec.valve("stirrer"))
+        metrics = self.fontMetrics()
+        height = metrics.height()
+        boxes = []
+        for number, text in enumerate(self.vessel_readings):
+            width = metrics.horizontalAdvance(text) + 4
+            top = name.bottom() + 2 + number * height
+            boxes.append((QRectF(name.left(), top, width, height), text))
         return boxes
 
     def shows_label(self, valve) -> bool:
@@ -388,7 +561,15 @@ class PcsCanvas(QWidget):
         The stirrer's name stands to its right: below it runs the shaft.
         """
         painter.setPen(MUTED)
-        painter.drawText(self._valve_label_box(valve), Qt.AlignmentFlag.AlignCenter, valve.label)
+        painter.drawText(
+            self._valve_label_box(valve), Qt.AlignmentFlag.AlignCenter, self.label_text(valve)
+        )
+
+    def label_text(self, valve) -> str:
+        """The name on the sheet; the stirrer's carries its speed."""
+        if valve.element == "stirrer" and self.stirrer_reading:
+            return f"{valve.label} · {self.stirrer_reading}"
+        return valve.label
 
     def _valve_label_box(self, valve) -> QRectF:
         geometry = self.widgets[valve.element].geometry()
@@ -397,7 +578,7 @@ class PcsCanvas(QWidget):
             return QRectF(
                 geometry.right() + 4,
                 geometry.center().y() - metrics.height() / 2,
-                metrics.horizontalAdvance(valve.label) + 4,
+                metrics.horizontalAdvance(self.label_text(valve)) + 4,
                 metrics.height(),
             )
         width = max(geometry.width(), metrics.horizontalAdvance(valve.label) + 4)
@@ -408,15 +589,25 @@ class PcsCanvas(QWidget):
 class PcsView(QWidget):
     """The PCS tab: a reserved banner row above the flow sheet."""
 
+    #: An operator's click: the flag to write and its new value, 0.0 or 1.0.
+    #: Same signature as ControlPanel.parameter_changed, on purpose.
+    parameter_changed = Signal(str, float)
+
     def __init__(
         self,
         n_reservoirs: int,
         variables=(),
         layout_path=None,
+        organism: str = "",
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
         self.spec = pcs_spec(int(n_reservoirs))
+        self.broth = broth_spec(organism)
+        self.running = False
+        self.animation_timer = QTimer(self)
+        self.animation_timer.setInterval(BUBBLE_INTERVAL_MS)
+        self.animation_timer.timeout.connect(self._animate)
         layout, self.layout_problem = load_pcs_layout(self.spec, layout_path)
         units = {row["name"]: row.get("unit") or "" for row in variables}
 
@@ -433,8 +624,50 @@ class PcsView(QWidget):
         #: operator.
         self.owners: dict[str, str | None] = {valve.element: None for valve in self.spec.valves}
 
+        for valve in self.spec.valves:
+            # toggled, not clicked: it carries the new state, and set_state_now
+            # blocks it, so loading never reports.
+            self.canvas.widgets[valve.element].toggled.connect(
+                lambda checked, name=valve.parameter: self.parameter_changed.emit(
+                    name, float(checked)
+                )
+            )
+
     def element(self, element: str) -> QWidget:
         return self.canvas.widgets[element]
+
+    # ------------------------------------------------------- animation --
+
+    def set_running(self, running: bool) -> None:
+        """Whether the process computes. Nothing moves while it pauses."""
+        self.running = bool(running)
+
+    def showEvent(self, event) -> None:  # noqa: N802 - Qt API
+        super().showEvent(event)
+        self.animation_timer.start()
+
+    def hideEvent(self, event) -> None:  # noqa: N802 - Qt API
+        super().hideEvent(event)
+        self.animation_timer.stop()
+
+    def _animate(self) -> None:
+        """One frame: dashes run along live pipes and on down the lance, the
+        impeller turns while it stirs, bubbles rise while gas flows.
+
+        Only while the process runs. A paused process with moving lines would
+        say that something flows that the model is not computing.
+        """
+        if not self.running:
+            return
+        seconds = BUBBLE_INTERVAL_MS / 1000
+        self.canvas.flow_travel += FLOW_DASH_SPEED * seconds
+        vessel = self.canvas.widgets[REACTOR]
+        if vessel.gassing():
+            vessel.advance_bubbles(seconds)
+        if vessel.stirring():
+            vessel.advance_stirrer(seconds)
+        vessel.set_flow_travel(self.canvas.lance_travel())
+        self.canvas.update()
 
     def load(self, state) -> None:
         """Commands and ownership from p (and the feed phase flags in a)."""
@@ -442,8 +675,8 @@ class PcsView(QWidget):
             owner = valve.locked_by(state.p, state.a)
             self.owners[valve.element] = owner
             button = self.canvas.widgets[valve.element]
+            # Enables the element for the operator, disables it for a controller.
             button.set_locked(owner)
-            button.setEnabled(False)  # read only until phase 4
             if owner is None:
                 button.set_state_now(state.p.get(valve.parameter) == 1)
         self.refresh(state)
@@ -455,10 +688,19 @@ class PcsView(QWidget):
         phase 6 has nothing to rebuild; nobody passes any yet.
         """
         for pipe in self.spec.pipes:
-            value = read_value(pipe.flow, state)
-            live = value is not None and value > FLOW_EPSILON
-            if pipe.counts_when is not None and not pipe.counts_when.holds(state.p, state.a):
-                live = False
+            self.canvas.reading_units.pop(pipe.element, None)
+            instead = pipe.instead
+            if instead is not None and all(c.holds(state.p, state.a) for c in instead.when):
+                value = read_value(instead.flow, state)
+                self.canvas.reading_units[pipe.element] = instead.unit
+                live = value is not None and value > FLOW_EPSILON
+            else:
+                value = read_value(pipe.flow, state)
+                live = value is not None and value > FLOW_EPSILON
+                if pipe.counts_when is not None and not pipe.counts_when.holds(state.p, state.a):
+                    live = False
+                if value is not None:
+                    value *= pipe.factor
             self.canvas.flows[pipe.element] = value
             self.canvas.live[pipe.element] = live
 
@@ -474,15 +716,55 @@ class PcsView(QWidget):
             widget = self.canvas.widgets[tank.element]
             volume = read_value(tank.volume, state)
             maximum = read_value(tank.maximum, state)
-            if isinstance(widget, VesselWidget):
+            if tank.element == "harvest":
+                widget.set_collected(
+                    harvested_volume(self.spec, lambda source: read_value(source, state))
+                )
+            elif isinstance(widget, VesselWidget):
                 widget.set_volume(volume, maximum, read_value(tank.minimum, state))
                 speed = read_value("v:NSt", state)
                 widget.set_stirring(speed is not None and speed > FLOW_EPSILON)
+                self.canvas.stirrer_reading = ""
+                if speed is not None:
+                    unit = pretty_unit(self.canvas.units.get("NSt", ""))
+                    self.canvas.stirrer_reading = f"{speed:.4g} {unit}".strip()
+                self._show_reactor_state(widget, state)
+                widget.set_flow_travel(self.canvas.lance_travel())
             else:
                 widget.set_volume(volume, maximum)
+
+        self.canvas.vessel_readings = []
+        for reading in VESSEL_READINGS:
+            value = read_value(reading.source, state)
+            if value is None:
+                continue
+            text = f"{reading.label} {value:.{reading.decimals}f} {reading.unit}"
+            self.canvas.vessel_readings.append(text.strip())
 
         levels = dict(alarms)
         for element, widget in self.canvas.widgets.items():
             widget.set_alarm(levels.get(element))
 
         self.canvas.update()
+
+    def _show_reactor_state(self, vessel: VesselWidget, state) -> None:
+        """Gas in, harvest out and the colour of the broth."""
+        live = self.canvas.live
+        vessel.set_gassing(
+            any(
+                live[pipe.element]
+                for pipe in self.spec.pipes
+                if pipe.target == REACTOR and pipe.medium == "gas"
+            )
+        )
+        vessel.set_draining(
+            any(live[pipe.element] for pipe in self.spec.pipes if pipe.source == REACTOR)
+        )
+        vessel.set_jacket(
+            pipe.medium
+            for pipe in self.spec.pipes
+            if pipe.target == REACTOR and pipe.medium in JACKET_MEDIA and live[pipe.element]
+        )
+        biomass = read_value(self.broth.biomass, state) or 0.0
+        product = read_value(self.broth.product, state) or 0.0
+        vessel.set_broth(biomass / self.broth.biomass_full, product / self.broth.product_full)

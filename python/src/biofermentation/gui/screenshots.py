@@ -79,7 +79,42 @@ def render(out_dir: Path, db_path: Path | None = None) -> list[Path]:
         figure.refresh()
         shoot(figure, "07_figure_app.png", (1500, 815))
 
+    shoot(_process_templates(), "10_process_templates.png", (720, 420))
+
     return written
+
+
+def _process_templates():
+    """The load dialog with two templates of the Pichia model.
+
+    Built on a copy of the shipped template in a directory of its own: the
+    dialog needs stored templates, and render() may have been given somebody's
+    real database, which a screenshot must not write to.
+    """
+    import tempfile
+
+    from ..db import load_phases, save_process_template
+    from .dialogs.process_templates import LoadTemplateDialog
+
+    folder = Path(tempfile.mkdtemp(prefix="biofermentation-shot-"))
+    db_path = folder / "templates.db"
+    shutil.copy(TEMPLATE_DB, db_path)
+    setup = load_phases(db_path, 519)
+    model = setup.info.modelID
+    save_process_template(
+        db_path,
+        model,
+        "Pichia standard",
+        "Glycerol batch, fed-batch on reservoir 1, methanol pulses on reservoir 2 "
+        "and a closed-loop methanol phase.",
+        setup.phases,
+        author="Lab course",
+    )
+    save_process_template(
+        db_path, model, "Short test", "Batch and one pulse.", [setup.phases[0], setup.phases[2]]
+    )
+    types = {row["process_typeID"]: row["type"] for row in setup.lookups.process_type}
+    return LoadTemplateDialog(db_path, model, types, model_name=setup.info.model_name or "")
 
 
 def _pcs_elements():

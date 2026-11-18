@@ -142,7 +142,7 @@ def test_a_vessel_reports_what_its_parameters_mean(db):
     from biofermentation.db import bioreactor_parameters
 
     rows = bioreactor_parameters(db, "BIOSTAT ED")
-    assert len(rows) == 60
+    assert len(rows) == 62
     first = rows[0]
     assert {"parametername", "tex", "unit", "categoryname", "categorysection", "value"} <= set(
         first
@@ -176,7 +176,7 @@ def test_an_unused_vessel_goes_with_its_values(db):
     from biofermentation.db import delete_bioreactor
 
     result = delete_bioreactor(db, "BIOSTAT B")
-    assert result["parameters"] == 60
+    assert result["parameters"] == 62
     assert "BIOSTAT B" not in {row["name"] for row in list_bioreactors(db)}
     with sqlite3.connect(db) as conn:
         left = conn.execute(
@@ -237,7 +237,7 @@ def test_an_organism_carries_its_models(db, tmp_path):
     definition = export_definition(db, "Escherichia coli")
     assert [model.name for model in definition.models] == ["Escherichia model"]
     # 250 before tmax was dropped, 253 with the four anti-windup switches.
-    assert len(definition.models[0].parameters) == 253
+    assert len(definition.models[0].parameters) == 255
 
     path = write_definition(definition, tmp_path / "ecoli.yaml")
     again = load_definition(path)
@@ -249,7 +249,7 @@ def test_an_imported_organism_can_carry_a_project(db):
     definition.display_name = "E. coli (lab strain)"
     counts = import_definition(db, definition)
     assert counts["models"] == 1
-    assert counts["model_parameters"] == 253
+    assert counts["model_parameters"] == 255
 
     with sqlite3.connect(db) as conn:
         conn.row_factory = sqlite3.Row
@@ -265,7 +265,7 @@ def test_an_imported_organism_can_carry_a_project(db):
     project_id = create_project(db, "From the import", model["modelID"])
     setup = load_phases(db, project_id)
     assert setup.info.organism_name == "E. coli (lab strain)"
-    assert len(setup.p) == 253
+    assert len(setup.p) == 255
 
 
 def test_a_model_may_set_parameters_the_organism_does_not_define(db):

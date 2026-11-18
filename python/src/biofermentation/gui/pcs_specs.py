@@ -126,6 +126,21 @@ class NodeSpec:
 
 
 @dataclass(frozen=True)
+class Substitute:
+    """What a pipe carries instead of its flow, while every `when` holds.
+
+    The heating line in manual temperature control: the model heats
+    electrically then (`PH = PHmax` while `f_heating` is on) and writes no
+    heating water flow. The line shows that heat going into the jacket, as a
+    power, rather than standing idle while the heater runs.
+    """
+
+    when: tuple[Condition, ...]
+    flow: str
+    unit: str
+
+
+@dataclass(frozen=True)
 class PipeSpec:
     """A line between two elements, live while its flow is."""
 
@@ -142,6 +157,15 @@ class PipeSpec:
     #: The unit of the reading, where the flow is no stored series (an "a:"
     #: value has no row in variableTab). Stored series take theirs from there.
     unit: str | None = None
+    #: Shown instead of the flow while its conditions hold (see Substitute).
+    instead: Substitute | None = None
+    #: The reading is the flow times this, in `unit`: 1000 turns the model's
+    #: kg/h into the g/h the sheet shows for cooling and heating water.
+    factor: float = 1.0
+    #: The widest reading this pipe can show, before its unit. The box keeps
+    #: that width, so the reading does not move when a digit comes or goes.
+    #: None: the sheet's default, enough for the Variable Pool's four digits.
+    widest: str | None = None
 
 
 @dataclass(frozen=True)
@@ -152,6 +176,10 @@ class PcsSpec:
     nodes: tuple[NodeSpec, ...]
     valves: tuple[ValveSpec, ...]
     pipes: tuple[PipeSpec, ...]
+    #: What has gone into the harvest vessel, as a volume balance: pairs of
+    #: (start volume, volume now) for the reactor and everything that feeds
+    #: it. See `harvested_volume`.
+    harvest_balance: tuple[tuple[str, str], ...] = ()
 
     def elements(self) -> list[str]:
         """Every element id that needs a place on the sheet, in drawing order."""
@@ -165,6 +193,66 @@ class PcsSpec:
             if valve.element == element:
                 return valve
         raise KeyError(element)
+
+
+# --------------------------------------------------------- readings --
+
+
+@dataclass(frozen=True)
+class ReadingSpec:
+    """A value of the broth, written beside the reactor."""
+
+    label: str
+    source: str
+    decimals: int
+    unit: str = ""
+
+
+#: What the broth is doing, beside the reactor (PCS plan, phase 5). The same
+#: series and the same decimals as the actual values of the control panels —
+#: the true values, not the measured series, which E. coli keeps frozen at
+#: their start (CLAUDE.md, fifth deviation). The stirrer speed stands at the
+#: motor. `test_the_vessel_readings_are_the_panel_readings` holds both together.
+VESSEL_READINGS = (
+    ReadingSpec("pH", "v:pHL", 2),
+    ReadingSpec("pO₂", "v:pO2", 1, "%"),
+    ReadingSpec("ϑ", "v:thetaL", 2, "°C"),
+)
+
+
+# ------------------------------------------------------------ broth --
+
+
+@dataclass(frozen=True)
+class BrothSpec:
+    """What colours the liquid in the reactor.
+
+    The broth turns beige as the cells grow, as a real culture does, and —
+    where the organism makes a coloured product — green with the product.
+    `*_full` is the concentration at which the colour is fully there. Both
+    are a choice for the eye, not a measurement.
+    """
+
+    biomass: str = "v:cXL"
+    biomass_full: float = 100.0  # g/l
+    product: str | None = None
+    product_full: float = 1.0  # g/l
+
+
+#: Organisms whose product colours the broth. Pichia's is treated as GFP.
+COLOURED_PRODUCTS = {"pichia_pastoris": "v:cP1L"}
+
+
+def broth_spec(organism: str) -> BrothSpec:
+    return BrothSpec(product=COLOURED_PRODUCTS.get(organism))
+
+
+def pretty_unit(unit: str) -> str:
+    """ "l/min" as "l min⁻¹", the way the units are written in the thesis."""
+    numerator, slash, denominator = unit.partition("/")
+    if not slash:
+        return unit
+    return f"{numerator} {denominator}⁻¹"
 
 
 # ------------------------------------------------------------ locks --
@@ -230,8 +318,10 @@ def pcs_spec(n_reservoirs: int) -> PcsSpec:
         TankSpec(REACTOR, "Reactor", "v:VL", "p:VLmax", "p:VLmin"),
         TankSpec("acid", "Acid", "v:VT1", "p:VT10"),
         TankSpec("alkali", "Alkali", "v:VT2", "p:VT20"),
-        # No volume series for either (decision 4).
-        TankSpec("antifoam", "Antifoam"),
+        # The antifoam reservoir is an addition to the model (16.11.2026,
+        # db/additions.py). A database from before it has no VT30: no level.
+        TankSpec("antifoam", "Antifoam", "v:VT3", "p:VT30"),
+        # No volume series for the harvest vessel (decision 4).
         TankSpec("harvest", "Harvest"),
     ]
     nodes = [
@@ -244,7 +334,7 @@ def pcs_spec(n_reservoirs: int) -> PcsSpec:
         ValveSpec("alkali_pump", "f_alkali", "Alkali", "v:FT2", (PH_MANUAL,), "pump"),
         # The model reads f_antifoam only after inoculation (a.ToI != 0). That
         # is not a controller taking over, so no lock; nothing flows before.
-        ValveSpec("antifoam_pump", "f_antifoam", "Antifoam", None, symbol="pump"),
+        ValveSpec("antifoam_pump", "f_antifoam", "Antifoam", "v:FT3", symbol="pump"),
         ValveSpec("harvest_valve", "f_harvest", "Harvest", "v:FH", (HARVEST_MANUAL,), "valve"),
         ValveSpec("aeration_valve", "f_aeration", "Aeration", "v:FnG", (AERATION_BY_HAND,)),
         ValveSpec("stirrer", "f_motor", "Stirrer", "v:NSt", (STIRRER_BY_HAND,), "motor"),
@@ -254,7 +344,7 @@ def pcs_spec(n_reservoirs: int) -> PcsSpec:
     pipes = [
         PipeSpec("acid_line", "acid", REACTOR, "acid", "v:FT1", "acid_pump"),
         PipeSpec("alkali_line", "alkali", REACTOR, "base", "v:FT2", "alkali_pump"),
-        PipeSpec("antifoam_line", "antifoam", REACTOR, "antifoam", None, "antifoam_pump"),
+        PipeSpec("antifoam_line", "antifoam", REACTOR, "antifoam", "v:FT3", "antifoam_pump"),
         PipeSpec("harvest_line", REACTOR, "harvest", "harvest", "v:FH", "harvest_valve"),
         PipeSpec("aeration_line", "gas_manifold", REACTOR, "gas", "v:FnG", "aeration_valve"),
         PipeSpec(
@@ -264,7 +354,11 @@ def pcs_spec(n_reservoirs: int) -> PcsSpec:
             "coolant",
             "a:mdotC",
             "cooling_valve",
-            unit="kg/h",  # mdotCmax is kg/h in parameterTab
+            # mdotC is kg/h (mdotCmax in parameterTab); shown in g/h. By hand
+            # it is mdotCmax, 1 500 000 g/h with the shipped vessels.
+            unit="g/h",
+            factor=1000.0,
+            widest="0\u2009000\u2009000",
         ),
         PipeSpec(
             "heating_line",
@@ -274,15 +368,25 @@ def pcs_spec(n_reservoirs: int) -> PcsSpec:
             "a:mdotH",
             "heating_valve",
             counts_when=Condition("p:Mode_temp", (1,)),
-            unit="kg/h",  # mdotHmax is kg/h in parameterTab
+            # mdotH is kg/h (mdotHmax in parameterTab); shown in g/h.
+            unit="g/h",
+            factor=1000.0,
+            widest="0\u2009000\u2009000",
+            # By hand the heater is electric: PHmax watts while f_heating is on
+            # (both models, _temperature_control).
+            instead=Substitute(
+                (Condition("p:Mode_temp", (0,)), Condition("p:f_heating", (1,))),
+                "p:PHmax",
+                "W",
+            ),
         ),
     ]
 
     gases = (
         _gas_line("air", "Air", "f_air", "v:FnAIR", (GAS_BY_HAND,)),
-        _gas_line("o2", "O2", "f_O2", "v:FnO2", (GAS_BY_HAND,)),
-        _gas_line("n2", "N2", "f_N2", "v:FnN2"),
-        _gas_line("co2", "CO2", "f_CO2", "v:FnCO2"),
+        _gas_line("o2", "O₂", "f_O2", "v:FnO2", (GAS_BY_HAND,)),
+        _gas_line("n2", "N₂", "f_N2", "v:FnN2"),
+        _gas_line("co2", "CO₂", "f_CO2", "v:FnCO2"),
     )
     for node, valve, pipe in gases:
         nodes.append(node)
@@ -295,4 +399,29 @@ def pcs_spec(n_reservoirs: int) -> PcsSpec:
         valves.append(valve)
         pipes.append(pipe)
 
-    return PcsSpec(tuple(tanks), tuple(nodes), tuple(valves), tuple(pipes))
+    # The reactor's only outflow is the harvest (ode_volume of both models:
+    # dVL = feeds + acid + base - FH), so whatever came in and is no longer
+    # in the reactor or its reservoirs has been harvested. The antifoam
+    # reservoir is not part of it: its volume never enters VL.
+    balance = [("p:VL0", "v:VL"), ("p:VT10", "v:VT1"), ("p:VT20", "v:VT2")]
+    balance += [(f"p:VR{n}0", f"v:VR{n}") for n in range(1, n_reservoirs + 1)]
+    return PcsSpec(tuple(tanks), tuple(nodes), tuple(valves), tuple(pipes), tuple(balance))
+
+
+def harvested_volume(spec: PcsSpec, read) -> float | None:
+    """The total volume harvested so far [l], from the volume balance.
+
+    `read(source)` returns the number behind a source or None. Exact by
+    construction — no new series, nothing integrated on the sheet — and it
+    stays right for a reopened project whose stored series were thinned,
+    where summing FH times Δt over the stored points would not. None while
+    any term is unknown.
+    """
+    total = 0.0
+    for start, now in spec.harvest_balance:
+        first, current = read(start), read(now)
+        if first is None or current is None:
+            return None
+        total += first - current
+    # Rounding leaves about 1e-15 l before anything has been harvested.
+    return max(total, 0.0)

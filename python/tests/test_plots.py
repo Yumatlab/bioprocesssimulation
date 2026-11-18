@@ -568,8 +568,12 @@ def test_the_time_axis_prints_both_ends_of_its_range(qapp):
         specs = plot.bottom_axis.generateDrawSpecs(painter)
     finally:
         painter.end()
+    # Compared as numbers, not as strings: how many decimals a label carries
+    # is a separate question (see HonestTicksAxis), and this test is about
+    # *whether* the two ends are labelled at all.
     labels = {text for _, _, text in specs[2]}
-    assert {"0", "5"} <= labels, labels
+    numbers = {float(text) for text in labels if text.replace(".", "", 1).isdigit()}
+    assert {0.0, 5.0} <= numbers, labels
 
 
 def test_an_end_label_stays_inside_the_axis(qapp):
@@ -895,3 +899,49 @@ def test_saving_the_default_offers_a_copy_instead(figure, monkeypatch):
     figure.save_template()
     assert figure.template.templateID != 1
     assert figure.template.name == "Copy of default"
+
+
+def test_a_tick_label_names_the_height_it_sits_at(qapp):
+    """The label said 0.1 where the tick was 0.12 — measured, in a real plot.
+
+    Every axis is forced to the template's number of divisions across
+    whatever range the data asks for, so the step is often not a round
+    number. pyqtgraph then takes its decimals from `ceil(-log10(spacing))`:
+    a step of 0.12 gets one decimal and the ticks 0, 0.12, 0.24, 0.36, 0.48
+    are printed 0, 0.1, 0.2, 0.4, 0.5 — the "missing" 0.3 is 0.36 rounded up,
+    and a curve at 0.10 sits visibly *below* the line marked 0.1.
+    """
+    from biofermentation.gui.widgets.plot_view import HonestTicksAxis
+
+    axis = HonestTicksAxis(orientation="left")
+    ticks = [0.0, 0.12, 0.24, 0.36, 0.48]
+    assert axis.tickStrings(ticks, 1.0, 0.12) == ["0.00", "0.12", "0.24", "0.36", "0.48"]
+
+    # Round steps stay round: no axis grows decimals it does not need.
+    assert axis.tickStrings([0, 400, 800], 1.0, 400.0) == ["0", "400", "800"]
+    assert axis.tickStrings([0, 1, 2, 3], 1.0, 1.0) == ["0", "1", "2", "3"]
+    assert axis.tickStrings([0, 0.1, 0.2], 1.0, 0.1) == ["0.0", "0.1", "0.2"]
+
+    # A step that cannot be written exactly is rounded far enough to be
+    # unambiguous rather than endlessly.
+    assert axis.tickStrings([0, 5 / 3, 10 / 3, 5.0], 1.0, 5 / 3) == [
+        "0.00",
+        "1.67",
+        "3.33",
+        "5.00",
+    ]
+
+
+def test_the_scale_of_an_axis_is_read_from_its_own_numbers(qapp):
+    """No label may sit further from its tick than a hundredth of the step."""
+    from biofermentation.gui.widgets.plot_view import HonestTicksAxis
+
+    for spacing, values in (
+        (0.12, [0.0, 0.12, 0.24, 0.36, 0.48]),
+        (0.005, [0.0, 0.005, 0.01]),
+        (2.5, [0.0, 2.5, 5.0]),
+        (1 / 3, [0.0, 1 / 3, 2 / 3, 1.0]),
+    ):
+        labels = HonestTicksAxis(orientation="left").tickStrings(values, 1.0, spacing)
+        for value, label in zip(values, labels, strict=True):
+            assert abs(float(label) - value) <= spacing * 0.01, (label, value)

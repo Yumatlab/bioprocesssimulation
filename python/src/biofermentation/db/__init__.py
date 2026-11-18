@@ -14,14 +14,24 @@ from .bioreactors import (
 )
 from .connection import get_connection
 from .maintenance import database_size, vacuum_database
-from .migrate import apply_migration, ensure_columns, ensure_indexes
+from .migrate import apply_migration, ensure_columns, ensure_indexes, ensure_template_tables
 from .models import (
     Condition,
     Lookups,
     Phase,
+    ProcessTemplate,
     ProjectInfo,
     ProjectSetup,
     VariableSeries,
+)
+from .process_templates import (
+    TemplateExistsError,
+    delete_process_template,
+    list_process_templates,
+    load_process_template,
+    rename_process_template,
+    save_process_template,
+    template_count,
 )
 from .project import (
     DeletionCancelledError,
@@ -65,9 +75,11 @@ __all__ = [
     "Lookups",
     "MissingPrerequisiteError",
     "Phase",
+    "ProcessTemplate",
     "ProjectInfo",
     "ProjectPackage",
     "ProjectSetup",
+    "TemplateExistsError",
     "VariableSeries",
     "apply_migration",
     "bioreactor_parameters",
@@ -78,10 +90,12 @@ __all__ = [
     "database_size",
     "delete_bioreactor",
     "delete_model",
+    "delete_process_template",
     "delete_project",
     "duplicate_model",
     "ensure_columns",
     "ensure_indexes",
+    "ensure_template_tables",
     "export_bioreactor",
     "export_defaults",
     "free_bioreactor_name",
@@ -91,11 +105,13 @@ __all__ = [
     "import_package",
     "list_bioreactors",
     "list_models",
+    "list_process_templates",
     "list_projects",
     "load_bioreactor",
     "load_defaults",
     "load_model_defaults",
     "load_phases",
+    "load_process_template",
     "load_project_info",
     "load_project_log",
     "load_project_variables",
@@ -103,9 +119,12 @@ __all__ = [
     "model_usage",
     "read_package",
     "refresh_reference_values",
+    "rename_process_template",
     "save_model_parameters",
+    "save_process_template",
     "save_project",
     "save_project_with_backup",
+    "template_count",
     "unique_project_name",
     "update_model",
     "vacuum_database",

@@ -61,6 +61,11 @@ class Settings:
     #: `storage_interval` silently — one decision for the whole course instead
     #: of a question every student answers differently.
     ask_storage_on_save: bool = True
+    #: Whether process templates are offered — saving and loading both
+    #: (Projektplan_Prozessvorlagen.md, decision E4). Off for a course in which
+    #: students are to design their process themselves. A course setting, not
+    #: a lock: this file can be edited by anybody.
+    process_templates: bool = True
 
     def shows(self, tab: str) -> bool:
         return tab not in self.hidden_tabs
@@ -86,6 +91,7 @@ class Settings:
             "refresh_seconds": float(self.refresh_seconds),
             "storage_interval": int(self.storage_interval),
             "ask_storage_on_save": bool(self.ask_storage_on_save),
+            "process_templates": bool(self.process_templates),
         }
 
 
@@ -130,6 +136,7 @@ def load_settings(path: Path | None = None) -> tuple[Settings, str]:
             refresh_seconds=refresh,
             storage_interval=interval,
             ask_storage_on_save=bool(document.get("ask_storage_on_save", True)),
+            process_templates=bool(document.get("process_templates", True)),
         ), ""
     except (ValueError, yaml.YAMLError, OSError) as error:
         return Settings(), f"{path.name}: {error}"
@@ -154,6 +161,9 @@ def save_settings(settings: Settings, path: Path | None = None) -> Path:
         "#               Δt stays what it is — this is file size, not accuracy.\n"
         "# ask_storage_on_save: whether the closing dialog offers that field\n"
         "#               again. false uses the setting above without asking.\n"
+        "# process_templates: whether the Process Manager offers saving and\n"
+        "#               loading process templates. false for a course in which\n"
+        "#               the process is to be designed from scratch.\n"
         + yaml.safe_dump(settings.as_document(), sort_keys=True, allow_unicode=True),
         encoding="utf-8",
     )

@@ -31,6 +31,17 @@ class PhaseStatus(IntEnum):
     COMPLETED = 4
 
 
+def is_started(phase: Phase) -> bool:
+    """Whether a phase has run or is running — and is therefore part of the record.
+
+    The one rule for what may no longer be edited, deleted or replaced: the
+    automaton has already read its conditions and applied its parameters.
+    Upcoming and pending phases are still a plan. Used by the phase panels and
+    by the process templates alike, so the two cannot disagree.
+    """
+    return phase.statusID in (PhaseStatus.ACTIVE, PhaseStatus.COMPLETED)
+
+
 class PhaseType(IntEnum):
     """processTab.process_typeID, as process_typeTab defines it."""
 

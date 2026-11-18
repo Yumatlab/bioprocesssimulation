@@ -10,7 +10,10 @@ Zweck: Wiederaufbau. Ist die Datenbank leer oder verloren, stellt
 
 **Projektdaten sind nicht enthalten** — `projectTab`, `project_parameterTab`,
 `processTab`, `process_parameterTab`, `timeTab`, `dataTab`, `logTab`. Das sind
-Anwenderdaten, keine Defaults.
+Anwenderdaten, keine Defaults. **Ebenso wenig die Prozessvorlagen**
+(`process_templateTab` und ihre zwei Kindtabellen): sie hängen an Modellen,
+aber jemand hat sie angelegt. `load_defaults` verweigert deshalb auch, solange
+Vorlagen existieren.
 
 ## Verwendung
 

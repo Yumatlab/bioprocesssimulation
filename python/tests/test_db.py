@@ -307,7 +307,7 @@ def test_both_bioreactors_are_fully_populated():
             "   SELECT 1 FROM default_bioreactorTab b"
             "    WHERE b.bioreactorID = 2 AND b.parameterID = a.parameterID)"
         ).fetchone()[0]
-    assert counts == {1: 60, 2: 60}
+    assert counts == {1: 62, 2: 62}  # 60 and the antifoam reservoir's two
     assert missing == 0
 
 
@@ -378,7 +378,7 @@ def test_load_project_info_rejects_unknown_project(db_copy: Path):
 def test_load_phases_reads_everything_in_one_go(db_copy: Path):
     setup = load_phases(db_copy, PROJECT_WITH_PHASES)
     # 283: 280 originally, minus tmax, plus the four anti-windup switches.
-    assert len(setup.p) == 283
+    assert len(setup.p) == 285  # 283 and the antifoam reservoir's two
     assert setup.p["NStw"] == 1000.0
     assert len(setup.phases) == 5
     # Free table-wide, not only inside the project — processID is the
@@ -912,8 +912,8 @@ def test_a_model_carries_both_sides_and_says_which(db_copy):
         "neither — added after the model was built",
     }
     # 193 from the organism, 60 from the vessel in this template.
-    assert len(rows) == 253
-    assert sum(row["origin"] == "bioreactor" for row in rows) == 60
+    assert len(rows) == 255  # 253 and the antifoam reservoir's two
+    assert sum(row["origin"] == "bioreactor" for row in rows) == 62
 
 
 def test_saving_model_parameters_writes_values_and_nothing_else(db_copy):

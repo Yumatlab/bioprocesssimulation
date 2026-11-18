@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ...control import EndCondition, PhaseStatus, StartCondition
+from ...control import EndCondition, PhaseStatus, StartCondition, is_started
 from ...db.models import Phase
 from ..values import format_number
 from .indicators import StatusLamp
@@ -163,7 +163,7 @@ class PhasePanel(QGroupBox):
         # or deleting it would leave a process history that never happened —
         # the automaton has already read its conditions and applied its
         # parameters, so a change now would be rewriting what was done.
-        self._finished = phase.statusID in (PhaseStatus.ACTIVE, PhaseStatus.COMPLETED)
+        self._finished = is_started(phase)
         self.apply_editable()
 
         if phase.statusID == PhaseStatus.PENDING and phase.start.time is not None:
@@ -222,6 +222,9 @@ class PhaseGrid(QWidget):
     delete_requested = Signal(int)
     add_requested = Signal()
     force_start_requested = Signal(int)
+    #: "Save as template…" / "Load template…" — the window decides what happens.
+    save_template_requested = Signal()
+    load_template_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -235,6 +238,21 @@ class PhaseGrid(QWidget):
         self.add_button.setFixedWidth(100)
         self.add_button.setToolTip("Add a phase")
         self.add_button.clicked.connect(self.add_requested.emit)
+        # The process as a whole has its two buttons in a bar of their own,
+        # which the window puts at the bottom right of the tab, under the
+        # scroll area: always in view, however far the row is scrolled. The
+        # grid keeps them, because it knows when they apply.
+        self.template_button = QPushButton("Save as template…")
+        self.template_button.clicked.connect(self.save_template_requested.emit)
+        self.load_template_button = QPushButton("Load template…")
+        self.load_template_button.clicked.connect(self.load_template_requested.emit)
+        self.template_bar = QWidget()
+        bar = QHBoxLayout(self.template_bar)
+        bar.setContentsMargins(8, 4, 8, 8)
+        bar.addStretch()
+        bar.addWidget(self.template_button)
+        bar.addWidget(self.load_template_button)
+        self._phase_count = 0
 
     def rebuild(
         self,
@@ -270,6 +288,7 @@ class PhaseGrid(QWidget):
 
         self._layout.addWidget(self.add_button)
         self._layout.addStretch()
+        self._phase_count = len(phases)
         self.set_editable(self._editable)
 
     def set_editable(self, editable: bool) -> None:
@@ -286,6 +305,26 @@ class PhaseGrid(QWidget):
         )
         for panel in self.panels:
             panel.set_editable(self._editable)
+        # Loading changes the plan, so it waits for a standing process like
+        # adding does (decision E6).
+        self.load_template_button.setEnabled(self._editable)
+        self.load_template_button.setToolTip(
+            "Load a process template of this model"
+            if self._editable
+            else "Pause the process to load a template"
+        )
+        # Saving changes nothing in the run, so it stays possible while the
+        # process runs; it only needs something to save.
+        self.template_button.setEnabled(self._phase_count > 0)
+        self.template_button.setToolTip(
+            "Save these phases as a process template for this model"
+            if self._phase_count
+            else "There are no phases to save"
+        )
+
+    def set_templates_offered(self, offered: bool) -> None:
+        """Show or hide both template buttons (Settings, decision E4)."""
+        self.template_bar.setVisible(offered)
 
     def _clear(self) -> None:
         for panel in self.panels:

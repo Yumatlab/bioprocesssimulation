@@ -156,6 +156,18 @@ signal, because `control/` stays free of Qt.
 `PHASE_PARAMETERS` says which parameters a phase type offers. The table sits
 next to the handlers that read it, on purpose.
 
+**Process templates** (`control/templates.py`, `db/process_templates.py`,
+`gui/dialogs/process_templates.py`). A template is a phase list stored for a
+model in three tables of its own (`process_templateTab`,
+`process_template_phaseTab`, `process_template_parameterTab`) — not in
+`processTab`, which carries status, times and a table-wide process id. The
+placing is a pure function: `place_template(phases, new, mode)` returns a new
+list and never moves a started phase (`is_started`, the same rule the phase
+panels lock with); `hand_over` then gives the list to the automaton and lets
+`adopt_active_phase` find the running phase again. Saving and listing are short
+transactions of their own during a session — the one deliberate exception to
+the two accesses per session, named in the module.
+
 ---
 
 ## 6. The database
@@ -210,7 +222,25 @@ plus a reason for the log.
 |---|---|
 | `styles/default.qss` | colours, spacing, fonts |
 | `layouts/control_options.yaml` | arrangement of the panels, kind of mode selector |
+| `layouts/pcs.yaml` | arrangement of the flow sheet |
 | `settings.yaml` | visible tabs, student view |
+
+**The PCS tab is a view onto `p`, `v` and `a`, and it computes nothing.**
+Three layers, as with the control panels: `gui/pcs_specs.py` says what is on
+the sheet and which flag, series and lock belongs to each element (data, no
+Qt, tested without a window); `layouts/pcs.yaml` says where it stands;
+`widgets/pcs_elements.py` and `widgets/pcs_view.py` draw it. A valve shows the
+command from `p`, its line the flow from `v` or `a` — command and feedback
+are kept apart, so an element owned by a controller can follow the flow while
+staying locked. A click takes the same path as a panel switch
+(`parameter_changed` → `ControlWindow._set_parameter` → `runner.editing()`),
+and afterwards the panels and the sheet are loaded again so they never
+disagree. A test runs the reference project with a click and with the same
+flag set by hand and requires both runs to be identical.
+
+**Any tab can be detached** (`widgets/detachable_tabs.py`). The page is moved
+into a window of its own, not copied, and `ControlWindow.refresh()` redraws
+what the operator sees: the front tab and every detached one.
 
 Qt has traps, and this project has stepped into most of them once. They are
 collected in `CLAUDE.md` — styled combo boxes, `clicked(bool)`, `isVisible()`,

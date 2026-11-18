@@ -148,3 +148,7 @@ default_variableID,organismID,variableID,visible,upload_rate,initial_assignment
 166,2,78,1,cyclic,app.p.cS2L0
 167,2,80,1,cyclic,(app.v.FR1(end)*app.p.cS1R1+app.v.FR2(end)*app.p.cS1R2)/app.v.VL(end)
 168,2,81,1,cyclic,(app.v.FR1(end)*app.p.cS2R1+app.v.FR2(end)*app.p.cS2R2)/app.v.VL(end)
+169,1,83,1,cyclic,app.p.VT30
+170,2,83,1,cyclic,app.p.VT30
+171,1,84,1,cyclic,0
+172,2,84,1,cyclic,0

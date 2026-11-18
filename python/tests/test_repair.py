@@ -103,7 +103,7 @@ def test_project_732_is_the_interrupted_write(db_copy: Path):
     would put a gap in the one record of what the MATLAB path did.
     """
     row = next(r for r in find_broken_projects(db_copy) if r["projectID"] == 732)
-    assert (row["parameters"], row["expected"]) == (42, 253)
+    assert (row["parameters"], row["expected"]) == (42, 255)
 
     with sqlite3.connect(f"file:{db_copy}?mode=ro", uri=True) as conn:
         lo, hi, n = conn.execute(
@@ -288,9 +288,9 @@ def test_a_dry_run_removes_nothing(tmp_path):
     assert report["applied"] is False
     assert report["parameters"][0]["name"] == "tmax"
     with sqlite3.connect(target) as conn:
-        assert conn.execute(
-            "SELECT COUNT(*) FROM parameterTab WHERE name = 'tmax'"
-        ).fetchone()[0] == 1
+        assert (
+            conn.execute("SELECT COUNT(*) FROM parameterTab WHERE name = 'tmax'").fetchone()[0] == 1
+        )
 
 
 def test_the_reference_run_keeps_its_record_of_tmax():
@@ -347,12 +347,129 @@ def test_a_tuned_gain_of_somebody_else_is_left_alone(db_copy: Path):
     from biofermentation.db.connection import get_connection
     from biofermentation.db.repair import correct_pichia_feed_gains
 
+    def kp(table: str) -> list[float]:
+        with get_connection(db_copy, readonly=True) as conn:
+            return [
+                row[0]
+                for row in conn.execute(
+                    f"SELECT value FROM {table} WHERE parameterID = "
+                    "(SELECT parameterID FROM parameterTab WHERE name = 'KP_feedR2')"
+                )
+            ]
+
+    with get_connection(db_copy) as conn:
+        for table in ("default_modelTab", "model_parameterTab", "project_parameterTab"):
+            conn.execute(
+                f"UPDATE {table} SET value = -0.5 WHERE parameterID = "
+                "(SELECT parameterID FROM parameterTab WHERE name = 'KP_feedR2')",
+            )
+    found = correct_pichia_feed_gains(db_copy, dry_run=False)
+    # Checked on the values themselves, not on the report: since the projects
+    # are corrected too, KP_feedR2 may well be listed for another row.
+    assert "KP_feedR2" not in found["changed"]
+    for table in ("default_modelTab", "model_parameterTab", "project_parameterTab"):
+        assert set(kp(table)) == {-0.5}, table
+
+
+def _feed_gains(db: Path, table: str, column: str) -> dict:
+    from biofermentation.db.connection import get_connection
+
+    with get_connection(db, readonly=True) as conn:
+        rows = conn.execute(
+            f"SELECT t.{column}, p.name, t.value FROM {table} t "
+            "JOIN parameterTab p ON p.parameterID = t.parameterID "
+            "WHERE p.name IN ('KP_feedR2', 'KI_feedR2', 'KD_feedR2')"
+        ).fetchall()
+    found: dict = {}
+    for owner, name, value in rows:
+        found.setdefault(owner, {})[name] = value
+    return found
+
+
+def _as_shipped(db: Path, *tables: str) -> None:
+    """Put the inverted gains back where the shipped data had them.
+
+    The template is corrected since 18.11.2026 (FEHLER.md, F-01); these tests
+    are about what the correction does to a database that is not.
+    """
+    from biofermentation.db.connection import get_connection
+    from biofermentation.db.repair import PICHIA_FEED_GAINS
+
+    with get_connection(db) as conn:
+        for table in tables:
+            for name, (shipped, _) in PICHIA_FEED_GAINS.items():
+                owners = {
+                    "project_parameterTab": "projectID IN (519, 520)",
+                    "model_parameterTab": "modelID IN (SELECT m.modelID FROM modelTab m "
+                    "JOIN organismTab o ON o.organismID = m.organismID "
+                    "WHERE o.name LIKE 'Pichia%')",
+                    "default_modelTab": "organismID IN (SELECT organismID FROM organismTab "
+                    "WHERE name LIKE 'Pichia%')",
+                }[table]
+                conn.execute(
+                    f"UPDATE {table} SET value = ? WHERE parameterID = "
+                    f"(SELECT parameterID FROM parameterTab WHERE name = ?) AND {owners}",
+                    (shipped, name),
+                )
+
+
+def test_projects_without_a_recording_are_corrected_too(db_copy: Path):
+    """519 and 520 shipped with -2/-15/-0.009 and have no stored series."""
+    from biofermentation.db.repair import PICHIA_FEED_GAINS, correct_pichia_feed_gains
+
+    _as_shipped(db_copy, "project_parameterTab")
+    wrong = {name: shipped for name, (shipped, _) in PICHIA_FEED_GAINS.items()}
+    right = {name: measured for name, (_, measured) in PICHIA_FEED_GAINS.items()}
+    projects = _feed_gains(db_copy, "project_parameterTab", "projectID")
+    assert projects[519] == projects[520] == wrong
+
+    found = correct_pichia_feed_gains(db_copy)
+    assert sorted(found["projects"]) == [519, 520]
+    assert found["kept"] == []
+    correct_pichia_feed_gains(db_copy, dry_run=False)
+    projects = _feed_gains(db_copy, "project_parameterTab", "projectID")
+    assert projects[519] == projects[520] == right
+
+
+def test_a_project_with_a_recording_keeps_its_values(db_copy: Path):
+    """Its stored run was computed with them; the report names it."""
+    from biofermentation.db.connection import get_connection
+    from biofermentation.db.repair import PICHIA_FEED_GAINS, correct_pichia_feed_gains
+
+    _as_shipped(db_copy, "project_parameterTab")
     with get_connection(db_copy) as conn:
         conn.execute(
-            "UPDATE default_modelTab SET value = -0.5 WHERE parameterID = "
-            "(SELECT parameterID FROM parameterTab WHERE name = 'KP_feedR2')",
+            "INSERT INTO timeTab (projectID, datetime, process_time) VALUES (520, '', 0.0)"
         )
-    assert "KP_feedR2" not in correct_pichia_feed_gains(db_copy)["changed"]
+    found = correct_pichia_feed_gains(db_copy, dry_run=False)
+    assert found["projects"] == [519]
+    assert [project_id for project_id, _ in found["kept"]] == [520]
+    projects = _feed_gains(db_copy, "project_parameterTab", "projectID")
+    assert projects[520] == {name: shipped for name, (shipped, _) in PICHIA_FEED_GAINS.items()}
+
+
+def test_wrong_models_are_found_when_the_defaults_are_already_right(db_copy: Path):
+    """The user's database: defaults never corrected there, models wrong too —
+    and a database where only the models are wrong must not be missed."""
+    from biofermentation.db.connection import get_connection
+    from biofermentation.db.repair import PICHIA_FEED_GAINS, correct_pichia_feed_gains
+
+    with get_connection(db_copy) as conn:
+        for name, (shipped, _) in PICHIA_FEED_GAINS.items():
+            conn.execute(
+                "UPDATE model_parameterTab SET value = ? WHERE parameterID = "
+                "(SELECT parameterID FROM parameterTab WHERE name = ?) AND modelID IN "
+                "(SELECT modelID FROM modelTab m JOIN organismTab o"
+                " ON o.organismID = m.organismID WHERE o.name LIKE 'Pichia%')",
+                (shipped, name),
+            )
+    found = correct_pichia_feed_gains(db_copy)
+    assert found["tables"]["default_modelTab"] == 0
+    assert found["tables"]["model_parameterTab"] > 0
+    correct_pichia_feed_gains(db_copy, dry_run=False)
+    right = {name: measured for name, (_, measured) in PICHIA_FEED_GAINS.items()}
+    for gains in _feed_gains(db_copy, "model_parameterTab", "modelID").values():
+        assert gains == right
 
 
 def test_every_anti_windup_flag_carries_a_description(db_copy: Path):
@@ -392,3 +509,42 @@ def test_every_anti_windup_flag_carries_a_description(db_copy: Path):
             assert rows, table
             for row in rows:
                 assert row["description"] == expected[row["name"]], f"{table}: {row['name']}"
+
+
+# ------------------------------------------------ at application start --
+
+
+def test_the_start_corrects_an_older_database_once_with_a_copy(db_copy: Path, qapp):
+    """What a user's database gets on its next start (FEHLER.md, F-01)."""
+    from biofermentation.gui.app import _correct_known_errors, corrected_gains_note
+
+    # As the user's database had them: defaults, models and a project.
+    _as_shipped(db_copy, "default_modelTab", "model_parameterTab", "project_parameterTab")
+    first = _correct_known_errors(db_copy)
+    assert first["applied"] and first["rows"] > 0
+    assert sorted(first["projects"]) == [519, 520]
+    copy = db_copy.with_suffix(".pre-correction.db")
+    assert copy.is_file()
+    copy.unlink()
+
+    second = _correct_known_errors(db_copy)
+    assert second["changed"] == {}
+    assert not copy.exists(), "nothing to change, no copy"
+    assert "KP_feedR2 -2 → 1" in corrected_gains_note()
+
+
+@pytest.fixture(scope="session")
+def qapp():
+    pytest.importorskip("PySide6")
+    from PySide6.QtWidgets import QApplication
+
+    return QApplication.instance() or QApplication([])
+
+
+def test_the_template_ships_with_no_inverted_feed_gain_anywhere(db_copy: Path):
+    """F-01 corrected in defaults, models and the shipped projects alike."""
+    from biofermentation.db.repair import correct_pichia_feed_gains
+
+    found = correct_pichia_feed_gains(db_copy)
+    assert found["changed"] == {}
+    assert found["kept"] == []
