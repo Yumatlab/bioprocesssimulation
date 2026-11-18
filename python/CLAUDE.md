@@ -1224,6 +1224,33 @@ nicht abgestimmt, sondern folgenlos.
   nicht mitgeändert, im Skript kommentiert.
 - **`xCGin` fehlt in `variableTab`.** Das Gegenstück `xOGin` ist vorhanden.
 
+### Versionen ab 3.0.1: ein verifizierter Stand, dann Fehlerbehebung
+
+Entschieden am 18.11.2026 (Anwender), statt eines Kompatibilitätsschalters:
+
+- **3.0.1 ist der abgeschlossene, verifizierte Stand** (Commit `324a194`,
+  annotierter Tag `v3.0.1`). Das E.-coli-Modell rechnet dort MATLABs
+  Arithmetik samt ihrer Fehler; das gemessene Protokoll steht in
+  `docs/verification_escherichia_coli.md` („Record for version 3.0.1"),
+  erzeugt mit `tools/verification_record.py`, und lässt sich vom Tag aus
+  jederzeit wiederholen.
+- **Ab 3.1.0 werden MATLAB-Fehler behoben** (`FEHLER.md`). Jede Behebung
+  bekommt einen Eintrag in `docs/changes_from_matlab.md` — was MATLAB tat,
+  was jetzt, warum, gemessene Wirkung, Version — und wandert in `FEHLER.md`
+  nach „Behoben". Ändert sie Größen des Referenzvergleichs, wird der
+  Referenztest für genau diese Größen angepasst, mit Verweis auf den Eintrag
+  und das Protokoll von 3.0.1 — nicht gelockert, um grün zu bleiben.
+- **`CHANGELOG.md`** sagt je Version, was kam. Dritte Stelle: Veröffentlichung
+  desselben verifizierten Stands; zweite Stelle: ein Schritt, der ändert, was
+  ein Lauf rechnet.
+- **Hochladen ist Sache des Anwenders.** Der Push auf `main` braucht
+  `BIOFERM_PUSH_MAIN=1` (Hook `tools/pre-push-guard.sh`), und diese Sitzung
+  darf den Hook nicht übergehen. Reihenfolge: `main` pushen, CI auf allen drei
+  Systemen abwarten (viele GUI-Tests sind neu und liefen nie unter Windows),
+  erst dann den Tag pushen — der Tag löst Bau und Release aus.
+- Der lokale `main` verfolgt jetzt `origin/main` (vorher das längst gemergte
+  `origin/python-port`).
+
 ### Eine Versionsnummer, drei Stellen, die sie zeigen
 
 `biofermentation.__version__` ist die Quelle. `pyproject.toml` hat keine

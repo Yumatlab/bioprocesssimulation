@@ -9,4 +9,4 @@ See CLAUDE.md for the architecture and the phase plan.
 #: tools/make_launcher.py stamps it into the .app bundle — they drifted to
 #: "3.0" in the window and "0.1.0" in the package once already, which is two
 #: answers to a question that has one.
-__version__ = "3.0.1"
+__version__ = "3.1.0"
