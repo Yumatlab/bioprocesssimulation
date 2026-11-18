@@ -332,7 +332,7 @@ def pcs_spec(n_reservoirs: int) -> PcsSpec:
     valves = [
         ValveSpec("acid_pump", "f_acid", "Acid", "v:FT1", (PH_MANUAL,), "pump"),
         ValveSpec("alkali_pump", "f_alkali", "Alkali", "v:FT2", (PH_MANUAL,), "pump"),
-        # The model reads f_antifoam only after inoculation (a.ToI != 0). That
+        # The model reads f_antifoam only after inoculation (a.inoc_occ). That
         # is not a controller taking over, so no lock; nothing flows before.
         ValveSpec("antifoam_pump", "f_antifoam", "Antifoam", "v:FT3", symbol="pump"),
         ValveSpec("harvest_valve", "f_harvest", "Harvest", "v:FH", (HARVEST_MANUAL,), "valve"),

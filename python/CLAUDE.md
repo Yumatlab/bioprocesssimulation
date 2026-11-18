@@ -1268,6 +1268,24 @@ Entschieden am 18.11.2026 (Anwender), statt eines Kompatibilitätsschalters:
 - Der lokale `main` verfolgt jetzt `origin/main` (vorher das längst gemergte
   `origin/python-port`).
 
+### Behobene MATLAB-Fehler in 3.1.0
+
+Vorgehen je Fehler: vorher messen, beheben, nachher messen, zwei Arten von
+Test in `tests/test_matlab_fixes.py` — der Fehler ist weg, **und** überall,
+wo der alte Code nicht falsch war, ergibt der neue bitgleich dieselben Zahlen
+(z. B. über eine Unterklasse mit der alten Bedingung). Gegenprobe: mit dem
+alten Code wird der Test rot. Dann `tools/verification_record.py` vor und
+nach der Behebung vergleichen, Eintrag in `docs/changes_from_matlab.md`,
+Zeile in `FEHLER.md` nach „Behoben".
+
+- **F-07** Antischaum: `inoc_occ` statt `ToI != 0`. Die beiden Umwege
+  (`a.ToI = 1e-6` in `test_antifoam_reservoir.py` und in der PCS-Probe
+  `test_pcs_specs._owned`) sind entfernt — sie gab es nur wegen des Fehlers.
+- **F-04** pH-Pumpen mit eigener Grenze. Beim Testen gelernt: Pichias Medium
+  springt im ersten Schritt von `pH0` = 5,0 auf pH 7,41 (chemisches
+  Gleichgewicht); ein Sollwert relativ zu `pH0` liegt dort auf der falschen
+  Seite. Tests nehmen pH 3 bzw. 11.
+
 ### Eine Versionsnummer, drei Stellen, die sie zeigen
 
 `biofermentation.__version__` ist die Quelle. `pyproject.toml` hat keine

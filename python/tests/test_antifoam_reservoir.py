@@ -36,10 +36,9 @@ def _state(organism: str, project: int, **parameters):
     p = dict(load_phases(TEMPLATE_DB, project).p)
     p.update(f_Inoc=1.0, f_InocStart=1.0)
     p.update(parameters)
+    # Inoculated at the start: since F-07 was fixed (3.1.0) that doses
+    # antifoam like any other inoculation; before, ToI = 0 kept it off.
     state = build_state(p, model, dt=2 / 3600)
-    # Inoculated at t = 0 leaves ToI at 0, and the model doses only while
-    # ToI != 0 — as far as the timer knows, a moment after the start.
-    state.a.ToI = 1e-6
     return state, model
 
 
@@ -98,7 +97,6 @@ def test_a_database_from_before_it_still_runs(organism, project):
     p.update(f_Inoc=1.0, f_InocStart=1.0, f_antifoam=1.0)
     del p["VT30"], p["FT3max"]
     state = build_state(p, model, dt=2 / 3600)
-    state.a.ToI = 1e-6
     run_steps(state, model, 20)
     assert state.v.VT3[state.idx] == 0.0
     assert state.v.FT3[state.idx] == 0.0

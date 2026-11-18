@@ -159,6 +159,46 @@ give the antifoam bottle a level that empties at the pump rate while dosing.
 the volume does not enter the reactor. Measured: every other series
 identical.
 
+### 1.10 Antifoam after an inoculation at time 0 — 3.1.0 (F-07)
+
+**MATLAB:** antifoam is dosed only while `ToI != 0`, meant as "the culture
+is inoculated". But `ToI` is the *time* of inoculation, and a culture
+inoculated at the start (`f_InocStart`, or switched on in the very first
+step) has `ToI` = 0. Its antifoam never dosed, whatever the switch said.
+**Now:** the condition is the inoculation flag `inoc_occ`, which says exactly
+"inoculated". The time since inoculation is computed as before.
+**Why:** the switch did nothing in the most common way a run is started.
+**Effect (measured, 2 h, inoculated at the start, antifoam on):**
+
+| | `AAF` max. | mean kLa | pO2 at 2 h | antifoam bottle at 2 h |
+|---|---:|---:|---:|---:|
+| *E. coli* 716, before | 0 | 146.9 h⁻¹ | 29.8 % | 0.5 l |
+| *E. coli* 716, now | 0.352 | 141.2 h⁻¹ | 20.3 % | 0.30 l |
+| *Pichia* 519, before | 0 | 613.3 h⁻¹ | 113.9 % | 0.5 l |
+| *Pichia* 519, now | 0.352 | 505.9 h⁻¹ | 98.1 % | 0.30 l |
+
+The antifoam now lowers kLa and with it the oxygen transfer, as intended.
+**Unchanged:** every run inoculated later than the start — there `ToI` > 0
+and the two conditions are the same question. A test runs both conditions
+side by side with an inoculation in the run and requires identical results.
+The *E. coli* reference run has antifoam off; its verification record is
+unchanged to the digit.
+
+### 1.11 Each pH pump held by its own limit — 3.1.0 (F-04)
+
+**MATLAB:** in automatic pH control the acid rate was scaled with `FT2max`,
+the limit of the **alkali** pump, and the alkali rate with `FT1max`, the
+limit of the acid pump. Manual mode had them right.
+**Now:** each pump with its own limit, in both organisms.
+**Why:** a plain swap; with two different pumps the acid pump would have
+been held by the alkali pump's limit and the other way round.
+**Effect:** none on any shipped data — every vessel has equal limits
+(BIOSTAT ED 0.5/0.5 l/h, BIOSTAT B 1.0/1.0 l/h, the reference run
+0.5/0.5), so the numbers are identical; the verification record is unchanged
+to the digit. With different limits, each pump now follows its own: tested
+by changing only the *other* pump's limit and requiring the working pump's
+flow to stay identical — with the crossed limits it did not.
+
 ---
 
 ## 2. Changes to what the operator sees (the run is the same)
@@ -211,9 +251,8 @@ taken for one:
 
 The errors of the original that 3.0.1 still contains are listed with their
 effect in `FEHLER.md`, section 2 — among them the frozen measurements of
-*E. coli* (F-02), the crossed pump limits of acid and alkali (F-04), the
-antifoam that never doses after inoculation at time 0 (F-07) and the
-controller states lost on reopening (F-12). Each one that is fixed moves into
+*E. coli* (F-02) and the controller states lost on reopening (F-12). Fixed
+so far in 3.1.0: F-07 (section 1.10) and F-04 (section 1.11). Each one that is fixed moves into
 this document with its version and its measured effect.
 
 ---

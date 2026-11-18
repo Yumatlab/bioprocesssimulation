@@ -547,7 +547,12 @@ class EscherichiaColi(OrganismModel):
     def _antifoam(self, state: SimulationState, prev: int) -> float:
         """Anti-foam dosing activity [1/h]."""
         p, v, a = state.p, state.v, state.a
-        if p.f_antifoam == 1 and a.ToI != 0:
+        # F-07 (FEHLER.md), fixed in 3.1.0: MATLAB asks `ToI != 0` for "the
+        # culture is inoculated", and ToI is the *time* of inoculation — 0 for
+        # a culture inoculated at the start, which therefore never got any
+        # antifoam. inoc_occ is the flag that says it. For any inoculation
+        # after t = 0 both are the same; only the case at t = 0 changes.
+        if p.f_antifoam == 1 and a.inoc_occ == 1:
             TON = v.t[prev] - a.ToI
             return p.AAFtast * p.VAF ** (TON / p.Ttast)
         return 0.0
@@ -590,18 +595,20 @@ class EscherichiaColi(OrganismModel):
         ceypH = cEypH / (1 - (-1))
         cP_ypH = ceypH * 100
 
-        # MATLAB crosses the pump limits here: the acid rate is scaled with
-        # FT2max and the alkali rate with FT1max. Reproduced.
+        # F-04 (FEHLER.md), fixed in 3.1.0: MATLAB scaled the acid rate with
+        # FT2max (the alkali pump) and the alkali rate with FT1max. Each pump
+        # now has its own limit, as in manual mode above. With equal limits —
+        # every shipped vessel — the numbers are the same.
         if cP_ypH > 0:
             yT1 = min(cP_ypH * p.KP_pH2a, 100.0)
-            v.FT1[i] = yT1 / 100 * p.FT2max
+            v.FT1[i] = yT1 / 100 * p.FT1max
             v.FT2[i] = 0.0
         elif cP_ypH < 0:
             yT2 = cP_ypH * p.KP_pH2b
             if yT2 > 100:
                 yT2 = 100.0
             v.FT1[i] = 0.0
-            v.FT2[i] = yT2 / 100 * p.FT1max
+            v.FT2[i] = yT2 / 100 * p.FT2max
         else:
             v.FT1[i] = 0.0
             v.FT2[i] = 0.0

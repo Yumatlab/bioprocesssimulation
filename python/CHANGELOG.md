@@ -16,6 +16,18 @@ recorded in `docs/changes_from_matlab.md` with its measured effect. The
 *E. coli* comparison with MATLAB may differ where an error is fixed; the
 verified state before that is version 3.0.1.
 
+### Fixed (errors inherited from MATLAB)
+
+- **F-07** Antifoam now doses after an inoculation at the start; before, the
+  switch did nothing in that case (MATLAB tested the *time* of inoculation
+  against 0). Measured: kLa and pO2 lower as intended; runs inoculated later
+  unchanged to the bit.
+- **F-04** Acid and alkali pump each held by their own limit in automatic pH
+  control (MATLAB had them crossed). No effect on any shipped data, whose
+  limits are equal.
+
+Both leave the *E. coli* verification record of 3.0.1 unchanged to the digit.
+
 Planned next: the controller tuning tool (`Projektplan_Regleroptimierung.md`).
 
 ---

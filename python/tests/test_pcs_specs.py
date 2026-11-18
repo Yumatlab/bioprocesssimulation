@@ -113,12 +113,6 @@ def _same_run(first, second) -> bool:
 def _owned(valve) -> dict[str, float]:
     """A setting in which every lock of the valve leaves it to the operator."""
     setting = {lock.source: lock.values[0] for lock in valve.locks}
-    if valve.parameter == "f_antifoam":
-        # The model doses only while a.ToI != 0, and a culture inoculated at
-        # t = 0 keeps ToI at 0 — so a probe that starts inoculated never
-        # doses. Inoculated a moment after the start, as far as the timer
-        # knows; ToI has to lie before t, or the dosing time is negative.
-        setting["a:ToI"] = 1e-6
     return setting
 
 
